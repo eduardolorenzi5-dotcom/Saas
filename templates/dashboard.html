@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Dashboard — GastosAI</title>
+  <link rel="stylesheet" href="/static/css/site.css"/>
+</head>
+<body>
+<div class="dash-layout">
+  <aside class="dash-sidebar">
+    <div class="dash-logo">GastosAI</div>
+    <nav class="dash-nav">
+      <a href="/dashboard" class="ativo">Visão geral</a>
+      <a href="/logout">Sair</a>
+    </nav>
+  </aside>
+  <main class="dash-main">
+    <div class="dash-header">
+      <h1>Olá, {{ session.cliente_nome }} 👋</h1>
+      <span style="font-size:13px;color:#888;">{{ mes }}</span>
+    </div>
+
+    <div class="cards-row">
+      <div class="stat-card">
+        <div class="stat-label">Total gasto no mês</div>
+        <div class="stat-val">R$ {{ "%.2f"|format(total) }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Registros este mês</div>
+        <div class="stat-val">{{ gastos|length }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Categorias usadas</div>
+        <div class="stat-val">{{ por_cat|length }}</div>
+      </div>
+    </div>
+
+    <div class="dash-card wpp-info" style="margin-bottom:20px;">
+      <span>📱</span>
+      <span>Seu agente está ativo no WhatsApp <strong>{{ cliente.whatsapp }}</strong>. Envie mensagens como <em>"gastei 50 reais no mercado"</em> para registrar gastos automaticamente.</span>
+    </div>
+
+    <div class="dash-card">
+      <div class="dash-card-title">Adicionar gasto manualmente</div>
+      <div class="form-row">
+        <div class="field" style="margin:0;"><label>Descrição</label><input type="text" id="inp-desc" placeholder="Ex: Mercado"/></div>
+        <div class="field" style="margin:0;"><label>Valor (R$)</label><input type="number" id="inp-val" placeholder="0,00" step="0.01"/></div>
+        <div class="field" style="margin:0;"><label>Categoria</label>
+          <select id="inp-cat">
+            <option>Alimentação</option><option>Transporte</option><option>Saúde</option>
+            <option>Lazer</option><option>Moradia</option><option>Educação</option>
+            <option>Roupas</option><option>Outros</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0;"><label>Data</label><input type="date" id="inp-data"/></div>
+      </div>
+      <button class="btn-primary" onclick="addGasto()">Adicionar</button>
+    </div>
+
+    {% if por_cat %}
+    <div class="dash-card">
+      <div class="dash-card-title">Por categoria</div>
+      {% for c in por_cat %}
+      <div class="gasto-item">
+        <span><span class="cat-dot" style="background:{{ loop.index|cat_cor }}"></span>{{ c.categoria }}</span>
+        <strong>R$ {{ "%.2f"|format(c.total) }}</strong>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="dash-card">
+      <div class="dash-card-title">Gastos do mês</div>
+      <div id="lista-gastos">
+        {% for g in gastos %}
+        <div class="gasto-item" id="g-{{ g.id }}">
+          <div>
+            <div class="gasto-desc">{{ g.descricao }}</div>
+            <div class="gasto-meta">{{ g.categoria }} · {{ g.data }} {% if g.fonte == 'whatsapp' %}· via WhatsApp{% endif %}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span class="gasto-val">R$ {{ "%.2f"|format(g.valor) }}</span>
+            <button class="del-btn" onclick="delGasto({{ g.id }})">×</button>
+          </div>
+        </div>
+        {% else %}
+        <p style="text-align:center;color:#aaa;padding:20px;font-size:14px;">Nenhum gasto registrado este mês.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+  </main>
+</div>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>

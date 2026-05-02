@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"/><title>Pagamento — GastosAI</title><link rel="stylesheet" href="/static/css/site.css"/></head>
+<body>
+<div class="pag-wrap">
+  <div class="pag-card">
+    <h2>Finalizar pagamento</h2>
+    <div class="pag-resumo">
+      <div class="pag-row"><span>Cliente</span><span>{{ cliente.nome }}</span></div>
+      <div class="pag-row"><span>Plano</span><span>{{ cliente.plano_nome }}</span></div>
+      <div class="pag-row total"><span>Total</span><span>R$ {{ "%.2f"|format(cliente.preco) }}/mês</span></div>
+    </div>
+    <p style="font-size:13px;color:#888;margin-bottom:16px;">Selecione a forma de pagamento:</p>
+    <div class="pag-metodos">
+      <div class="pag-metodo ativo">Pix</div>
+      <div class="pag-metodo">Cartão de crédito</div>
+    </div>
+    <p style="font-size:12px;color:#aaa;margin-bottom:20px;">* Ambiente de demonstração. Clique em confirmar para ativar sua conta.</p>
+    <form method="POST" action="/pagamento/confirmar/{{ cliente.id }}">
+      <button type="submit" class="btn-primary btn-block">Confirmar pagamento</button>
+    </form>
+  </div>
+</div>
+</body></html>

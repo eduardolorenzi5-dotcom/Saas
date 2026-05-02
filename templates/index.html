@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GastosAI — Controle seus gastos pelo WhatsApp</title>
+  <link rel="stylesheet" href="/static/css/site.css"/>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <span class="logo">GastosAI</span>
+    <div class="nav-links">
+      <a href="#planos">Planos</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a href="/login" class="btn-outline">Entrar</a>
+      <a href="/cadastro" class="btn-primary">Começar grátis</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <h1>Controle seus gastos<br/>pelo <span class="highlight">WhatsApp</span></h1>
+    <p class="hero-sub">Envie uma mensagem como "gastei R$50 no mercado" e nossa IA registra tudo automaticamente. No fim do mês, receba um relatório completo.</p>
+    <a href="/cadastro" class="btn-primary btn-lg">Começar agora</a>
+  </div>
+</section>
+
+<section class="como-funciona" id="como-funciona">
+  <div class="section-inner">
+    <h2>Como funciona</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Assine um plano</h3>
+        <p>Escolha o plano ideal e conclua o pagamento em segundos.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Receba o acesso</h3>
+        <p>Seu agente de IA é ativado no WhatsApp imediatamente.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Registre pelo WhatsApp</h3>
+        <p>Mande mensagens naturais. A IA entende e organiza tudo.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3>Receba seu relatório</h3>
+        <p>Todo mês, um PDF completo com gráficos direto no seu WhatsApp.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="planos" id="planos">
+  <div class="section-inner">
+    <h2>Planos e preços</h2>
+    <div class="planos-grid">
+      {% for plano in planos %}
+      <div class="plano-card {% if loop.index == 2 %}destaque{% endif %}">
+        {% if loop.index == 2 %}<div class="badge-popular">Mais popular</div>{% endif %}
+        <h3>{{ plano.nome }}</h3>
+        <div class="preco">R$ {{ "%.2f"|format(plano.preco) }}<span>/mês</span></div>
+        <p class="plano-desc">{{ plano.descricao }}</p>
+        <a href="/cadastro?plano={{ plano.id }}" class="btn-primary btn-block">Assinar {{ plano.nome }}</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <p>GastosAI &copy; 2025 — Controle financeiro inteligente</p>
+</footer>
+
+</body>
+</html>

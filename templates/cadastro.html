@@ -1,0 +1,28 @@
+<!-- cadastro.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Cadastro — GastosAI</title><link rel="stylesheet" href="/static/css/site.css"/></head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h2>Criar conta</h2>
+    <p class="sub">Comece a controlar seus gastos hoje</p>
+    {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
+    <form method="POST">
+      <div class="field"><label>Nome completo</label><input type="text" name="nome" placeholder="Seu nome" required/></div>
+      <div class="field"><label>E-mail</label><input type="email" name="email" placeholder="seu@email.com" required/></div>
+      <div class="field"><label>Senha</label><input type="password" name="senha" placeholder="Mínimo 6 caracteres" required/></div>
+      <div class="field"><label>WhatsApp (com DDD)</label><input type="text" name="whatsapp" placeholder="11999999999" required/></div>
+      <div class="field"><label>Plano</label>
+        <select name="plano_id" required>
+          {% for plano in planos %}
+          <option value="{{ plano.id }}">{{ plano.nome }} — R$ {{ "%.2f"|format(plano.preco) }}/mês</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn-primary btn-block" style="margin-top:8px;">Continuar para pagamento</button>
+    </form>
+    <div class="auth-footer">Já tem conta? <a href="/login">Entrar</a></div>
+  </div>
+</div>
+</body></html>
