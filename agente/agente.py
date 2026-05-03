@@ -15,17 +15,25 @@ EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
 def buscar_cliente_por_fone(fone):
-    import logging
-    fone_limpo = "".join(c for c in fone if c.isdigit())
-    if not fone_limpo.startswith("55"):
-        fone_limpo = "55" + fone_limpo
+    digits = "".join(c for c in fone if c.isdigit())
+    if not digits.startswith("55"):
+        digits = "55" + digits
+
+    # Gera variantes com e sem o 9º dígito brasileiro (55 + DDD 2 dig + numero 8 ou 9 dig)
+    variantes = [digits]
+    if len(digits) == 12:  # sem o 9 extra → tenta adicionar
+        variantes.append(digits[:4] + "9" + digits[4:])
+    elif len(digits) == 13:  # com o 9 extra → tenta remover
+        variantes.append(digits[:4] + digits[5:])
+
     conn = get_db()
-    cliente = conn.execute(
-        "SELECT * FROM clientes WHERE whatsapp = %s",
-        (fone_limpo,)
-    ).fetchone()
-    todos = conn.execute("SELECT id, nome, whatsapp, status FROM clientes").fetchall()
-    logging.warning(f"BUSCA fone={fone_limpo} | encontrado={cliente is not None} | todos={[dict(r) for r in todos]}")
+    cliente = None
+    for v in variantes:
+        cliente = conn.execute(
+            "SELECT * FROM clientes WHERE whatsapp = %s", (v,)
+        ).fetchone()
+        if cliente:
+            break
     conn.close()
     return cliente
 
