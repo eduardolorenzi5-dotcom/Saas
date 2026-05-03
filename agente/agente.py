@@ -80,6 +80,19 @@ def deletar_gasto_por_descricao(cliente_id, descricao, valor=None):
     conn.close()
     return dict(gasto)
 
+def historico_gastos(cliente_id):
+    from datetime import timedelta
+    hoje = date.today()
+    tres_meses_atras = (hoje.replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)
+    tres_meses_atras = tres_meses_atras.replace(day=1)
+    conn = get_db()
+    gastos = conn.execute(
+        "SELECT descricao, valor, categoria, data FROM gastos WHERE cliente_id=%s AND data >= %s ORDER BY data DESC",
+        (cliente_id, tres_meses_atras.isoformat())
+    ).fetchall()
+    conn.close()
+    return [dict(g) for g in gastos]
+
 def resumo_mes(cliente_id):
     mes = date.today().strftime("%Y-%m")
     conn = get_db()
@@ -94,6 +107,38 @@ def resumo_mes(cliente_id):
     conn.close()
     return total, [dict(r) for r in por_cat]
 
+def gerar_analise_financeira(gastos):
+    if not gastos:
+        return "Ainda não tenho gastos suficientes para fazer uma análise. Continue registrando seus gastos!"
+
+    linhas_gastos = "\n".join(
+        f"- {g['data']}: {g['descricao']} | R$ {float(g['valor']):.2f} | {g['categoria']}"
+        for g in gastos
+    )
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
+    body = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 800,
+        "system": f"""Você é um consultor financeiro pessoal via WhatsApp. Analise os gastos do cliente e forneça insights práticos e personalizados.
+
+Baseado nos dados, responda em português, de forma amigável e direta (máximo 300 palavras), incluindo:
+1. 📊 Onde está gastando mais (top 2-3 categorias)
+2. ⚠️ O que precisa economizar (identifique padrões preocupantes)
+3. 📈 Tendência para a próxima semana (baseado na frequência e padrão dos gastos)
+4. 💡 1 dica prática e personalizada
+
+Hoje: {date.today().isoformat()}
+Use emojis para deixar a mensagem mais visual. Seja específico com os valores.""",
+        "messages": [{"role": "user", "content": f"Meus gastos dos últimos meses:\n{linhas_gastos}"}]
+    }
+    res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body, timeout=20)
+    res.raise_for_status()
+    return res.json()["content"][0]["text"].strip()
+
 def chamar_claude(mensagem, historico=[]):
     """Chama a API do Claude para interpretar a mensagem."""
     system = f"""Você é um assistente financeiro amigável via WhatsApp.
@@ -104,7 +149,8 @@ Ao receber uma mensagem, identifique se é:
 2. Uma EXCLUSÃO do último gasto — ex: "apaga o último", "cancela o último gasto"
 3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
 4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês"
-5. Outra mensagem — responda de forma amigável
+5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
+6. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(CATEGORIAS)}
 
@@ -123,6 +169,9 @@ Se for exclusão por descrição (extraia a descrição e opcionalmente o valor)
 
 Se for consulta de resumo, responda:
 {{"acao": "resumo"}}
+
+Se for pedido de análise financeira:
+{{"acao": "analise"}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -221,6 +270,10 @@ def processar_mensagem(fone, mensagem):
                 resposta = f"🗑️ Gasto removido!\n📝 {gasto['descricao']} — R$ {float(gasto['valor']):.2f}"
             else:
                 resposta = f"Não encontrei nenhum gasto com '{desc}' para remover."
+
+        elif acao == "analise":
+            gastos = historico_gastos(cliente["id"])
+            resposta = gerar_analise_financeira(gastos)
 
         elif acao == "resumo":
             total, por_cat = resumo_mes(cliente["id"])
