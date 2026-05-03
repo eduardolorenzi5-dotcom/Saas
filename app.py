@@ -229,9 +229,11 @@ def webhook_whatsapp():
 
         if payload.get("inputs"):
             inputs = payload["inputs"]
-            msg = inputs.get("query") or inputs.get("message") or inputs.get("text", "")
-            fone = inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or \
-                   inputs.get("user", "").replace("@s.whatsapp.net", "")
+            msg = (inputs.get("query") or inputs.get("message") or inputs.get("text") or
+                   payload.get("query") or payload.get("message") or payload.get("text", ""))
+            fone = (inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or
+                    inputs.get("user", "").replace("@s.whatsapp.net", "") or
+                    payload.get("user", "").replace("@s.whatsapp.net", ""))
         elif payload.get("query"):
             msg = payload.get("query", "")
             fone = payload.get("remoteJid", "").replace("@s.whatsapp.net", "") or \
