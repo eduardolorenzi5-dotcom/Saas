@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Esqueci minha senha — Controla Fácil</title><link rel="stylesheet" href="/static/css/site.css"/></head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h2>Esqueci minha senha</h2>
+    {% if enviado %}
+      <p class="sub">Se este e-mail estiver cadastrado, você receberá um link para redefinir sua senha em breve.</p>
+      <a href="/login" class="btn-primary btn-block" style="margin-top:16px;">Voltar ao login</a>
+    {% else %}
+      <p class="sub">Digite seu e-mail e enviaremos um link para redefinir sua senha.</p>
+      <form method="POST">
+        <div class="field"><label>E-mail</label><input type="email" name="email" placeholder="seu@email.com" required autofocus/></div>
+        <button type="submit" class="btn-primary btn-block" style="margin-top:8px;">Enviar link</button>
+      </form>
+      <div class="auth-footer"><a href="/login">Voltar ao login</a></div>
+    {% endif %}
+  </div>
+</div>
+</body></html>

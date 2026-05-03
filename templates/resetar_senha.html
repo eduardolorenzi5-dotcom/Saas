@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Redefinir senha — Controla Fácil</title><link rel="stylesheet" href="/static/css/site.css"/></head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h2>Redefinir senha</h2>
+    {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
+    {% if valido %}
+      <p class="sub">Digite sua nova senha.</p>
+      <form method="POST">
+        <div class="field"><label>Nova senha</label><input type="password" name="senha" placeholder="Mínimo 6 caracteres" required minlength="6" autofocus/></div>
+        <div class="field"><label>Confirmar senha</label><input type="password" name="confirma" placeholder="Repita a senha" required/></div>
+        <button type="submit" class="btn-primary btn-block" style="margin-top:8px;">Salvar nova senha</button>
+      </form>
+    {% else %}
+      <a href="/esqueci-senha" class="btn-primary btn-block" style="margin-top:16px;">Solicitar novo link</a>
+    {% endif %}
+    <div class="auth-footer"><a href="/login">Voltar ao login</a></div>
+  </div>
+</div>
+</body></html>

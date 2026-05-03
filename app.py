@@ -97,6 +97,18 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
         """)
+    # Adiciona colunas de reset de senha se não existirem
+    if USE_PG:
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS reset_token TEXT")
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS reset_expiry TEXT")
+    else:
+        for col in ["reset_token TEXT", "reset_expiry TEXT"]:
+            try:
+                conn.execute(f"ALTER TABLE clientes ADD COLUMN {col}")
+            except Exception:
+                pass
+    conn.commit()
+
     existe = conn.execute("SELECT COUNT(*) as cnt FROM planos").fetchone()["cnt"]
     if not existe:
         conn.executemany("INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)", [
@@ -109,6 +121,34 @@ def init_db():
 
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
+
+def enviar_email_reset(destinatario, link):
+    import smtplib
+    from email.mime.text import MIMEText
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASS", "")
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user)
+    corpo = f"""Olá!
+
+Recebemos uma solicitação para redefinir sua senha no Controla Fácil.
+
+Clique no link abaixo para criar uma nova senha (válido por 1 hora):
+
+{link}
+
+Se você não solicitou isso, ignore este e-mail.
+
+— Equipe Controla Fácil"""
+    msg = MIMEText(corpo, "plain", "utf-8")
+    msg["Subject"] = "Redefinição de senha — Controla Fácil"
+    msg["From"] = smtp_from
+    msg["To"] = destinatario
+    with smtplib.SMTP(smtp_host, smtp_port) as s:
+        s.starttls()
+        s.login(smtp_user, smtp_pass)
+        s.sendmail(smtp_from, [destinatario], msg.as_string())
 
 def normalizar_whatsapp(numero):
     """Remove tudo que não é dígito e garante o formato 55DDDNUMERO."""
@@ -269,6 +309,62 @@ def deletar_gasto(gid):
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+@app.route("/esqueci-senha", methods=["GET", "POST"])
+def esqueci_senha():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        conn = get_db()
+        cliente = conn.execute("SELECT * FROM clientes WHERE email=%s", (email,)).fetchone()
+        if cliente:
+            token = secrets.token_urlsafe(32)
+            expiry = (datetime.utcnow().replace(microsecond=0) + __import__("datetime").timedelta(hours=1)).isoformat()
+            conn.execute(
+                "UPDATE clientes SET reset_token=%s, reset_expiry=%s WHERE email=%s",
+                (token, expiry, email)
+            )
+            conn.commit()
+            base_url = os.environ.get("BASE_URL", request.host_url.rstrip("/"))
+            link = f"{base_url}/resetar-senha/{token}"
+            try:
+                enviar_email_reset(email, link)
+            except Exception as e:
+                logging.error(f"Erro ao enviar email: {e}")
+        conn.close()
+        return render_template("esqueci_senha.html", enviado=True)
+    return render_template("esqueci_senha.html", enviado=False)
+
+@app.route("/resetar-senha/<token>", methods=["GET", "POST"])
+def resetar_senha(token):
+    conn = get_db()
+    cliente = conn.execute(
+        "SELECT * FROM clientes WHERE reset_token=%s", (token,)
+    ).fetchone()
+    if not cliente:
+        conn.close()
+        return render_template("resetar_senha.html", erro="Link inválido ou expirado.", token=token, valido=False)
+    expiry = cliente["reset_expiry"]
+    if not expiry or datetime.utcnow().isoformat() > expiry:
+        conn.close()
+        return render_template("resetar_senha.html", erro="Link expirado. Solicite um novo.", token=token, valido=False)
+    if request.method == "POST":
+        nova_senha = request.form.get("senha", "")
+        confirma = request.form.get("confirma", "")
+        if len(nova_senha) < 6:
+            conn.close()
+            return render_template("resetar_senha.html", erro="A senha deve ter pelo menos 6 caracteres.", token=token, valido=True)
+        if nova_senha != confirma:
+            conn.close()
+            return render_template("resetar_senha.html", erro="As senhas não coincidem.", token=token, valido=True)
+        conn.execute(
+            "UPDATE clientes SET senha_hash=%s, reset_token=NULL, reset_expiry=NULL WHERE reset_token=%s",
+            (hash_senha(nova_senha), token)
+        )
+        conn.commit()
+        conn.close()
+        return redirect(url_for("login"))
+    conn.close()
+    return render_template("resetar_senha.html", erro=None, token=token, valido=True)
 
 @app.route("/webhook/whatsapp", methods=["POST"])
 def webhook_whatsapp():
