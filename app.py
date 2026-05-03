@@ -308,53 +308,6 @@ def webhook_whatsapp():
         logging.error(f"Erro webhook: {e}")
         return jsonify({"output": "Desculpe, tente novamente.", "status": "erro"}), 200
 
-@app.route("/admin/debug")
-def admin_debug():
-    import requests as req
-    result = {}
-    conn = get_db()
-    clientes = conn.execute("SELECT id, nome, whatsapp, status FROM clientes").fetchall()
-    conn.close()
-    result["clientes"] = [dict(c) for c in clientes]
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    result["anthropic_key_set"] = bool(api_key)
-    if api_key:
-        try:
-            r = req.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                json={"model": "claude-sonnet-4-6", "max_tokens": 10, "messages": [{"role": "user", "content": "oi"}]},
-                timeout=10
-            )
-            result["claude_status"] = r.status_code
-            result["claude_response"] = r.json()
-        except Exception as e:
-            result["claude_error"] = str(e)
-    result["evolution_url"] = os.environ.get("EVOLUTION_URL", "NÃO DEFINIDO")
-    result["evolution_key_set"] = bool(os.environ.get("EVOLUTION_KEY", ""))
-    result["use_postgres"] = USE_PG
-    return jsonify(result)
-
-@app.route("/admin/criar-teste")
-def admin_criar_teste():
-    senha_hash = hashlib.sha256("teste123".encode()).hexdigest()
-    conn = get_db()
-    try:
-        if USE_PG:
-            conn.execute(
-                "INSERT INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
-                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, normalizar_whatsapp("556198007328"), "ativo")
-            )
-        else:
-            conn.execute(
-                "INSERT OR IGNORE INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (%s, %s, %s, %s, %s)",
-                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, normalizar_whatsapp("556198007328"), "ativo")
-            )
-        conn.commit()
-        cliente = conn.execute("SELECT * FROM clientes WHERE whatsapp=%s", ("556198007328",)).fetchone()
-    finally:
-        conn.close()
-    return jsonify({"status": "ok", "cliente_id": cliente["id"], "nome": cliente["nome"], "whatsapp": cliente["whatsapp"]})
 
 @app.route("/relatorio/gerar/<int:cliente_id>")
 def gerar_relatorio(cliente_id):
