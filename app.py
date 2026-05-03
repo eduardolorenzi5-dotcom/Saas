@@ -145,10 +145,16 @@ Se você não solicitou isso, ignore este e-mail.
     msg["Subject"] = "Redefinição de senha — Controla Fácil"
     msg["From"] = smtp_from
     msg["To"] = destinatario
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-        s.starttls()
-        s.login(smtp_user, smtp_pass)
-        s.sendmail(smtp_from, [destinatario], msg.as_string())
+    use_ssl = int(smtp_port) == 465
+    if use_ssl:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as s:
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(smtp_from, [destinatario], msg.as_string())
+    else:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+            s.starttls()
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(smtp_from, [destinatario], msg.as_string())
 
 def normalizar_whatsapp(numero):
     """Remove tudo que não é dígito e garante o formato 55DDDNUMERO."""
