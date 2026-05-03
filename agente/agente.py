@@ -106,11 +106,11 @@ def processar_mensagem(fone, mensagem):
     """Função principal chamada pelo webhook."""
     cliente = buscar_cliente_por_fone(fone)
     if not cliente:
-        enviar_whatsapp(fone, "Olá! Não encontrei sua conta. Cadastre-se em gastosai.com para começar.")
+        enviar_whatsapp(fone, "Olá! Não encontrei sua conta. Cadastre-se no Controla Fácil para começar.")
         return "cliente não encontrado"
 
     if cliente["status"] != "ativo":
-        enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento em gastosai.com.")
+        enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento no Controla Fácil.")
         return "conta inativa"
 
     try:
