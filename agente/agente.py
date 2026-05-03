@@ -150,7 +150,8 @@ Ao receber uma mensagem, identifique se é:
 3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
 4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês"
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
-6. Outra mensagem — responda de forma amigável
+6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
+7. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(CATEGORIAS)}
 
@@ -172,6 +173,9 @@ Se for consulta de resumo, responda:
 
 Se for pedido de análise financeira:
 {{"acao": "analise"}}
+
+Se for pedido de dashboard/gráfico visual:
+{{"acao": "dashboard"}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -196,6 +200,80 @@ Responda sempre em português. Seja breve e amigável."""
     # Limpa possíveis backticks
     texto = texto.replace("```json","").replace("```","").strip()
     return json.loads(texto)
+
+def gerar_imagem_dashboard(cliente_id):
+    import io, base64
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    mes = date.today().strftime("%Y-%m")
+    conn = get_db()
+    por_cat = conn.execute(
+        "SELECT categoria, SUM(valor) as total FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY total DESC",
+        (cliente_id, f"{mes}%")
+    ).fetchall()
+    total_geral = conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
+        (cliente_id, f"{mes}%")
+    ).fetchone()["t"]
+    conn.close()
+
+    if not por_cat:
+        return None
+
+    categorias = [r["categoria"] for r in por_cat]
+    valores = [float(r["total"]) for r in por_cat]
+    percentuais = [v / total_geral * 100 if total_geral else 0 for v in valores]
+
+    cores = ["#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7","#DDA0DD","#98D8C8","#F7DC6F","#E8A87C"]
+
+    fig, ax = plt.subplots(figsize=(8, max(3, len(categorias) * 0.9 + 1.5)))
+    fig.patch.set_facecolor("#F8F9FA")
+    ax.set_facecolor("#F8F9FA")
+
+    bars = ax.barh(categorias, valores, color=cores[:len(categorias)], height=0.55, edgecolor="white", linewidth=1.5)
+
+    for bar, val, pct in zip(bars, valores, percentuais):
+        ax.text(
+            bar.get_width() + max(valores) * 0.01,
+            bar.get_y() + bar.get_height() / 2,
+            f"R$ {val:,.2f}  {pct:.1f}%",
+            va="center", fontsize=9, color="#333333"
+        )
+
+    mes_nome = date.today().strftime("%B/%Y").capitalize()
+    ax.set_title(f"Gastos por Categoria — {mes_nome}\nTotal: R$ {total_geral:,.2f}", fontsize=12, fontweight="bold", pad=12, color="#222222")
+    ax.invert_yaxis()
+    ax.set_xlim(0, max(valores) * 1.45)
+    ax.tick_params(axis="y", labelsize=10)
+    ax.xaxis.set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    plt.close()
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+def enviar_imagem_whatsapp(fone, imagem_b64, caption=""):
+    if not EVOLUTION_KEY:
+        return
+    url = f"{EVOLUTION_URL}/message/sendMedia/{EVOLUTION_INSTANCE}"
+    headers = {"apikey": EVOLUTION_KEY, "Content-Type": "application/json"}
+    body = {
+        "number": fone,
+        "mediatype": "image",
+        "mimetype": "image/png",
+        "caption": caption,
+        "media": imagem_b64,
+        "fileName": "relatorio.png",
+    }
+    requests.post(url, headers=headers, json=body, timeout=20)
 
 def enviar_whatsapp(fone, mensagem):
     """Envia mensagem de resposta via Evolution API."""
@@ -270,6 +348,15 @@ def processar_mensagem(fone, mensagem):
                 resposta = f"🗑️ Gasto removido!\n📝 {gasto['descricao']} — R$ {float(gasto['valor']):.2f}"
             else:
                 resposta = f"Não encontrei nenhum gasto com '{desc}' para remover."
+
+        elif acao == "dashboard":
+            imagem = gerar_imagem_dashboard(cliente["id"])
+            if imagem:
+                mes_nome = date.today().strftime("%B/%Y").capitalize()
+                enviar_imagem_whatsapp(fone, imagem, f"📊 Seus gastos de {mes_nome}")
+                resposta = ""
+            else:
+                resposta = "Você ainda não tem gastos registrados este mês para gerar o gráfico."
 
         elif acao == "analise":
             gastos = historico_gastos(cliente["id"])
