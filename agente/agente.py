@@ -170,6 +170,12 @@ Use emojis para deixar a mensagem mais visual. Seja específico com os valores."
     res.raise_for_status()
     return res.json()["content"][0]["text"].strip()
 
+def salvar_renda(cliente_id, valor):
+    conn = get_db()
+    conn.execute("UPDATE clientes SET renda_mensal=%s WHERE id=%s", (valor, cliente_id))
+    conn.commit()
+    conn.close()
+
 def verificar_agenda_conectada(cliente_id):
     conn = get_db()
     row = conn.execute("SELECT google_refresh_token FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
@@ -243,7 +249,8 @@ Ao receber uma mensagem, identifique se é:
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
 7. Um pedido para CONECTAR Google Agenda — ex: "quero conectar minha agenda", "conectar google agenda", "ativar agenda"
 8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
-9. Outra mensagem — responda de forma amigável
+9. Um REGISTRO de renda — ex: "ganho 3000 por mês", "meu salário é 5000", "recebo 2500 mensais", "minha renda é 4000"
+10. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(CATEGORIAS)}
 
@@ -279,6 +286,9 @@ Se for pedido para conectar Google Agenda:
 Se for um agendamento (extraia título, data/hora e duração em minutos):
 {{"acao": "agendar", "titulo": "...", "data_hora": "YYYY-MM-DDTHH:MM:00", "duracao_min": 60}}
 (use 60 minutos como padrão se não informado. Interprete datas relativas como "amanhã", "sexta", "dia 10" com base em hoje.)
+
+Se for registro de renda mensal:
+{{"acao": "registrar_renda", "valor": 0.00}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -547,10 +557,33 @@ def processar_mensagem(fone, mensagem):
 
         elif acao == "resumo":
             total, por_cat = resumo_mes(cliente["id"])
-            linhas = [f"📊 *Resumo de {mes_ano_pt()}*", f"💰 Total: R$ {total:.2f}", ""]
+            renda = float(cliente["renda_mensal"]) if cliente.get("renda_mensal") else None
+            linhas = [f"📊 *Resumo de {mes_ano_pt()}*", ""]
+            if renda:
+                saldo = renda - total
+                pct = (total / renda * 100) if renda else 0
+                linhas.append(f"💵 Renda: R$ {renda:.2f}")
+                linhas.append(f"💸 Gasto: R$ {total:.2f} ({pct:.1f}%)")
+                linhas.append(f"{'✅' if saldo >= 0 else '⚠️'} Saldo: R$ {saldo:.2f}")
+            else:
+                linhas.append(f"💰 Total gasto: R$ {total:.2f}")
+                linhas.append("💡 _Dica: informe sua renda com 'meu salário é 3000' para ver o saldo_")
+            linhas.append("")
             for c in por_cat:
                 linhas.append(f"  • {c['categoria']}: R$ {c['s']:.2f}")
             resposta = "\n".join(linhas)
+
+        elif acao == "registrar_renda":
+            valor = float(resultado.get("valor", 0))
+            if valor > 0:
+                salvar_renda(cliente["id"], valor)
+                resposta = (
+                    f"✅ Renda mensal registrada: R$ {valor:.2f}\n\n"
+                    f"Agora consigo te mostrar quanto você já gastou em relação à sua renda. "
+                    f"Envie *resumo* para ver!"
+                )
+            else:
+                resposta = "Não consegui identificar o valor da renda. Tente: *meu salário é 3000*"
 
         elif acao == "conectar_agenda":
             link = gerar_link_agenda(cliente["id"])

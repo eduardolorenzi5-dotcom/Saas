@@ -29,6 +29,16 @@
         <div class="stat-label">Total gasto no mês</div>
         <div class="stat-val">R$ {{ "%.2f"|format(total) }}</div>
       </div>
+      {% if renda %}
+      <div class="stat-card">
+        <div class="stat-label">Saldo do mês</div>
+        <div class="stat-val" style="color:{{ '#e53e3e' if total > renda else '#38a169' }}">R$ {{ "%.2f"|format(renda - total) }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">% da renda gasta</div>
+        <div class="stat-val">{{ "%.0f"|format(total / renda * 100) }}%</div>
+      </div>
+      {% else %}
       <div class="stat-card">
         <div class="stat-label">Registros este mês</div>
         <div class="stat-val">{{ gastos|length }}</div>
@@ -37,7 +47,19 @@
         <div class="stat-label">Categorias usadas</div>
         <div class="stat-val">{{ por_cat|length }}</div>
       </div>
+      {% endif %}
     </div>
+    {% if renda %}
+    <div class="dash-card" style="margin-bottom:20px;padding:12px 20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:600;">Renda mensal: R$ {{ "%.2f"|format(renda) }}</span>
+        <span style="font-size:12px;color:#888;">{{ gastos|length }} registros · {{ por_cat|length }} categorias</span>
+      </div>
+      <div style="background:#e5e7eb;border-radius:100px;height:8px;overflow:hidden;">
+        <div style="background:{{ '#e53e3e' if total > renda else '#38a169' }};height:100%;width:{{ [total/renda*100,100]|min }}%;border-radius:100px;transition:width .3s;"></div>
+      </div>
+    </div>
+    {% endif %}
 
     <div class="dash-card wpp-info" style="margin-bottom:20px;">
       <span>📱</span>

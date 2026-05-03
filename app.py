@@ -100,11 +100,13 @@ def init_db():
     # Adiciona colunas extras se não existirem
     if USE_PG:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
-                    "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT"]:
+                    "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
+                    "renda_mensal REAL"]:
             conn.execute(f"ALTER TABLE clientes ADD COLUMN IF NOT EXISTS {col}")
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
-                    "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT"]:
+                    "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
+                    "renda_mensal REAL"]:
             try:
                 conn.execute(f"ALTER TABLE clientes ADD COLUMN {col}")
             except Exception:
@@ -409,7 +411,8 @@ def dashboard():
     conn.close()
     return render_template("dashboard.html",
         gastos=gastos, total=total, por_cat=por_cat,
-        cliente=cliente, mes=mes
+        cliente=cliente, mes=mes,
+        renda=float(cliente["renda_mensal"]) if cliente["renda_mensal"] else None
     )
 
 @app.route("/api/gastos", methods=["POST"])
