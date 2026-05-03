@@ -62,7 +62,7 @@
       <div class="dash-card-title">Por categoria</div>
       {% for c in por_cat %}
       <div class="gasto-item">
-        <span><span class="cat-dot" style="background:{{ loop.index|cat_cor }}"></span>{{ c.categoria }}</span>
+        <span><span class="cat-dot" style="background:#1a1a1a"></span>{{ c.categoria }}</span>
         <strong>R$ {{ "%.2f"|format(c.total) }}</strong>
       </div>
       {% endfor %}
