@@ -505,54 +505,52 @@ def resetar_senha(token):
     conn.close()
     return render_template("resetar_senha.html", erro=None, token=token, valido=True)
 
-def _google_flow(state=None):
-    from google_auth_oauthlib.flow import Flow
-    client_config = {
-        "web": {
-            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
-            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [os.environ.get("GOOGLE_REDIRECT_URI", "")]
-        }
-    }
-    kwargs = {"scopes": ["https://www.googleapis.com/auth/calendar.events"]}
-    if state:
-        kwargs["state"] = state
-    flow = Flow.from_client_config(client_config, **kwargs)
-    flow.redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
-    return flow
-
 @app.route("/agenda/conectar/<int:cliente_id>")
 def agenda_conectar(cliente_id):
-    try:
-        flow = _google_flow()
-        auth_url, _ = flow.authorization_url(
-            access_type="offline",
-            prompt="consent",
-            state=str(cliente_id)
-        )
-        return redirect(auth_url)
-    except Exception as e:
-        logging.error(f"Erro agenda_conectar: {e}", exc_info=True)
-        return f"Erro ao gerar link: {e}", 500
+    import urllib.parse
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
+    params = urllib.parse.urlencode({
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "https://www.googleapis.com/auth/calendar.events",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": str(cliente_id)
+    })
+    return redirect(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
 
 @app.route("/agenda/callback")
 def agenda_callback():
+    import urllib.request, urllib.parse, json as _json
+    code = request.args.get("code", "")
     state = request.args.get("state", "")
     try:
         cliente_id = int(state)
     except ValueError:
         return "Estado inválido.", 400
-    flow = _google_flow(state=state)
-    callback_url = request.url.replace("http://", "https://")
-    flow.fetch_token(authorization_response=callback_url)
-    creds = flow.credentials
-    expiry_str = creds.expiry.isoformat() if creds.expiry else None
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
+    data = urllib.parse.urlencode({
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code"
+    }).encode()
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            tokens = _json.loads(resp.read())
+    except Exception as e:
+        logging.error(f"Erro ao trocar token Google: {e}", exc_info=True)
+        return "Erro ao conectar agenda. Tente novamente.", 500
     conn = get_db()
     conn.execute(
-        "UPDATE clientes SET google_access_token=%s, google_refresh_token=%s, google_token_expiry=%s WHERE id=%s",
-        (creds.token, creds.refresh_token, expiry_str, cliente_id)
+        "UPDATE clientes SET google_access_token=%s, google_refresh_token=%s WHERE id=%s",
+        (tokens.get("access_token"), tokens.get("refresh_token"), cliente_id)
     )
     conn.commit()
     conn.close()

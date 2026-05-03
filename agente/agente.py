@@ -179,15 +179,23 @@ def verificar_agenda_conectada(cliente_id):
 def gerar_link_agenda(cliente_id):
     return f"{APP_URL}/agenda/conectar/{cliente_id}"
 
+def _google_refresh_token(refresh_token):
+    """Troca o refresh_token por um novo access_token."""
+    resp = requests.post("https://oauth2.googleapis.com/token", data={
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token"
+    }, timeout=10)
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
 def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60):
-    from google.oauth2.credentials import Credentials
-    from google.auth.transport.requests import Request as GRequest
-    from googleapiclient.discovery import build
     import datetime as dt
 
     conn = get_db()
     row = conn.execute(
-        "SELECT google_access_token, google_refresh_token, google_token_expiry FROM clientes WHERE id=%s",
+        "SELECT google_access_token, google_refresh_token FROM clientes WHERE id=%s",
         (cliente_id,)
     ).fetchone()
     conn.close()
@@ -195,31 +203,30 @@ def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60):
     if not row or not row["google_refresh_token"]:
         return None
 
-    creds = Credentials(
-        token=row["google_access_token"],
-        refresh_token=row["google_refresh_token"],
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=GOOGLE_CLIENT_ID,
-        client_secret=GOOGLE_CLIENT_SECRET,
-        scopes=["https://www.googleapis.com/auth/calendar.events"]
-    )
-    if not creds.valid:
-        creds.refresh(GRequest())
-        conn = get_db()
-        conn.execute("UPDATE clientes SET google_access_token=%s WHERE id=%s", (creds.token, cliente_id))
-        conn.commit()
-        conn.close()
-
-    service = build("calendar", "v3", credentials=creds)
-    inicio = dt.datetime.fromisoformat(data_hora_iso)
-    fim = inicio + dt.timedelta(minutes=duracao_min)
-    event = {
-        "summary": titulo,
-        "start": {"dateTime": inicio.isoformat(), "timeZone": "America/Sao_Paulo"},
-        "end": {"dateTime": fim.isoformat(), "timeZone": "America/Sao_Paulo"},
-    }
-    created = service.events().insert(calendarId="primary", body=event).execute()
-    return created.get("htmlLink")
+    access_token = row["google_access_token"]
+    # Tenta criar o evento; se 401, renova o token e tenta de novo
+    for tentativa in range(2):
+        inicio = dt.datetime.fromisoformat(data_hora_iso)
+        fim = inicio + dt.timedelta(minutes=duracao_min)
+        event = {
+            "summary": titulo,
+            "start": {"dateTime": inicio.isoformat(), "timeZone": "America/Sao_Paulo"},
+            "end": {"dateTime": fim.isoformat(), "timeZone": "America/Sao_Paulo"},
+        }
+        resp = requests.post(
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json=event, timeout=15
+        )
+        if resp.status_code == 401 and tentativa == 0:
+            access_token = _google_refresh_token(row["google_refresh_token"])
+            conn = get_db()
+            conn.execute("UPDATE clientes SET google_access_token=%s WHERE id=%s", (access_token, cliente_id))
+            conn.commit()
+            conn.close()
+            continue
+        resp.raise_for_status()
+        return resp.json().get("htmlLink")
 
 def chamar_claude(mensagem, historico=[]):
     """Chama a API do Claude para interpretar a mensagem."""
