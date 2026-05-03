@@ -110,6 +110,13 @@ def init_db():
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
+def normalizar_whatsapp(numero):
+    """Remove tudo que não é dígito e garante o formato 55DDDNUMERO."""
+    digits = "".join(c for c in numero if c.isdigit())
+    if not digits.startswith("55"):
+        digits = "55" + digits
+    return digits
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -131,7 +138,7 @@ def cadastro():
         nome     = request.form.get("nome", "").strip()
         email    = request.form.get("email", "").strip().lower()
         senha    = request.form.get("senha", "")
-        whatsapp = request.form.get("whatsapp", "").strip()
+        whatsapp = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
         plano_id = request.form.get("plano_id")
         if not all([nome, email, senha, whatsapp, plano_id]):
             return render_template("cadastro.html", erro="Preencha todos os campos.")
@@ -336,12 +343,12 @@ def admin_criar_teste():
         if USE_PG:
             conn.execute(
                 "INSERT INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
-                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, "556198007328", "ativo")
+                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, normalizar_whatsapp("556198007328"), "ativo")
             )
         else:
             conn.execute(
                 "INSERT OR IGNORE INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (%s, %s, %s, %s, %s)",
-                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, "556198007328", "ativo")
+                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, normalizar_whatsapp("556198007328"), "ativo")
             )
         conn.commit()
         cliente = conn.execute("SELECT * FROM clientes WHERE whatsapp=%s", ("556198007328",)).fetchone()

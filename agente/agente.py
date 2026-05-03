@@ -15,11 +15,13 @@ EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
 def buscar_cliente_por_fone(fone):
-    fone_limpo = fone.replace("+","").replace("-","").replace(" ","").replace("(","").replace(")","")
+    fone_limpo = "".join(c for c in fone if c.isdigit())
+    if not fone_limpo.startswith("55"):
+        fone_limpo = "55" + fone_limpo
     conn = get_db()
     cliente = conn.execute(
-        "SELECT * FROM clientes WHERE REPLACE(REPLACE(REPLACE(whatsapp,'-',''),'(',''),')','') LIKE %s",
-        (f"%{fone_limpo[-8:]}",)
+        "SELECT * FROM clientes WHERE whatsapp = %s",
+        (fone_limpo,)
     ).fetchone()
     conn.close()
     return cliente
