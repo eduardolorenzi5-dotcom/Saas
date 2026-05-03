@@ -145,7 +145,7 @@ Se você não solicitou isso, ignore este e-mail.
     msg["Subject"] = "Redefinição de senha — Controla Fácil"
     msg["From"] = smtp_from
     msg["To"] = destinatario
-    with smtplib.SMTP(smtp_host, smtp_port) as s:
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
         s.starttls()
         s.login(smtp_user, smtp_pass)
         s.sendmail(smtp_from, [destinatario], msg.as_string())
@@ -326,10 +326,13 @@ def esqueci_senha():
             conn.commit()
             base_url = os.environ.get("BASE_URL", request.host_url.rstrip("/"))
             link = f"{base_url}/resetar-senha/{token}"
-            try:
-                enviar_email_reset(email, link)
-            except Exception as e:
-                logging.error(f"Erro ao enviar email: {e}")
+            import threading
+            def _send():
+                try:
+                    enviar_email_reset(email, link)
+                except Exception as e:
+                    logging.error(f"Erro ao enviar email: {e}")
+            threading.Thread(target=_send, daemon=True).start()
         conn.close()
         return render_template("esqueci_senha.html", enviado=True)
     return render_template("esqueci_senha.html", enviado=False)
