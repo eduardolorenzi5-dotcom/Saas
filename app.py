@@ -109,11 +109,24 @@ def init_db():
                 pass
     conn.commit()
 
-    conn.execute("DELETE FROM planos")
-    conn.execute(
-        "INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)",
-        ("Controla Fácil", 14.90, "Controle de gastos via WhatsApp com IA + dashboard + relatórios")
-    )
+    # Garante plano único sem deletar (evita violação de FK com clientes existentes)
+    descricao_plano = "Controle de gastos via WhatsApp com IA + dashboard + relatórios"
+    if USE_PG:
+        row = conn.execute("SELECT id FROM planos WHERE nome = %s", ("Controla Fácil",)).fetchone()
+        if row:
+            conn.execute("UPDATE planos SET preco=%s, descricao=%s WHERE nome=%s",
+                         (14.90, descricao_plano, "Controla Fácil"))
+        else:
+            conn.execute("INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)",
+                         ("Controla Fácil", 14.90, descricao_plano))
+    else:
+        row = conn.execute("SELECT id FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchone()
+        if row:
+            conn.execute("UPDATE planos SET preco=?, descricao=? WHERE nome=?",
+                         (14.90, descricao_plano, "Controla Fácil"))
+        else:
+            conn.execute("INSERT INTO planos (nome, preco, descricao) VALUES (?, ?, ?)",
+                         ("Controla Fácil", 14.90, descricao_plano))
     conn.commit()
     conn.close()
 
