@@ -80,7 +80,7 @@ Responda sempre em português. Seja breve e amigável."""
         "content-type": "application/json"
     }
     body = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "max_tokens": 500,
         "system": system,
         "messages": [{"role": "user", "content": mensagem}]
@@ -145,8 +145,9 @@ def processar_mensagem(fone, mensagem):
             resposta = resultado.get("texto", "Como posso te ajudar?")
 
     except Exception as e:
+        import logging, traceback
+        logging.error(f"Erro agente: {e}\n{traceback.format_exc()}")
         resposta = "Desculpe, não consegui processar sua mensagem. Tente novamente."
-        print(f"Erro agente: {e}")
 
     enviar_whatsapp(fone, resposta)
     return resposta
