@@ -186,7 +186,7 @@ def login_required(f):
 @app.route("/")
 def index():
     conn = get_db()
-    planos = conn.execute("SELECT * FROM planos ORDER BY preco").fetchall()
+    planos = conn.execute("SELECT * FROM planos WHERE nome = %s" if USE_PG else "SELECT * FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchall()
     conn.close()
     return render_template("index.html", planos=planos)
 
@@ -216,7 +216,7 @@ def cadastro():
                 return render_template("cadastro.html", erro="E-mail ja cadastrado.")
             raise
     conn = get_db()
-    planos = conn.execute("SELECT * FROM planos ORDER BY preco").fetchall()
+    planos = conn.execute("SELECT * FROM planos WHERE nome = %s" if USE_PG else "SELECT * FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchall()
     conn.close()
     return render_template("cadastro.html", planos=planos)
 
