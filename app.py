@@ -235,13 +235,46 @@ def deletar_gasto(gid):
 def webhook_whatsapp():
     """Recebe mensagens da Evolution API e aciona o agente."""
     from agente.agente import processar_mensagem
+    import logging
     payload = request.json
+    logging.warning(f"WEBHOOK PAYLOAD: {payload}")
     try:
-        msg  = payload["data"]["message"]["conversation"]
-        fone = payload["data"]["key"]["remoteJid"].replace("@s.whatsapp.net", "")
+        # Tenta diferentes formatos do payload da Evolution API
+        msg = None
+        fone = None
+
+        # Formato Evolution Bot
+        if payload.get("message"):
+            msg = payload.get("message", {}).get("conversation") or \
+                  payload.get("message", {}).get("extendedTextMessage", {}).get("text") or \
+                  payload.get("message", {}).get("body", "")
+            fone = payload.get("remoteJid", "").replace("@s.whatsapp.net", "")
+
+        # Formato webhook padrão
+        elif payload.get("data"):
+            data = payload["data"]
+            msg = data.get("message", {}).get("conversation") or \
+                  data.get("message", {}).get("extendedTextMessage", {}).get("text") or \
+                  data.get("body", "")
+            fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
+
+        # Formato direto
+        elif payload.get("body"):
+            msg = payload.get("body", "")
+            fone = payload.get("from", "").replace("@s.whatsapp.net", "")
+
+        if not msg or not fone:
+            logging.warning(f"Payload não reconhecido: {payload}")
+            return jsonify({"status": "ignorado"}), 200
+
+        # Ignora mensagens do próprio bot
+        if payload.get("fromMe") or payload.get("data", {}).get("key", {}).get("fromMe"):
+            return jsonify({"status": "ignorado"}), 200
+
         resposta = processar_mensagem(fone, msg)
         return jsonify({"status": "ok", "resposta": resposta})
     except Exception as e:
+        logging.error(f"Erro webhook: {e}, payload: {payload}")
         return jsonify({"status": "erro", "detalhe": str(e)}), 400
 
 # ── Relatório mensal (acionado por cron ou manualmente) ───────────────────────
