@@ -256,6 +256,39 @@ def webhook_whatsapp():
         logging.error(f"Erro webhook: {e}")
         return jsonify({"output": "Desculpe, tente novamente.", "status": "erro"}), 200
 
+@app.route("/admin/debug")
+def admin_debug():
+    import requests as req, os
+    result = {}
+
+    # 1. verifica cliente no banco
+    conn = get_db()
+    clientes = conn.execute("SELECT id, nome, whatsapp, status FROM clientes").fetchall()
+    conn.close()
+    result["clientes"] = [dict(c) for c in clientes]
+
+    # 2. testa API do Claude
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    result["anthropic_key_set"] = bool(api_key)
+    if api_key:
+        try:
+            r = req.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                json={"model": "claude-sonnet-4-6", "max_tokens": 10, "messages": [{"role": "user", "content": "oi"}]},
+                timeout=10
+            )
+            result["claude_status"] = r.status_code
+            result["claude_response"] = r.json()
+        except Exception as e:
+            result["claude_error"] = str(e)
+
+    # 3. variáveis de ambiente relevantes
+    result["evolution_url"] = os.environ.get("EVOLUTION_URL", "NÃO DEFINIDO")
+    result["evolution_key_set"] = bool(os.environ.get("EVOLUTION_KEY", ""))
+
+    return jsonify(result)
+
 @app.route("/admin/criar-teste")
 def admin_criar_teste():
     senha_hash = hashlib.sha256("teste123".encode()).hexdigest()
