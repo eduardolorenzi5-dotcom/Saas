@@ -107,10 +107,38 @@ a { text-decoration: none; color: inherit; }
 /* Footer */
 .footer { background: #1a1a1a; color: #888; text-align: center; padding: 24px; font-size: 13px; }
 
+/* Mobile nav bar (dashboard) */
+.dash-mobile-bar { display: none; }
+
 @media (max-width: 768px) {
   .hero h1 { font-size: 32px; }
   .steps { grid-template-columns: 1fr 1fr; }
   .planos-grid { grid-template-columns: 1fr; }
-  .cards-row { grid-template-columns: 1fr; }
+  .cards-row { grid-template-columns: 1fr 1fr; }
   .form-row { grid-template-columns: 1fr 1fr; }
+
+  /* Dashboard mobile */
+  .dash-sidebar { display: none; }
+  .dash-mobile-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e3;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .dash-mobile-bar .logo { font-size: 16px; font-weight: 700; }
+  .dash-mobile-bar a { font-size: 14px; color: #555; }
+  .dash-main { padding: 16px; }
+  .dash-header h1 { font-size: 18px; }
+  .stat-val { font-size: 20px; }
+  .form-row { grid-template-columns: 1fr; }
+  .wpp-info { font-size: 12px; }
+}
+
+@media (max-width: 400px) {
+  .cards-row { grid-template-columns: 1fr; }
 }
