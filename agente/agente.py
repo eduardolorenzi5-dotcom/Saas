@@ -185,6 +185,25 @@ def verificar_agenda_conectada(cliente_id):
 def gerar_link_agenda(cliente_id):
     return f"{APP_URL}/agenda/conectar/{cliente_id}"
 
+CORES_AGENDA = {
+    "lavanda": "1", "lavender": "1",
+    "verde": "2", "sage": "2", "salvia": "2",
+    "roxo": "3", "uva": "3", "grape": "3",
+    "rosa": "4", "flamingo": "4",
+    "amarelo": "4", "banana": "5",
+    "laranja": "6", "tangerina": "6",
+    "azul": "7", "peacock": "7",
+    "azul-escuro": "8", "azul escuro": "8", "mirtilo": "8", "blueberry": "8",
+    "verde-escuro": "9", "verde escuro": "9", "manjericao": "9",
+    "vermelho": "11", "tomate": "11", "tomato": "11",
+    "cinza": "None",
+}
+
+def _cor_para_id(cor):
+    if not cor:
+        return None
+    return CORES_AGENDA.get(cor.lower().strip())
+
 def _google_refresh_token(refresh_token):
     """Troca o refresh_token por um novo access_token."""
     resp = requests.post("https://oauth2.googleapis.com/token", data={
@@ -196,7 +215,7 @@ def _google_refresh_token(refresh_token):
     resp.raise_for_status()
     return resp.json()["access_token"]
 
-def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60):
+def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60, cor=None):
     import datetime as dt
 
     conn = get_db()
@@ -219,6 +238,9 @@ def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60):
             "start": {"dateTime": inicio.isoformat(), "timeZone": "America/Sao_Paulo"},
             "end": {"dateTime": fim.isoformat(), "timeZone": "America/Sao_Paulo"},
         }
+        color_id = _cor_para_id(cor)
+        if color_id and color_id != "None":
+            event["colorId"] = color_id
         resp = requests.post(
             "https://www.googleapis.com/calendar/v3/calendars/primary/events",
             headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
@@ -283,9 +305,9 @@ Se for pedido de dashboard/gráfico visual:
 Se for pedido para conectar Google Agenda:
 {{"acao": "conectar_agenda"}}
 
-Se for um agendamento (extraia título, data/hora e duração em minutos):
-{{"acao": "agendar", "titulo": "...", "data_hora": "YYYY-MM-DDTHH:MM:00", "duracao_min": 60}}
-(use 60 minutos como padrão se não informado. Interprete datas relativas como "amanhã", "sexta", "dia 10" com base em hoje.)
+Se for um agendamento (extraia título, data/hora, duração em minutos e cor opcional):
+{{"acao": "agendar", "titulo": "...", "data_hora": "YYYY-MM-DDTHH:MM:00", "duracao_min": 60, "cor": "vermelho"}}
+(use 60 minutos como padrão se não informado. Interprete datas relativas como "amanhã", "sexta", "dia 10" com base em hoje. Omita "cor" se não mencionada. Cores possíveis: vermelho, laranja, amarelo, verde, azul, azul-escuro, roxo, rosa, cinza.)
 
 Se for registro de renda mensal:
 {{"acao": "registrar_renda", "valor": 0.00}}
@@ -609,15 +631,18 @@ def processar_mensagem(fone, mensagem):
                 titulo = resultado.get("titulo", "Compromisso")
                 data_hora = resultado.get("data_hora", "")
                 duracao = int(resultado.get("duracao_min", 60))
+                cor = resultado.get("cor")
                 try:
-                    link_evento = criar_evento_agenda(cliente["id"], titulo, data_hora, duracao)
+                    link_evento = criar_evento_agenda(cliente["id"], titulo, data_hora, duracao, cor)
                     from datetime import datetime as _dt
                     dt_fmt = _dt.fromisoformat(data_hora)
+                    cor_emoji = {"vermelho":"🔴","laranja":"🟠","amarelo":"🟡","verde":"🟢","azul":"🔵","roxo":"🟣","rosa":"🩷","cinza":"⚫"}.get((cor or "").lower(), "")
                     resposta = (
                         f"✅ Agendado no Google Agenda!\n"
                         f"📌 {titulo}\n"
                         f"📅 {dt_fmt.strftime('%d/%m/%Y')} às {dt_fmt.strftime('%H:%M')}\n"
                         f"⏱️ Duração: {duracao} min"
+                        + (f"\n🎨 Cor: {cor_emoji} {cor.capitalize()}" if cor else "")
                     )
                 except Exception as e:
                     import logging, traceback
