@@ -256,6 +256,21 @@ def webhook_whatsapp():
         logging.error(f"Erro webhook: {e}")
         return jsonify({"output": "Desculpe, tente novamente.", "status": "erro"}), 200
 
+@app.route("/admin/criar-teste")
+def admin_criar_teste():
+    senha_hash = hashlib.sha256("teste123".encode()).hexdigest()
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (?,?,?,?,?)",
+            ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, "556198007328", "ativo")
+        )
+        conn.commit()
+        cliente = conn.execute("SELECT * FROM clientes WHERE whatsapp=?", ("556198007328",)).fetchone()
+    finally:
+        conn.close()
+    return jsonify({"status": "ok", "cliente_id": cliente["id"], "nome": cliente["nome"], "whatsapp": cliente["whatsapp"]})
+
 @app.route("/relatorio/gerar/<int:cliente_id>")
 def gerar_relatorio(cliente_id):
     from relatorio.gerador import gerar_pdf
