@@ -46,6 +46,40 @@ def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto):
     conn.commit()
     conn.close()
 
+def deletar_ultimo_gasto(cliente_id):
+    conn = get_db()
+    ultimo = conn.execute(
+        "SELECT id, descricao, valor FROM gastos WHERE cliente_id=%s ORDER BY criado_em DESC LIMIT 1",
+        (cliente_id,)
+    ).fetchone()
+    if not ultimo:
+        conn.close()
+        return None
+    conn.execute("DELETE FROM gastos WHERE id=%s AND cliente_id=%s", (ultimo["id"], cliente_id))
+    conn.commit()
+    conn.close()
+    return dict(ultimo)
+
+def deletar_gasto_por_descricao(cliente_id, descricao, valor=None):
+    conn = get_db()
+    if valor is not None:
+        gasto = conn.execute(
+            "SELECT id, descricao, valor FROM gastos WHERE cliente_id=%s AND LOWER(descricao) LIKE LOWER(%s) AND valor=%s ORDER BY criado_em DESC LIMIT 1",
+            (cliente_id, f"%{descricao}%", valor)
+        ).fetchone()
+    else:
+        gasto = conn.execute(
+            "SELECT id, descricao, valor FROM gastos WHERE cliente_id=%s AND LOWER(descricao) LIKE LOWER(%s) ORDER BY criado_em DESC LIMIT 1",
+            (cliente_id, f"%{descricao}%")
+        ).fetchone()
+    if not gasto:
+        conn.close()
+        return None
+    conn.execute("DELETE FROM gastos WHERE id=%s AND cliente_id=%s", (gasto["id"], cliente_id))
+    conn.commit()
+    conn.close()
+    return dict(gasto)
+
 def resumo_mes(cliente_id):
     mes = date.today().strftime("%Y-%m")
     conn = get_db()
@@ -67,13 +101,22 @@ Seu papel é ajudar o usuário a registrar gastos e consultar o resumo financeir
 
 Ao receber uma mensagem, identifique se é:
 1. Um REGISTRO de gasto — extraia: descricao, valor (número), categoria, data
-2. Uma CONSULTA de resumo — responda com "RESUMO"
-3. Outra mensagem — responda de forma amigável
+2. Uma EXCLUSÃO do último gasto — ex: "apaga o último", "cancela o último gasto"
+3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
+4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês"
+5. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(CATEGORIAS)}
 
 Se for um registro, responda APENAS com JSON no formato:
 {{"acao": "registrar", "descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}
+
+Se for exclusão do último gasto:
+{{"acao": "deletar_ultimo"}}
+
+Se for exclusão por descrição (extraia a descrição e opcionalmente o valor):
+{{"acao": "deletar", "descricao": "...", "valor": 0.00}}
+(omita "valor" se não mencionado)
 
 Se for consulta de resumo, responda:
 {{"acao": "resumo"}}
@@ -142,6 +185,22 @@ def processar_mensagem(fone, mensagem):
                 f"📂 {resultado['categoria']}\n"
                 f"📅 {resultado.get('data', date.today().isoformat())}"
             )
+
+        elif acao == "deletar_ultimo":
+            gasto = deletar_ultimo_gasto(cliente["id"])
+            if gasto:
+                resposta = f"🗑️ Último gasto removido!\n📝 {gasto['descricao']} — R$ {float(gasto['valor']):.2f}"
+            else:
+                resposta = "Não encontrei nenhum gasto para remover."
+
+        elif acao == "deletar":
+            desc = resultado.get("descricao", "")
+            valor = resultado.get("valor")
+            gasto = deletar_gasto_por_descricao(cliente["id"], desc, float(valor) if valor else None)
+            if gasto:
+                resposta = f"🗑️ Gasto removido!\n📝 {gasto['descricao']} — R$ {float(gasto['valor']):.2f}"
+            else:
+                resposta = f"Não encontrei nenhum gasto com '{desc}' para remover."
 
         elif acao == "resumo":
             total, por_cat = resumo_mes(cliente["id"])
