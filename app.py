@@ -1,62 +1,105 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
-import sqlite3, os, hashlib, secrets, logging
+import os, hashlib, secrets, logging
 from datetime import datetime, date
 from functools import wraps
+from db import get_db, USE_PG
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gastos.db")
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 def init_db():
     conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS planos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            preco REAL NOT NULL,
-            descricao TEXT
-        );
-        CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            senha_hash TEXT NOT NULL,
-            whatsapp TEXT,
-            plano_id INTEGER,
-            status TEXT DEFAULT 'pendente',
-            token_acesso TEXT UNIQUE,
-            criado_em TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (plano_id) REFERENCES planos(id)
-        );
-        CREATE TABLE IF NOT EXISTS gastos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cliente_id INTEGER NOT NULL,
-            descricao TEXT NOT NULL,
-            valor REAL NOT NULL,
-            categoria TEXT NOT NULL,
-            data TEXT NOT NULL,
-            fonte TEXT DEFAULT 'manual',
-            criado_em TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (cliente_id) REFERENCES clientes(id)
-        );
-        CREATE TABLE IF NOT EXISTS pagamentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cliente_id INTEGER NOT NULL,
-            valor REAL NOT NULL,
-            status TEXT DEFAULT 'pendente',
-            referencia TEXT,
-            criado_em TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (cliente_id) REFERENCES clientes(id)
-        );
-    """)
-    existe = conn.execute("SELECT COUNT(*) FROM planos").fetchone()[0]
+    if USE_PG:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS planos (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                preco REAL NOT NULL,
+                descricao TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS clientes (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                senha_hash TEXT NOT NULL,
+                whatsapp TEXT,
+                plano_id INTEGER,
+                status TEXT DEFAULT 'pendente',
+                token_acesso TEXT UNIQUE,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (plano_id) REFERENCES planos(id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS gastos (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL NOT NULL,
+                categoria TEXT NOT NULL,
+                data TEXT NOT NULL,
+                fonte TEXT DEFAULT 'manual',
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pagamentos (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                valor REAL NOT NULL,
+                status TEXT DEFAULT 'pendente',
+                referencia TEXT,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
+    else:
+        conn._raw.executescript("""
+            CREATE TABLE IF NOT EXISTS planos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                preco REAL NOT NULL,
+                descricao TEXT
+            );
+            CREATE TABLE IF NOT EXISTS clientes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                senha_hash TEXT NOT NULL,
+                whatsapp TEXT,
+                plano_id INTEGER,
+                status TEXT DEFAULT 'pendente',
+                token_acesso TEXT UNIQUE,
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (plano_id) REFERENCES planos(id)
+            );
+            CREATE TABLE IF NOT EXISTS gastos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL NOT NULL,
+                categoria TEXT NOT NULL,
+                data TEXT NOT NULL,
+                fonte TEXT DEFAULT 'manual',
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
+            CREATE TABLE IF NOT EXISTS pagamentos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                valor REAL NOT NULL,
+                status TEXT DEFAULT 'pendente',
+                referencia TEXT,
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
+        """)
+    existe = conn.execute("SELECT COUNT(*) as cnt FROM planos").fetchone()["cnt"]
     if not existe:
-        conn.executemany("INSERT INTO planos (nome, preco, descricao) VALUES (?,?,?)", [
+        conn.executemany("INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)", [
             ("Basico",  29.90, "Controle de gastos + relatorio mensal"),
             ("Pro",     59.90, "Tudo do Basico + multiplos usuarios + relatorios semanais"),
             ("Premium", 99.90, "Tudo do Pro + consultoria financeira mensal"),
@@ -96,15 +139,17 @@ def cadastro():
         try:
             conn = get_db()
             conn.execute(
-                "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso) VALUES (?,?,?,?,?,?)",
+                "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso) VALUES (%s, %s, %s, %s, %s, %s)",
                 (nome, email, hash_senha(senha), whatsapp, plano_id, token)
             )
             conn.commit()
-            cliente_id = conn.execute("SELECT id FROM clientes WHERE email=?", (email,)).fetchone()["id"]
+            cliente_id = conn.execute("SELECT id FROM clientes WHERE email=%s", (email,)).fetchone()["id"]
             conn.close()
             return redirect(url_for("pagamento", cliente_id=cliente_id))
-        except sqlite3.IntegrityError:
-            return render_template("cadastro.html", erro="E-mail ja cadastrado.")
+        except Exception as e:
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                return render_template("cadastro.html", erro="E-mail ja cadastrado.")
+            raise
     conn = get_db()
     planos = conn.execute("SELECT * FROM planos ORDER BY preco").fetchall()
     conn.close()
@@ -114,7 +159,7 @@ def cadastro():
 def pagamento(cliente_id):
     conn = get_db()
     cliente = conn.execute(
-        "SELECT c.*, p.nome as plano_nome, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=?",
+        "SELECT c.*, p.nome as plano_nome, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=%s",
         (cliente_id,)
     ).fetchone()
     conn.close()
@@ -124,13 +169,13 @@ def pagamento(cliente_id):
 def confirmar_pagamento(cliente_id):
     conn = get_db()
     cliente = conn.execute(
-        "SELECT c.*, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=?",
+        "SELECT c.*, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=%s",
         (cliente_id,)
     ).fetchone()
     if cliente:
-        conn.execute("UPDATE clientes SET status='ativo' WHERE id=?", (cliente_id,))
+        conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
         conn.execute(
-            "INSERT INTO pagamentos (cliente_id, valor, status) VALUES (?,?,?)",
+            "INSERT INTO pagamentos (cliente_id, valor, status) VALUES (%s, %s, %s)",
             (cliente_id, cliente["preco"], "aprovado")
         )
         conn.commit()
@@ -140,7 +185,7 @@ def confirmar_pagamento(cliente_id):
 @app.route("/sucesso/<int:cliente_id>")
 def sucesso(cliente_id):
     conn = get_db()
-    cliente = conn.execute("SELECT * FROM clientes WHERE id=?", (cliente_id,)).fetchone()
+    cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     conn.close()
     return render_template("sucesso.html", cliente=cliente)
 
@@ -151,7 +196,7 @@ def login():
         senha = request.form.get("senha", "")
         conn = get_db()
         cliente = conn.execute(
-            "SELECT * FROM clientes WHERE email=? AND senha_hash=?",
+            "SELECT * FROM clientes WHERE email=%s AND senha_hash=%s",
             (email, hash_senha(senha))
         ).fetchone()
         conn.close()
@@ -176,18 +221,18 @@ def dashboard():
     mes = date.today().strftime("%Y-%m")
     conn = get_db()
     gastos = conn.execute(
-        "SELECT * FROM gastos WHERE cliente_id=? AND data LIKE ? ORDER BY data DESC",
+        "SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
         (cid, f"{mes}%")
     ).fetchall()
     total = conn.execute(
-        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=? AND data LIKE ?",
+        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
         (cid, f"{mes}%")
     ).fetchone()["t"]
     por_cat = conn.execute(
-        "SELECT categoria, SUM(valor) as total FROM gastos WHERE cliente_id=? AND data LIKE ? GROUP BY categoria ORDER BY total DESC",
+        "SELECT categoria, SUM(valor) as total FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY total DESC",
         (cid, f"{mes}%")
     ).fetchall()
-    cliente = conn.execute("SELECT * FROM clientes WHERE id=?", (cid,)).fetchone()
+    cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cid,)).fetchone()
     conn.close()
     return render_template("dashboard.html",
         gastos=gastos, total=total, por_cat=por_cat,
@@ -201,9 +246,9 @@ def adicionar_gasto():
     cid  = session["cliente_id"]
     conn = get_db()
     conn.execute(
-        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
         (cid, data["descricao"], float(data["valor"]), data["categoria"],
-         data.get("data", date.today().isoformat()), data.get("fonte","manual"))
+         data.get("data", date.today().isoformat()), data.get("fonte", "manual"))
     )
     conn.commit()
     conn.close()
@@ -213,7 +258,7 @@ def adicionar_gasto():
 @login_required
 def deletar_gasto(gid):
     conn = get_db()
-    conn.execute("DELETE FROM gastos WHERE id=? AND cliente_id=?", (gid, session["cliente_id"]))
+    conn.execute("DELETE FROM gastos WHERE id=%s AND cliente_id=%s", (gid, session["cliente_id"]))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -258,16 +303,12 @@ def webhook_whatsapp():
 
 @app.route("/admin/debug")
 def admin_debug():
-    import requests as req, os
+    import requests as req
     result = {}
-
-    # 1. verifica cliente no banco
     conn = get_db()
     clientes = conn.execute("SELECT id, nome, whatsapp, status FROM clientes").fetchall()
     conn.close()
     result["clientes"] = [dict(c) for c in clientes]
-
-    # 2. testa API do Claude
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     result["anthropic_key_set"] = bool(api_key)
     if api_key:
@@ -282,11 +323,9 @@ def admin_debug():
             result["claude_response"] = r.json()
         except Exception as e:
             result["claude_error"] = str(e)
-
-    # 3. variáveis de ambiente relevantes
     result["evolution_url"] = os.environ.get("EVOLUTION_URL", "NÃO DEFINIDO")
     result["evolution_key_set"] = bool(os.environ.get("EVOLUTION_KEY", ""))
-
+    result["use_postgres"] = USE_PG
     return jsonify(result)
 
 @app.route("/admin/criar-teste")
@@ -294,12 +333,18 @@ def admin_criar_teste():
     senha_hash = hashlib.sha256("teste123".encode()).hexdigest()
     conn = get_db()
     try:
-        conn.execute(
-            "INSERT OR IGNORE INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (?,?,?,?,?)",
-            ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, "556198007328", "ativo")
-        )
+        if USE_PG:
+            conn.execute(
+                "INSERT INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
+                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, "556198007328", "ativo")
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO clientes (nome, email, senha_hash, whatsapp, status) VALUES (%s, %s, %s, %s, %s)",
+                ("Eduardo Lorenzi", "eduardo@teste.com", senha_hash, "556198007328", "ativo")
+            )
         conn.commit()
-        cliente = conn.execute("SELECT * FROM clientes WHERE whatsapp=?", ("556198007328",)).fetchone()
+        cliente = conn.execute("SELECT * FROM clientes WHERE whatsapp=%s", ("556198007328",)).fetchone()
     finally:
         conn.close()
     return jsonify({"status": "ok", "cliente_id": cliente["id"], "nome": cliente["nome"], "whatsapp": cliente["whatsapp"]})

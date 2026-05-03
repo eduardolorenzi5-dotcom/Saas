@@ -1,27 +1,24 @@
 """
 Agente de WhatsApp — interpreta mensagens com Claude e salva gastos no banco.
 """
-import os, sqlite3, json, requests
+import os, sys, json, requests
 from datetime import date
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from db import get_db
+
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "gastos.db")
 EVOLUTION_URL = os.environ.get("EVOLUTION_URL", "http://localhost:8080")
 EVOLUTION_KEY = os.environ.get("EVOLUTION_KEY", "")
 EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
 def buscar_cliente_por_fone(fone):
     fone_limpo = fone.replace("+","").replace("-","").replace(" ","").replace("(","").replace(")","")
     conn = get_db()
     cliente = conn.execute(
-        "SELECT * FROM clientes WHERE REPLACE(REPLACE(REPLACE(whatsapp,'-',''),'(',''),')','') LIKE ?",
+        "SELECT * FROM clientes WHERE REPLACE(REPLACE(REPLACE(whatsapp,'-',''),'(',''),')','') LIKE %s",
         (f"%{fone_limpo[-8:]}",)
     ).fetchone()
     conn.close()
@@ -30,7 +27,7 @@ def buscar_cliente_por_fone(fone):
 def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto):
     conn = get_db()
     conn.execute(
-        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
         (cliente_id, descricao, valor, categoria, data_gasto, "whatsapp")
     )
     conn.commit()
@@ -40,11 +37,11 @@ def resumo_mes(cliente_id):
     mes = date.today().strftime("%Y-%m")
     conn = get_db()
     total = conn.execute(
-        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=? AND data LIKE ?",
+        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
         (cliente_id, f"{mes}%")
     ).fetchone()["t"]
     por_cat = conn.execute(
-        "SELECT categoria, SUM(valor) as s FROM gastos WHERE cliente_id=? AND data LIKE ? GROUP BY categoria ORDER BY s DESC",
+        "SELECT categoria, SUM(valor) as s FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY s DESC",
         (cliente_id, f"{mes}%")
     ).fetchall()
     conn.close()

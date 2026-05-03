@@ -2,16 +2,13 @@
 Gerador de relatório mensal em PDF.
 Usa reportlab para gerar PDF com tabela de gastos e resumo por categoria.
 """
-import os, sqlite3
+import os, sys
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "gastos.db")
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "relatorios")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from db import get_db
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "relatorios")
 
 def gerar_pdf(cliente_id, mes):
     """Gera PDF do relatório mensal e retorna o caminho do arquivo."""
@@ -24,17 +21,17 @@ def gerar_pdf(cliente_id, mes):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     conn = get_db()
-    cliente = conn.execute("SELECT * FROM clientes WHERE id=?", (cliente_id,)).fetchone()
+    cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     gastos  = conn.execute(
-        "SELECT * FROM gastos WHERE cliente_id=? AND data LIKE ? ORDER BY data, categoria",
+        "SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s ORDER BY data, categoria",
         (cliente_id, f"{mes}%")
     ).fetchall()
     por_cat = conn.execute(
-        "SELECT categoria, SUM(valor) as total, COUNT(*) as qtd FROM gastos WHERE cliente_id=? AND data LIKE ? GROUP BY categoria ORDER BY total DESC",
+        "SELECT categoria, SUM(valor) as total, COUNT(*) as qtd FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY total DESC",
         (cliente_id, f"{mes}%")
     ).fetchall()
     total = conn.execute(
-        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=? AND data LIKE ?",
+        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
         (cliente_id, f"{mes}%")
     ).fetchone()["t"]
     conn.close()
