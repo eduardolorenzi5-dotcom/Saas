@@ -187,6 +187,85 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "controla2024")
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if request.args.get("key") != ADMIN_KEY and session.get("admin") != True:
+            return redirect(url_for("admin_login"))
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    erro = None
+    if request.method == "POST":
+        if request.form.get("key") == ADMIN_KEY:
+            session["admin"] = True
+            return redirect(url_for("admin_painel"))
+        erro = "Chave incorreta."
+    return render_template("admin_login.html", erro=erro)
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin", None)
+    return redirect(url_for("admin_login"))
+
+@app.route("/admin")
+@admin_required
+def admin_painel():
+    conn = get_db()
+    clientes = conn.execute("""
+        SELECT c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
+               c.renda_mensal, c.google_refresh_token,
+               p.nome as plano_nome, p.preco,
+               COUNT(g.id) as total_gastos,
+               COALESCE(SUM(g.valor), 0) as total_gasto_mes
+        FROM clientes c
+        LEFT JOIN planos p ON c.plano_id = p.id
+        LEFT JOIN gastos g ON g.cliente_id = c.id AND g.data LIKE %s
+        GROUP BY c.id, p.nome, p.preco
+        ORDER BY c.criado_em DESC
+    """, (date.today().strftime("%Y-%m") + "%",)).fetchall()
+    total_clientes = len(clientes)
+    ativos = sum(1 for c in clientes if c["status"] == "ativo")
+    receita = sum(float(c["preco"] or 0) for c in clientes if c["status"] == "ativo")
+    conn.close()
+    return render_template("admin.html",
+        clientes=clientes, total_clientes=total_clientes,
+        ativos=ativos, receita=receita
+    )
+
+@app.route("/admin/ativar/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_ativar(cliente_id):
+    conn = get_db()
+    conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_painel"))
+
+@app.route("/admin/desativar/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_desativar(cliente_id):
+    conn = get_db()
+    conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (cliente_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_painel"))
+
+@app.route("/admin/deletar/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_deletar(cliente_id):
+    conn = get_db()
+    conn.execute("DELETE FROM gastos WHERE cliente_id=%s", (cliente_id,))
+    conn.execute("DELETE FROM pagamentos WHERE cliente_id=%s", (cliente_id,))
+    conn.execute("DELETE FROM clientes WHERE id=%s", (cliente_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_painel"))
+
 @app.route("/")
 def index():
     conn = get_db()

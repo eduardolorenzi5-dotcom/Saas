@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin — Controla Fácil</title>
+  <link rel="stylesheet" href="/static/css/site.css"/>
+  <style>
+    body { background:#f4f4f2; }
+    .admin-wrap { max-width:1100px; margin:0 auto; padding:32px 20px; }
+    .admin-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; }
+    .admin-header h1 { font-size:22px; font-weight:700; }
+    .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:28px; }
+    .stat-box { background:#fff; border-radius:12px; padding:20px 24px; border:1px solid #e5e5e3; }
+    .stat-box .label { font-size:12px; color:#888; margin-bottom:6px; }
+    .stat-box .val { font-size:26px; font-weight:700; }
+    .admin-table-wrap { background:#fff; border-radius:12px; border:1px solid #e5e5e3; overflow:hidden; }
+    .admin-table-wrap h2 { font-size:15px; font-weight:700; padding:16px 20px; border-bottom:1px solid #e5e5e3; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { text-align:left; padding:10px 16px; background:#f9f9f7; color:#888; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #e5e5e3; }
+    td { padding:12px 16px; border-bottom:1px solid #f0f0ee; vertical-align:middle; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#fafaf8; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:100px; font-size:11px; font-weight:600; }
+    .badge-ativo { background:#d1fae5; color:#065f46; }
+    .badge-pendente { background:#fef3c7; color:#92400e; }
+    .badge-agenda { background:#dbeafe; color:#1e40af; font-size:10px; }
+    .action-btn { border:none; border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:500; }
+    .btn-ativar { background:#d1fae5; color:#065f46; }
+    .btn-desativar { background:#fef3c7; color:#92400e; }
+    .btn-deletar { background:#fee2e2; color:#991b1b; }
+    .admin-footer { text-align:right; padding:12px 20px; font-size:12px; color:#aaa; }
+    @media(max-width:700px){ .stats-row{grid-template-columns:1fr;} table{font-size:12px;} th,td{padding:8px 10px;} }
+  </style>
+</head>
+<body>
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h1>Painel Admin — Controla Fácil</h1>
+    <a href="/admin/logout" style="font-size:13px;color:#888;">Sair</a>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="label">Total de clientes</div>
+      <div class="val">{{ total_clientes }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Contas ativas</div>
+      <div class="val" style="color:#065f46;">{{ ativos }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Receita mensal estimada</div>
+      <div class="val" style="color:#1a1a1a;">R$ {{ "%.2f"|format(receita) }}</div>
+    </div>
+  </div>
+
+  <div class="admin-table-wrap">
+    <h2>Clientes ({{ total_clientes }})</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nome</th>
+          <th>E-mail</th>
+          <th>WhatsApp</th>
+          <th>Status</th>
+          <th>Agenda</th>
+          <th>Gastos este mês</th>
+          <th>Renda</th>
+          <th>Cadastro</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td style="color:#aaa;">{{ c.id }}</td>
+          <td><strong>{{ c.nome }}</strong></td>
+          <td style="color:#555;">{{ c.email }}</td>
+          <td style="color:#555;">{{ c.whatsapp or '—' }}</td>
+          <td>
+            <span class="badge {{ 'badge-ativo' if c.status == 'ativo' else 'badge-pendente' }}">
+              {{ c.status }}
+            </span>
+          </td>
+          <td>
+            {% if c.google_refresh_token %}
+              <span class="badge badge-agenda">✓ conectada</span>
+            {% else %}
+              <span style="color:#ccc;font-size:12px;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <span style="font-weight:600;">R$ {{ "%.2f"|format(c.total_gasto_mes) }}</span>
+            <span style="color:#aaa;font-size:11px;"> / {{ c.total_gastos }} reg.</span>
+          </td>
+          <td>
+            {% if c.renda_mensal %}
+              R$ {{ "%.2f"|format(c.renda_mensal) }}
+            {% else %}
+              <span style="color:#ccc;">—</span>
+            {% endif %}
+          </td>
+          <td style="color:#888;font-size:12px;">{{ c.criado_em[:10] if c.criado_em else '—' }}</td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              {% if c.status != 'ativo' %}
+              <form method="POST" action="/admin/ativar/{{ c.id }}" style="display:inline;">
+                <button class="action-btn btn-ativar">Ativar</button>
+              </form>
+              {% else %}
+              <form method="POST" action="/admin/desativar/{{ c.id }}" style="display:inline;">
+                <button class="action-btn btn-desativar">Desativar</button>
+              </form>
+              {% endif %}
+              <form method="POST" action="/admin/deletar/{{ c.id }}" style="display:inline;"
+                    onsubmit="return confirm('Deletar {{ c.nome }}? Todos os dados serão removidos.');">
+                <button class="action-btn btn-deletar">Deletar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" style="text-align:center;color:#aaa;padding:32px;">Nenhum cliente cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="admin-footer">Atualizado agora</div>
+  </div>
+</div>
+</body>
+</html>
