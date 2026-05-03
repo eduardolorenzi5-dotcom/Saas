@@ -109,13 +109,11 @@ def init_db():
                 pass
     conn.commit()
 
-    existe = conn.execute("SELECT COUNT(*) as cnt FROM planos").fetchone()["cnt"]
-    if not existe:
-        conn.executemany("INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)", [
-            ("Basico",  29.90, "Controle de gastos + relatorio mensal"),
-            ("Pro",     59.90, "Tudo do Basico + multiplos usuarios + relatorios semanais"),
-            ("Premium", 99.90, "Tudo do Pro + consultoria financeira mensal"),
-        ])
+    conn.execute("DELETE FROM planos")
+    conn.execute(
+        "INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)",
+        ("Controla Fácil", 14.90, "Controle de gastos via WhatsApp com IA + dashboard + relatórios")
+    )
     conn.commit()
     conn.close()
 
