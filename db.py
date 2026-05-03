@@ -50,7 +50,11 @@ class _SQLiteConn:
 def get_db():
     if USE_PG:
         import psycopg2, psycopg2.extras
-        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        url = DATABASE_URL.strip()
+        # Remove prefixo "DATABASE_URL=" caso tenha sido colado com a chave
+        if url.lower().startswith("database_url="):
+            url = url.split("=", 1)[1]
+        url = url.replace("postgres://", "postgresql://", 1)
         raw = psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
         return _PGConn(raw)
     db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gastos.db")
