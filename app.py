@@ -525,13 +525,17 @@ def _google_flow(state=None):
 
 @app.route("/agenda/conectar/<int:cliente_id>")
 def agenda_conectar(cliente_id):
-    flow = _google_flow()
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        prompt="consent",
-        state=str(cliente_id)
-    )
-    return redirect(auth_url)
+    try:
+        flow = _google_flow()
+        auth_url, _ = flow.authorization_url(
+            access_type="offline",
+            prompt="consent",
+            state=str(cliente_id)
+        )
+        return redirect(auth_url)
+    except Exception as e:
+        logging.error(f"Erro agenda_conectar: {e}", exc_info=True)
+        return f"Erro ao gerar link: {e}", 500
 
 @app.route("/agenda/callback")
 def agenda_callback():
