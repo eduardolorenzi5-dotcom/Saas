@@ -4,6 +4,9 @@ from datetime import datetime, date
 from functools import wraps
 
 app = Flask(__name__)
+
+with app.app_context():
+    init_db()
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 DB_PATH = "gastos.db"
 
