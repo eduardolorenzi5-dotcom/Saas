@@ -243,22 +243,18 @@ def webhook_whatsapp():
         msg = None
         fone = None
 
-        # Formato Evolution Bot
-        if payload.get("message"):
-            msg = payload.get("message", {}).get("conversation") or \
-                  payload.get("message", {}).get("extendedTextMessage", {}).get("text") or \
-                  payload.get("message", {}).get("body", "")
-            fone = payload.get("remoteJid", "").replace("@s.whatsapp.net", "")
-
-        # Formato webhook padrão
+        # Formato Evolution Bot com inputs
+        if payload.get("inputs"):
+            inputs = payload["inputs"]
+            msg = inputs.get("query") or inputs.get("message") or inputs.get("text", "")
+            fone = inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or inputs.get("user", "").replace("@s.whatsapp.net", "")
+        elif payload.get("query"):
+            msg = payload.get("query", "")
+            fone = payload.get("remoteJid", "").replace("@s.whatsapp.net", "") or payload.get("user", "").replace("@s.whatsapp.net", "")
         elif payload.get("data"):
             data = payload["data"]
-            msg = data.get("message", {}).get("conversation") or \
-                  data.get("message", {}).get("extendedTextMessage", {}).get("text") or \
-                  data.get("body", "")
+            msg = data.get("message", {}).get("conversation") or data.get("body", "")
             fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
-
-        # Formato direto
         elif payload.get("body"):
             msg = payload.get("body", "")
             fone = payload.get("from", "").replace("@s.whatsapp.net", "")
