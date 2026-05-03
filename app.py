@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
-import sqlite3, os, hashlib, secrets
+import sqlite3, os, hashlib, secrets, logging
 from datetime import datetime, date
 from functools import wraps
 
@@ -7,7 +7,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gastos.db")
 
-# ── Banco de dados ─────────────────────────────────────────────────────────────
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -55,12 +54,11 @@ def init_db():
             FOREIGN KEY (cliente_id) REFERENCES clientes(id)
         );
     """)
-    # Inserir planos padrão se não existirem
     existe = conn.execute("SELECT COUNT(*) FROM planos").fetchone()[0]
     if not existe:
         conn.executemany("INSERT INTO planos (nome, preco, descricao) VALUES (?,?,?)", [
-            ("Básico",  29.90, "Controle de gastos + relatório mensal"),
-            ("Pro",     59.90, "Tudo do Básico + múltiplos usuários + relatórios semanais"),
+            ("Basico",  29.90, "Controle de gastos + relatorio mensal"),
+            ("Pro",     59.90, "Tudo do Basico + multiplos usuarios + relatorios semanais"),
             ("Premium", 99.90, "Tudo do Pro + consultoria financeira mensal"),
         ])
     conn.commit()
@@ -69,7 +67,6 @@ def init_db():
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-# ── Decorators ─────────────────────────────────────────────────────────────────
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -78,7 +75,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# ── Site público ───────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     conn = get_db()
@@ -94,10 +90,8 @@ def cadastro():
         senha    = request.form.get("senha", "")
         whatsapp = request.form.get("whatsapp", "").strip()
         plano_id = request.form.get("plano_id")
-
         if not all([nome, email, senha, whatsapp, plano_id]):
             return render_template("cadastro.html", erro="Preencha todos os campos.")
-
         token = secrets.token_urlsafe(32)
         try:
             conn = get_db()
@@ -108,11 +102,9 @@ def cadastro():
             conn.commit()
             cliente_id = conn.execute("SELECT id FROM clientes WHERE email=?", (email,)).fetchone()["id"]
             conn.close()
-            # Redireciona para pagamento (simulado)
             return redirect(url_for("pagamento", cliente_id=cliente_id))
         except sqlite3.IntegrityError:
-            return render_template("cadastro.html", erro="E-mail já cadastrado.")
-
+            return render_template("cadastro.html", erro="E-mail ja cadastrado.")
     conn = get_db()
     planos = conn.execute("SELECT * FROM planos ORDER BY preco").fetchall()
     conn.close()
@@ -130,7 +122,6 @@ def pagamento(cliente_id):
 
 @app.route("/pagamento/confirmar/<int:cliente_id>", methods=["POST"])
 def confirmar_pagamento(cliente_id):
-    """Simula confirmação de pagamento. Em produção, integrar Stripe/Mercado Pago."""
     conn = get_db()
     cliente = conn.execute(
         "SELECT c.*, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=?",
@@ -153,7 +144,6 @@ def sucesso(cliente_id):
     conn.close()
     return render_template("sucesso.html", cliente=cliente)
 
-# ── Login / Logout ─────────────────────────────────────────────────────────────
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -167,7 +157,7 @@ def login():
         conn.close()
         if cliente:
             if cliente["status"] != "ativo":
-                return render_template("login.html", erro="Sua conta ainda não foi ativada. Conclua o pagamento.")
+                return render_template("login.html", erro="Sua conta ainda nao foi ativada.")
             session["cliente_id"] = cliente["id"]
             session["cliente_nome"] = cliente["nome"]
             return redirect(url_for("dashboard"))
@@ -179,7 +169,6 @@ def logout():
     session.clear()
     return redirect(url_for("index"))
 
-# ── Dashboard do cliente ───────────────────────────────────────────────────────
 @app.route("/dashboard")
 @login_required
 def dashboard():
@@ -205,7 +194,6 @@ def dashboard():
         cliente=cliente, mes=mes
     )
 
-# ── API de gastos ──────────────────────────────────────────────────────────────
 @app.route("/api/gastos", methods=["POST"])
 @login_required
 def adicionar_gasto():
@@ -230,27 +218,24 @@ def deletar_gasto(gid):
     conn.close()
     return jsonify({"ok": True})
 
-# ── Webhook WhatsApp (Evolution API) ──────────────────────────────────────────
 @app.route("/webhook/whatsapp", methods=["POST"])
 def webhook_whatsapp():
-    """Recebe mensagens da Evolution API e aciona o agente."""
     from agente.agente import processar_mensagem
-    import logging
     payload = request.json
     logging.warning(f"WEBHOOK PAYLOAD: {payload}")
     try:
-        # Tenta diferentes formatos do payload da Evolution API
         msg = None
         fone = None
 
-        # Formato Evolution Bot com inputs
         if payload.get("inputs"):
             inputs = payload["inputs"]
             msg = inputs.get("query") or inputs.get("message") or inputs.get("text", "")
-            fone = inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or inputs.get("user", "").replace("@s.whatsapp.net", "")
+            fone = inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or \
+                   inputs.get("user", "").replace("@s.whatsapp.net", "")
         elif payload.get("query"):
             msg = payload.get("query", "")
-            fone = payload.get("remoteJid", "").replace("@s.whatsapp.net", "") or payload.get("user", "").replace("@s.whatsapp.net", "")
+            fone = payload.get("remoteJid", "").replace("@s.whatsapp.net", "") or \
+                   payload.get("user", "").replace("@s.whatsapp.net", "")
         elif payload.get("data"):
             data = payload["data"]
             msg = data.get("message", {}).get("conversation") or data.get("body", "")
@@ -260,20 +245,15 @@ def webhook_whatsapp():
             fone = payload.get("from", "").replace("@s.whatsapp.net", "")
 
         if not msg or not fone:
-            logging.warning(f"Payload não reconhecido: {payload}")
-            return jsonify({"status": "ignorado"}), 200
-
-        # Ignora mensagens do próprio bot
-        if payload.get("fromMe") or payload.get("data", {}).get("key", {}).get("fromMe"):
-            return jsonify({"status": "ignorado"}), 200
+            logging.warning(f"Payload nao reconhecido: {payload}")
+            return jsonify({"output": "", "status": "ignorado"}), 200
 
         resposta = processar_mensagem(fone, msg)
-        return jsonify({"status": "ok", "resposta": resposta})
+        return jsonify({"output": resposta, "status": "ok"})
     except Exception as e:
-        logging.error(f"Erro webhook: {e}, payload: {payload}")
-        return jsonify({"status": "erro", "detalhe": str(e)}), 400
+        logging.error(f"Erro webhook: {e}")
+        return jsonify({"output": "Desculpe, tente novamente.", "status": "erro"}), 200
 
-# ── Relatório mensal (acionado por cron ou manualmente) ───────────────────────
 @app.route("/relatorio/gerar/<int:cliente_id>")
 def gerar_relatorio(cliente_id):
     from relatorio.gerador import gerar_pdf
@@ -281,7 +261,6 @@ def gerar_relatorio(cliente_id):
     caminho = gerar_pdf(cliente_id, mes)
     return jsonify({"arquivo": caminho})
 
-# Inicializa banco ao importar (necessário para gunicorn)
 with app.app_context():
     init_db()
 
