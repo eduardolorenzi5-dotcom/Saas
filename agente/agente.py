@@ -588,8 +588,10 @@ def processar_mensagem(fone, mensagem):
         elif acao == "conectar_agenda":
             link = gerar_link_agenda(cliente["id"])
             resposta = (
-                f"📅 Para conectar seu Google Agenda, clique no link abaixo e autorize o acesso:\n\n"
+                f"📅 Para conectar seu Google Agenda, clique no link abaixo:\n\n"
                 f"{link}\n\n"
+                f"⚠️ *Atenção:* o Google pode exibir um aviso dizendo que o app não foi verificado. "
+                f"É normal! Basta clicar em *'Avançado'* e depois em *'Ir para Controla Fácil'* para continuar.\n\n"
                 f"Após autorizar, você poderá agendar compromissos direto aqui pelo WhatsApp! 😊"
             )
 
@@ -599,6 +601,8 @@ def processar_mensagem(fone, mensagem):
                 resposta = (
                     f"📅 Sua agenda ainda não está conectada. Clique no link abaixo para autorizar:\n\n"
                     f"{link}\n\n"
+                    f"⚠️ *Atenção:* o Google pode exibir um aviso dizendo que o app não foi verificado. "
+                    f"É normal! Clique em *'Avançado'* e depois em *'Ir para Controla Fácil'* para continuar.\n\n"
                     f"Após conectar, envie o agendamento novamente."
                 )
             else:
