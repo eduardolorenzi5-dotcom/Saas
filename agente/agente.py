@@ -108,8 +108,11 @@ Ao receber uma mensagem, identifique se é:
 
 Categorias disponíveis: {', '.join(CATEGORIAS)}
 
-Se for um registro, responda APENAS com JSON no formato:
+Se for um registro de UM gasto, responda APENAS com JSON no formato:
 {{"acao": "registrar", "descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}
+
+Se for um registro de MÚLTIPLOS gastos na mesma mensagem (ex: "gastei 50 no mercado, 30 no uber e 15 no café"), responda com JSON no formato:
+{{"acao": "registrar_multiplos", "gastos": [{{"descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}, ...]}}
 
 Se for exclusão do último gasto:
 {{"acao": "deletar_ultimo"}}
@@ -185,6 +188,23 @@ def processar_mensagem(fone, mensagem):
                 f"📂 {resultado['categoria']}\n"
                 f"📅 {resultado.get('data', date.today().isoformat())}"
             )
+
+        elif acao == "registrar_multiplos":
+            gastos = resultado.get("gastos", [])
+            total = 0.0
+            linhas = ["✅ Gastos registrados!\n"]
+            for g in gastos:
+                salvar_gasto(
+                    cliente["id"],
+                    g["descricao"],
+                    float(g["valor"]),
+                    g["categoria"],
+                    g.get("data", date.today().isoformat())
+                )
+                total += float(g["valor"])
+                linhas.append(f"📝 {g['descricao']} — R$ {float(g['valor']):.2f} ({g['categoria']})")
+            linhas.append(f"\n💰 Total: R$ {total:.2f}")
+            resposta = "\n".join(linhas)
 
         elif acao == "deletar_ultimo":
             gasto = deletar_ultimo_gasto(cliente["id"])
