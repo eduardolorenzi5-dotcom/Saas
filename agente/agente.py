@@ -65,6 +65,15 @@ def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto):
     conn.commit()
     conn.close()
 
+def deletar_todos_gastos(cliente_id, mes=None):
+    conn = get_db()
+    if mes:
+        conn.execute("DELETE FROM gastos WHERE cliente_id=%s AND data LIKE %s", (cliente_id, f"{mes}%"))
+    else:
+        conn.execute("DELETE FROM gastos WHERE cliente_id=%s", (cliente_id,))
+    conn.commit()
+    conn.close()
+
 def deletar_ultimo_gasto(cliente_id):
     conn = get_db()
     ultimo = conn.execute(
@@ -167,6 +176,7 @@ Ao receber uma mensagem, identifique se é:
 1. Um REGISTRO de gasto — extraia: descricao, valor (número), categoria, data
 2. Uma EXCLUSÃO do último gasto — ex: "apaga o último", "cancela o último gasto"
 3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
+4. Uma EXCLUSÃO de todos os gastos — ex: "apaga tudo", "zera meus gastos", "limpa o histórico", "apaga todos os gastos do mês"
 4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês"
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
@@ -182,6 +192,10 @@ Se for um registro de MÚLTIPLOS gastos na mesma mensagem (ex: "gastei 50 no mer
 
 Se for exclusão do último gasto:
 {{"acao": "deletar_ultimo"}}
+
+Se for exclusão de todos os gastos (mês atual ou histórico completo):
+{{"acao": "deletar_tudo", "mes": "YYYY-MM"}}
+(use "mes" com o mês atual se disser "deste mês", omita "mes" se quiser apagar tudo)
 
 Se for exclusão por descrição (extraia a descrição e opcionalmente o valor):
 {{"acao": "deletar", "descricao": "...", "valor": 0.00}}
@@ -423,6 +437,14 @@ def processar_mensagem(fone, mensagem):
                 linhas.append(f"📝 {g['descricao']} — R$ {float(g['valor']):.2f} ({g['categoria']}) {formatar_data(data_g)}")
             linhas.append(f"\n💰 Total: R$ {total:.2f}")
             resposta = "\n".join(linhas)
+
+        elif acao == "deletar_tudo":
+            mes = resultado.get("mes")
+            deletar_todos_gastos(cliente["id"], mes)
+            if mes:
+                resposta = f"🗑️ Todos os gastos de {mes_ano_pt(date.fromisoformat(mes + '-01'))} foram apagados."
+            else:
+                resposta = "🗑️ Todo o histórico de gastos foi apagado."
 
         elif acao == "deletar_ultimo":
             gasto = deletar_ultimo_gasto(cliente["id"])

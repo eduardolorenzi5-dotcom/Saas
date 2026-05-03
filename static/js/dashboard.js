@@ -22,3 +22,9 @@ async function delGasto(id) {
   const res = await fetch(`/api/gastos/${id}`, { method: 'DELETE' });
   if (res.ok) document.getElementById(`g-${id}`)?.remove();
 }
+
+async function limparTudo() {
+  if (!confirm('Apagar TODOS os gastos deste mês? Esta ação não pode ser desfeita.')) return;
+  const res = await fetch('/api/gastos/mes', { method: 'DELETE' });
+  if (res.ok) location.reload();
+}

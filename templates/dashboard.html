@@ -74,7 +74,10 @@
     {% endif %}
 
     <div class="dash-card">
-      <div class="dash-card-title">Gastos do mês</div>
+      <div class="dash-card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        Gastos do mês
+        <button class="del-btn" style="font-size:12px;padding:4px 10px;border-radius:6px;" onclick="limparTudo()">Apagar tudo</button>
+      </div>
       <div id="lista-gastos">
         {% for g in gastos %}
         <div class="gasto-item" id="g-{{ g.id }}">

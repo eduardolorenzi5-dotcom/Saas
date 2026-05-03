@@ -317,6 +317,16 @@ def deletar_gasto(gid):
     conn.close()
     return jsonify({"ok": True})
 
+@app.route("/api/gastos/mes", methods=["DELETE"])
+@login_required
+def deletar_gastos_mes():
+    mes = date.today().strftime("%Y-%m")
+    conn = get_db()
+    conn.execute("DELETE FROM gastos WHERE cliente_id=%s AND data LIKE %s", (session["cliente_id"], f"{mes}%"))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 @app.route("/esqueci-senha", methods=["GET", "POST"])
 def esqueci_senha():
     if request.method == "POST":
