@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"/><title>Pagamento — Controla Fácil</title><link rel="stylesheet" href="/static/css/site.css"/></head>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Pagamento — Controla Fácil</title>
+  <link rel="stylesheet" href="/static/css/site.css"/>
+</head>
 <body>
 <div class="pag-wrap">
   <div class="pag-card">
@@ -10,15 +15,16 @@
       <div class="pag-row"><span>Plano</span><span>{{ cliente.plano_nome }}</span></div>
       <div class="pag-row total"><span>Total</span><span>R$ {{ "%.2f"|format(cliente.preco) }}/mês</span></div>
     </div>
-    <p style="font-size:13px;color:#888;margin-bottom:16px;">Selecione a forma de pagamento:</p>
-    <div class="pag-metodos">
-      <div class="pag-metodo ativo">Pix</div>
-      <div class="pag-metodo">Cartão de crédito</div>
-    </div>
-    <p style="font-size:12px;color:#aaa;margin-bottom:20px;">* Ambiente de demonstração. Clique em confirmar para ativar sua conta.</p>
-    <form method="POST" action="/pagamento/confirmar/{{ cliente.id }}">
-      <button type="submit" class="btn-primary btn-block">Confirmar pagamento</button>
+    {% if erro %}
+    <div class="erro" style="margin-bottom:16px;">{{ erro }}</div>
+    {% endif %}
+    <form method="POST" action="/pagamento/checkout/{{ cliente.id }}">
+      <button type="submit" class="btn-primary btn-block" style="background:#009EE3;font-size:16px;padding:14px;">
+        💳 Pagar com Mercado Pago
+      </button>
     </form>
+    <p style="font-size:12px;color:#aaa;margin-top:16px;text-align:center;">Pix, cartão de crédito e débito aceitos</p>
   </div>
 </div>
-</body></html>
+</body>
+</html>

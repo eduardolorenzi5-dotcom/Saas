@@ -219,6 +219,112 @@ def pagamento(cliente_id):
     conn.close()
     return render_template("pagamento.html", cliente=cliente)
 
+@app.route("/pagamento/checkout/<int:cliente_id>", methods=["POST"])
+def checkout_mercadopago(cliente_id):
+    import requests as _req
+    mp_token = os.environ.get("MP_ACCESS_TOKEN", "")
+    if not mp_token:
+        return render_template("pagamento.html",
+            cliente=_get_cliente_plano(cliente_id),
+            erro="Pagamento indisponível no momento. Contate o suporte.")
+
+    conn = get_db()
+    cliente = conn.execute(
+        "SELECT c.*, p.nome as plano_nome, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=%s",
+        (cliente_id,)
+    ).fetchone()
+    conn.close()
+    if not cliente:
+        return redirect(url_for("index"))
+
+    base_url = os.environ.get("BASE_URL", "https://saas-production-2a7a.up.railway.app")
+    payload = {
+        "items": [{
+            "title": f"Controla Fácil — Plano {cliente['plano_nome']}",
+            "quantity": 1,
+            "currency_id": "BRL",
+            "unit_price": float(cliente["preco"]),
+        }],
+        "payer": {"email": cliente["email"]},
+        "back_urls": {
+            "success": f"{base_url}/pagamento/sucesso/{cliente_id}",
+            "failure": f"{base_url}/pagamento/{cliente_id}",
+            "pending": f"{base_url}/pagamento/sucesso/{cliente_id}",
+        },
+        "auto_return": "approved",
+        "notification_url": f"{base_url}/webhook/mercadopago",
+        "external_reference": str(cliente_id),
+    }
+    resp = _req.post(
+        "https://api.mercadopago.com/checkout/preferences",
+        headers={"Authorization": f"Bearer {mp_token}", "Content-Type": "application/json"},
+        json=payload, timeout=15
+    )
+    if resp.status_code != 201:
+        logging.error(f"MP erro: {resp.text}")
+        return render_template("pagamento.html", cliente=cliente,
+            erro="Erro ao criar pagamento. Tente novamente.")
+    init_point = resp.json().get("init_point")
+    return redirect(init_point)
+
+def _get_cliente_plano(cliente_id):
+    conn = get_db()
+    c = conn.execute(
+        "SELECT c.*, p.nome as plano_nome, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=%s",
+        (cliente_id,)
+    ).fetchone()
+    conn.close()
+    return c
+
+@app.route("/pagamento/sucesso/<int:cliente_id>")
+def pagamento_sucesso(cliente_id):
+    conn = get_db()
+    cliente = conn.execute(
+        "SELECT c.*, p.preco FROM clientes c JOIN planos p ON c.plano_id=p.id WHERE c.id=%s",
+        (cliente_id,)
+    ).fetchone()
+    if cliente and cliente["status"] != "ativo":
+        conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
+        conn.execute(
+            "INSERT INTO pagamentos (cliente_id, valor, status) VALUES (%s, %s, %s)",
+            (cliente_id, cliente["preco"], "aprovado")
+        )
+        conn.commit()
+    conn.close()
+    return redirect(url_for("sucesso", cliente_id=cliente_id))
+
+@app.route("/webhook/mercadopago", methods=["POST"])
+def webhook_mercadopago():
+    import requests as _req
+    mp_token = os.environ.get("MP_ACCESS_TOKEN", "")
+    try:
+        data = request.json or {}
+        logging.warning(f"MP WEBHOOK: {data}")
+        if data.get("type") == "payment":
+            payment_id = data.get("data", {}).get("id")
+            if payment_id:
+                resp = _req.get(
+                    f"https://api.mercadopago.com/v1/payments/{payment_id}",
+                    headers={"Authorization": f"Bearer {mp_token}"}, timeout=10
+                )
+                payment = resp.json()
+                if payment.get("status") == "approved":
+                    cliente_id = int(payment.get("external_reference", 0))
+                    if cliente_id:
+                        conn = get_db()
+                        cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+                        if cliente and cliente["status"] != "ativo":
+                            conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
+                            conn.execute(
+                                "INSERT INTO pagamentos (cliente_id, valor, status, referencia) VALUES (%s, %s, %s, %s)",
+                                (cliente_id, payment.get("transaction_amount", 0), "aprovado", str(payment_id))
+                            )
+                            conn.commit()
+                        conn.close()
+    except Exception as e:
+        logging.error(f"Erro webhook MP: {e}")
+    return jsonify({"ok": True}), 200
+
 @app.route("/pagamento/confirmar/<int:cliente_id>", methods=["POST"])
 def confirmar_pagamento(cliente_id):
     conn = get_db()
