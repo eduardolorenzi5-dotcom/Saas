@@ -123,38 +123,39 @@ def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
 def enviar_email_reset(destinatario, link):
-    import smtplib
-    from email.mime.text import MIMEText
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASS", "")
-    smtp_from = os.environ.get("SMTP_FROM", smtp_user)
-    corpo = f"""Olá!
-
-Recebemos uma solicitação para redefinir sua senha no Controla Fácil.
-
-Clique no link abaixo para criar uma nova senha (válido por 1 hora):
-
-{link}
-
-Se você não solicitou isso, ignore este e-mail.
-
-— Equipe Controla Fácil"""
-    msg = MIMEText(corpo, "plain", "utf-8")
-    msg["Subject"] = "Redefinição de senha — Controla Fácil"
-    msg["From"] = smtp_from
-    msg["To"] = destinatario
-    use_ssl = int(smtp_port) == 465
-    if use_ssl:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as s:
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(smtp_from, [destinatario], msg.as_string())
-    else:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-            s.starttls()
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(smtp_from, [destinatario], msg.as_string())
+    import urllib.request, json as _json
+    api_key = os.environ.get("BREVO_API_KEY", "")
+    sender_email = os.environ.get("BREVO_FROM_EMAIL", "")
+    sender_name = os.environ.get("BREVO_FROM_NAME", "Controla Fácil")
+    if not api_key or not sender_email:
+        raise Exception("BREVO_API_KEY ou BREVO_FROM_EMAIL nao configurado")
+    corpo = (
+        f"Olá!\n\n"
+        f"Recebemos uma solicitação para redefinir sua senha no Controla Fácil.\n\n"
+        f"Clique no link abaixo para criar uma nova senha (válido por 1 hora):\n\n"
+        f"{link}\n\n"
+        f"Se você não solicitou isso, ignore este e-mail.\n\n"
+        f"— Equipe Controla Fácil"
+    )
+    payload = _json.dumps({
+        "sender": {"name": sender_name, "email": sender_email},
+        "to": [{"email": destinatario}],
+        "subject": "Redefinição de senha — Controla Fácil",
+        "textContent": corpo,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={
+            "api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        if resp.status not in (200, 201):
+            raise Exception(f"Brevo retornou status {resp.status}")
 
 def normalizar_whatsapp(numero):
     """Remove tudo que não é dígito e garante o formato 55DDDNUMERO."""
