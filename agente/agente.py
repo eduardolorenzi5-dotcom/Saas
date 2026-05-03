@@ -15,6 +15,7 @@ EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
 def buscar_cliente_por_fone(fone):
+    import logging
     fone_limpo = "".join(c for c in fone if c.isdigit())
     if not fone_limpo.startswith("55"):
         fone_limpo = "55" + fone_limpo
@@ -23,6 +24,8 @@ def buscar_cliente_por_fone(fone):
         "SELECT * FROM clientes WHERE whatsapp = %s",
         (fone_limpo,)
     ).fetchone()
+    todos = conn.execute("SELECT id, nome, whatsapp, status FROM clientes").fetchall()
+    logging.warning(f"BUSCA fone={fone_limpo} | encontrado={cliente is not None} | todos={[dict(r) for r in todos]}")
     conn.close()
     return cliente
 
