@@ -378,17 +378,50 @@ def resetar_senha(token):
 
 def _extrair_imagem_b64(payload, inputs):
     """Tenta extrair imagem em base64 do payload do webhook."""
-    import base64 as _b64
+    import base64 as _b64, requests as _req
+
+    # Formato n8n/typebot: payload.files = [{'type': 'image', 'url': '...'}]
+    for f in payload.get("files", []):
+        if f.get("type") == "image":
+            url = f.get("url", "")
+            if url.startswith("http"):
+                try:
+                    r = _req.get(url, timeout=15)
+                    if r.status_code == 200:
+                        return _b64.b64encode(r.content).decode()
+                except Exception as e:
+                    logging.warning(f"Falha ao baixar imagem: {e}")
+            elif url:
+                # Pode ser message ID — busca via Evolution API
+                try:
+                    ev_url = os.environ.get("EVOLUTION_URL", "")
+                    ev_key = os.environ.get("EVOLUTION_KEY", "")
+                    ev_inst = os.environ.get("EVOLUTION_INSTANCE", "gastosai")
+                    fone = inputs.get("remoteJid") or payload.get("user", "")
+                    r = _req.post(
+                        f"{ev_url}/chat/getBase64FromMediaMessage/{ev_inst}",
+                        headers={"apikey": ev_key, "Content-Type": "application/json"},
+                        json={"message": {"key": {"id": url, "remoteJid": fone}}},
+                        timeout=15
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        b64 = data.get("base64") or data.get("data")
+                        if b64:
+                            return b64
+                except Exception as e:
+                    logging.warning(f"Falha ao buscar imagem via Evolution API: {e}")
+
     # base64 direto no payload
     for campo in ["base64", "mediaBase64", "imageBase64"]:
         v = inputs.get(campo) or payload.get(campo)
         if v:
             return v
-    # URL de mídia: baixa e converte
+
+    # URL direta em campos avulsos
     media_url = inputs.get("mediaUrl") or inputs.get("imageUrl") or payload.get("mediaUrl")
     if media_url:
         try:
-            import requests as _req
             r = _req.get(media_url, timeout=10)
             if r.status_code == 200:
                 return _b64.b64encode(r.content).decode()
