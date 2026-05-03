@@ -11,6 +11,9 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 EVOLUTION_URL = os.environ.get("EVOLUTION_URL", "http://localhost:8080")
 EVOLUTION_KEY = os.environ.get("EVOLUTION_KEY", "")
 EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+APP_URL = os.environ.get("APP_URL", "https://saas-production-2a7a.up.railway.app")
 
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
@@ -167,6 +170,57 @@ Use emojis para deixar a mensagem mais visual. Seja específico com os valores."
     res.raise_for_status()
     return res.json()["content"][0]["text"].strip()
 
+def verificar_agenda_conectada(cliente_id):
+    conn = get_db()
+    row = conn.execute("SELECT google_refresh_token FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    conn.close()
+    return bool(row and row["google_refresh_token"])
+
+def gerar_link_agenda(cliente_id):
+    return f"{APP_URL}/agenda/conectar/{cliente_id}"
+
+def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60):
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request as GRequest
+    from googleapiclient.discovery import build
+    import datetime as dt
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT google_access_token, google_refresh_token, google_token_expiry FROM clientes WHERE id=%s",
+        (cliente_id,)
+    ).fetchone()
+    conn.close()
+
+    if not row or not row["google_refresh_token"]:
+        return None
+
+    creds = Credentials(
+        token=row["google_access_token"],
+        refresh_token=row["google_refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        scopes=["https://www.googleapis.com/auth/calendar.events"]
+    )
+    if not creds.valid:
+        creds.refresh(GRequest())
+        conn = get_db()
+        conn.execute("UPDATE clientes SET google_access_token=%s WHERE id=%s", (creds.token, cliente_id))
+        conn.commit()
+        conn.close()
+
+    service = build("calendar", "v3", credentials=creds)
+    inicio = dt.datetime.fromisoformat(data_hora_iso)
+    fim = inicio + dt.timedelta(minutes=duracao_min)
+    event = {
+        "summary": titulo,
+        "start": {"dateTime": inicio.isoformat(), "timeZone": "America/Sao_Paulo"},
+        "end": {"dateTime": fim.isoformat(), "timeZone": "America/Sao_Paulo"},
+    }
+    created = service.events().insert(calendarId="primary", body=event).execute()
+    return created.get("htmlLink")
+
 def chamar_claude(mensagem, historico=[]):
     """Chama a API do Claude para interpretar a mensagem."""
     system = f"""Você é um assistente financeiro amigável via WhatsApp.
@@ -180,7 +234,9 @@ Ao receber uma mensagem, identifique se é:
 4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês"
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
-7. Outra mensagem — responda de forma amigável
+7. Um pedido para CONECTAR Google Agenda — ex: "quero conectar minha agenda", "conectar google agenda", "ativar agenda"
+8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
+9. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(CATEGORIAS)}
 
@@ -209,6 +265,13 @@ Se for pedido de análise financeira:
 
 Se for pedido de dashboard/gráfico visual:
 {{"acao": "dashboard"}}
+
+Se for pedido para conectar Google Agenda:
+{{"acao": "conectar_agenda"}}
+
+Se for um agendamento (extraia título, data/hora e duração em minutos):
+{{"acao": "agendar", "titulo": "...", "data_hora": "YYYY-MM-DDTHH:MM:00", "duracao_min": 60}}
+(use 60 minutos como padrão se não informado. Interprete datas relativas como "amanhã", "sexta", "dia 10" com base em hoje.)
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -481,6 +544,41 @@ def processar_mensagem(fone, mensagem):
             for c in por_cat:
                 linhas.append(f"  • {c['categoria']}: R$ {c['s']:.2f}")
             resposta = "\n".join(linhas)
+
+        elif acao == "conectar_agenda":
+            link = gerar_link_agenda(cliente["id"])
+            resposta = (
+                f"📅 Para conectar seu Google Agenda, clique no link abaixo e autorize o acesso:\n\n"
+                f"{link}\n\n"
+                f"Após autorizar, você poderá agendar compromissos direto aqui pelo WhatsApp! 😊"
+            )
+
+        elif acao == "agendar":
+            if not verificar_agenda_conectada(cliente["id"]):
+                link = gerar_link_agenda(cliente["id"])
+                resposta = (
+                    f"📅 Sua agenda ainda não está conectada. Clique no link abaixo para autorizar:\n\n"
+                    f"{link}\n\n"
+                    f"Após conectar, envie o agendamento novamente."
+                )
+            else:
+                titulo = resultado.get("titulo", "Compromisso")
+                data_hora = resultado.get("data_hora", "")
+                duracao = int(resultado.get("duracao_min", 60))
+                try:
+                    link_evento = criar_evento_agenda(cliente["id"], titulo, data_hora, duracao)
+                    from datetime import datetime as _dt
+                    dt_fmt = _dt.fromisoformat(data_hora)
+                    resposta = (
+                        f"✅ Agendado no Google Agenda!\n"
+                        f"📌 {titulo}\n"
+                        f"📅 {dt_fmt.strftime('%d/%m/%Y')} às {dt_fmt.strftime('%H:%M')}\n"
+                        f"⏱️ Duração: {duracao} min"
+                    )
+                except Exception as e:
+                    import logging, traceback
+                    logging.error(f"Erro ao criar evento: {e}\n{traceback.format_exc()}")
+                    resposta = "Não consegui criar o evento na agenda. Tente novamente."
 
         else:
             resposta = resultado.get("texto", "Como posso te ajudar?")

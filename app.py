@@ -97,12 +97,14 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
         """)
-    # Adiciona colunas de reset de senha se não existirem
+    # Adiciona colunas extras se não existirem
     if USE_PG:
-        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS reset_token TEXT")
-        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS reset_expiry TEXT")
+        for col in ["reset_token TEXT", "reset_expiry TEXT",
+                    "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT"]:
+            conn.execute(f"ALTER TABLE clientes ADD COLUMN IF NOT EXISTS {col}")
     else:
-        for col in ["reset_token TEXT", "reset_expiry TEXT"]:
+        for col in ["reset_token TEXT", "reset_expiry TEXT",
+                    "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT"]:
             try:
                 conn.execute(f"ALTER TABLE clientes ADD COLUMN {col}")
             except Exception:
@@ -502,6 +504,55 @@ def resetar_senha(token):
         return redirect(url_for("login"))
     conn.close()
     return render_template("resetar_senha.html", erro=None, token=token, valido=True)
+
+def _google_flow(state=None):
+    from google_auth_oauthlib.flow import Flow
+    client_config = {
+        "web": {
+            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [os.environ.get("GOOGLE_REDIRECT_URI", "")]
+        }
+    }
+    kwargs = {"scopes": ["https://www.googleapis.com/auth/calendar.events"]}
+    if state:
+        kwargs["state"] = state
+    flow = Flow.from_client_config(client_config, **kwargs)
+    flow.redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", "")
+    return flow
+
+@app.route("/agenda/conectar/<int:cliente_id>")
+def agenda_conectar(cliente_id):
+    flow = _google_flow()
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        state=str(cliente_id)
+    )
+    return redirect(auth_url)
+
+@app.route("/agenda/callback")
+def agenda_callback():
+    state = request.args.get("state", "")
+    try:
+        cliente_id = int(state)
+    except ValueError:
+        return "Estado inválido.", 400
+    flow = _google_flow(state=state)
+    callback_url = request.url.replace("http://", "https://")
+    flow.fetch_token(authorization_response=callback_url)
+    creds = flow.credentials
+    expiry_str = creds.expiry.isoformat() if creds.expiry else None
+    conn = get_db()
+    conn.execute(
+        "UPDATE clientes SET google_access_token=%s, google_refresh_token=%s, google_token_expiry=%s WHERE id=%s",
+        (creds.token, creds.refresh_token, expiry_str, cliente_id)
+    )
+    conn.commit()
+    conn.close()
+    return render_template("agenda_conectada.html")
 
 def _extrair_imagem_b64(payload, inputs):
     """Tenta extrair imagem em base64 do payload do webhook."""
