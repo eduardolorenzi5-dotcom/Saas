@@ -1,11 +1,11 @@
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+import sqlite3, os, hashlib, secrets
+from datetime import datetime, date
 from functools import wraps
 
 app = Flask(__name__)
-
-with app.app_context():
-    init_db()
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
-DB_PATH = "gastos.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gastos.db")
 
 # ── Banco de dados ─────────────────────────────────────────────────────────────
 def get_db():
@@ -252,6 +252,9 @@ def gerar_relatorio(cliente_id):
     caminho = gerar_pdf(cliente_id, mes)
     return jsonify({"arquivo": caminho})
 
-if __name__ == "__main__":
+# Inicializa banco ao importar (necessário para gunicorn)
+with app.app_context():
     init_db()
+
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
