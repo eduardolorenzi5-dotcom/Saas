@@ -14,6 +14,25 @@ EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
+MESES_PT = {
+    1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",
+    5:"Maio",6:"Junho",7:"Julho",8:"Agosto",
+    9:"Setembro",10:"Outubro",11:"Novembro",12:"Dezembro"
+}
+
+def mes_ano_pt(d=None):
+    if d is None:
+        d = date.today()
+    return f"{MESES_PT[d.month]}/{d.year}"
+
+def formatar_data(data_iso):
+    """Converte YYYY-MM-DD para DD/MM/YYYY."""
+    try:
+        y, m, dia = data_iso.split("-")
+        return f"{dia}/{m}/{y}"
+    except Exception:
+        return data_iso
+
 def buscar_cliente_por_fone(fone):
     digits = "".join(c for c in fone if c.isdigit())
     if not digits.startswith("55"):
@@ -242,7 +261,7 @@ def gerar_imagem_dashboard(cliente_id):
             va="center", fontsize=9, color="#333333"
         )
 
-    mes_nome = date.today().strftime("%B/%Y").capitalize()
+    mes_nome = mes_ano_pt()
     ax.set_title(f"Gastos por Categoria — {mes_nome}\nTotal: R$ {total_geral:,.2f}", fontsize=12, fontweight="bold", pad=12, color="#222222")
     ax.invert_yaxis()
     ax.set_xlim(0, max(valores) * 1.45)
@@ -333,19 +352,20 @@ def processar_imagem(fone, imagem_b64, caption=""):
         if resultado.get("erro") == "nao_e_comprovante":
             enviar_whatsapp(fone, "Não consegui identificar um comprovante nessa imagem. Envie a foto de um recibo ou nota fiscal.")
             return "imagem inválida"
+        data_comp = resultado.get("data", date.today().isoformat())
         salvar_gasto(
             cliente["id"],
             resultado["descricao"],
             float(resultado["valor"]),
             resultado["categoria"],
-            resultado.get("data", date.today().isoformat())
+            data_comp
         )
         resposta = (
             f"✅ Comprovante registrado!\n"
             f"📝 {resultado['descricao']}\n"
             f"💰 R$ {float(resultado['valor']):.2f}\n"
             f"📂 {resultado['categoria']}\n"
-            f"📅 {resultado.get('data', date.today().isoformat())}"
+            f"📅 {formatar_data(data_comp)}"
         )
     except Exception as e:
         import logging, traceback
@@ -377,12 +397,13 @@ def processar_mensagem(fone, mensagem):
                 resultado["categoria"],
                 resultado.get("data", date.today().isoformat())
             )
+            data_gasto = resultado.get("data", date.today().isoformat())
             resposta = (
                 f"✅ Registrado!\n"
                 f"📝 {resultado['descricao']}\n"
                 f"💰 R$ {float(resultado['valor']):.2f}\n"
                 f"📂 {resultado['categoria']}\n"
-                f"📅 {resultado.get('data', date.today().isoformat())}"
+                f"📅 {formatar_data(data_gasto)}"
             )
 
         elif acao == "registrar_multiplos":
@@ -390,15 +411,16 @@ def processar_mensagem(fone, mensagem):
             total = 0.0
             linhas = ["✅ Gastos registrados!\n"]
             for g in gastos:
+                data_g = g.get("data", date.today().isoformat())
                 salvar_gasto(
                     cliente["id"],
                     g["descricao"],
                     float(g["valor"]),
                     g["categoria"],
-                    g.get("data", date.today().isoformat())
+                    data_g
                 )
                 total += float(g["valor"])
-                linhas.append(f"📝 {g['descricao']} — R$ {float(g['valor']):.2f} ({g['categoria']})")
+                linhas.append(f"📝 {g['descricao']} — R$ {float(g['valor']):.2f} ({g['categoria']}) {formatar_data(data_g)}")
             linhas.append(f"\n💰 Total: R$ {total:.2f}")
             resposta = "\n".join(linhas)
 
@@ -421,7 +443,7 @@ def processar_mensagem(fone, mensagem):
         elif acao == "dashboard":
             imagem = gerar_imagem_dashboard(cliente["id"])
             if imagem:
-                mes_nome = date.today().strftime("%B/%Y").capitalize()
+                mes_nome = mes_ano_pt()
                 enviar_imagem_whatsapp(fone, imagem, f"📊 Seus gastos de {mes_nome}")
                 resposta = ""
             else:
@@ -433,8 +455,7 @@ def processar_mensagem(fone, mensagem):
 
         elif acao == "resumo":
             total, por_cat = resumo_mes(cliente["id"])
-            mes_nome = date.today().strftime("%B/%Y")
-            linhas = [f"📊 *Resumo de {mes_nome}*", f"💰 Total: R$ {total:.2f}", ""]
+            linhas = [f"📊 *Resumo de {mes_ano_pt()}*", f"💰 Total: R$ {total:.2f}", ""]
             for c in por_cat:
                 linhas.append(f"  • {c['categoria']}: R$ {c['s']:.2f}")
             resposta = "\n".join(linhas)
