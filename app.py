@@ -376,14 +376,35 @@ def resetar_senha(token):
     conn.close()
     return render_template("resetar_senha.html", erro=None, token=token, valido=True)
 
+def _extrair_imagem_b64(payload, inputs):
+    """Tenta extrair imagem em base64 do payload do webhook."""
+    import base64 as _b64
+    # base64 direto no payload
+    for campo in ["base64", "mediaBase64", "imageBase64"]:
+        v = inputs.get(campo) or payload.get(campo)
+        if v:
+            return v
+    # URL de mídia: baixa e converte
+    media_url = inputs.get("mediaUrl") or inputs.get("imageUrl") or payload.get("mediaUrl")
+    if media_url:
+        try:
+            import requests as _req
+            r = _req.get(media_url, timeout=10)
+            if r.status_code == 200:
+                return _b64.b64encode(r.content).decode()
+        except Exception as e:
+            logging.warning(f"Falha ao baixar imagem de {media_url}: {e}")
+    return None
+
 @app.route("/webhook/whatsapp", methods=["POST"])
 def webhook_whatsapp():
-    from agente.agente import processar_mensagem
+    from agente.agente import processar_mensagem, processar_imagem
     payload = request.json
     logging.warning(f"WEBHOOK PAYLOAD: {payload}")
     try:
         msg = None
         fone = None
+        imagem_b64 = None
 
         if payload.get("inputs"):
             inputs = payload["inputs"]
@@ -392,23 +413,35 @@ def webhook_whatsapp():
             fone = (inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or
                     inputs.get("user", "").replace("@s.whatsapp.net", "") or
                     payload.get("user", "").replace("@s.whatsapp.net", ""))
+            imagem_b64 = _extrair_imagem_b64(payload, inputs)
         elif payload.get("query"):
             msg = payload.get("query", "")
             fone = payload.get("remoteJid", "").replace("@s.whatsapp.net", "") or \
                    payload.get("user", "").replace("@s.whatsapp.net", "")
+            imagem_b64 = _extrair_imagem_b64(payload, {})
         elif payload.get("data"):
             data = payload["data"]
-            msg = data.get("message", {}).get("conversation") or data.get("body", "")
+            img_msg = data.get("message", {}).get("imageMessage", {})
+            msg = img_msg.get("caption") or data.get("message", {}).get("conversation") or data.get("body", "")
             fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
+            imagem_b64 = _extrair_imagem_b64(payload, img_msg)
         elif payload.get("body"):
             msg = payload.get("body", "")
             fone = payload.get("from", "").replace("@s.whatsapp.net", "")
+            imagem_b64 = _extrair_imagem_b64(payload, {})
 
-        if not msg or not fone:
+        if not fone:
             logging.warning(f"Payload nao reconhecido: {payload}")
             return jsonify({"output": "", "status": "ignorado"}), 200
 
-        resposta = processar_mensagem(fone, msg)
+        if imagem_b64:
+            resposta = processar_imagem(fone, imagem_b64, msg or "")
+        elif msg:
+            resposta = processar_mensagem(fone, msg)
+        else:
+            logging.warning(f"Sem mensagem nem imagem: {payload}")
+            return jsonify({"output": "", "status": "ignorado"}), 200
+
         return jsonify({"output": resposta, "status": "ok"})
     except Exception as e:
         logging.error(f"Erro webhook: {e}")

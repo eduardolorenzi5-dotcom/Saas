@@ -285,6 +285,75 @@ def enviar_whatsapp(fone, mensagem):
     body = {"number": fone, "text": mensagem}
     requests.post(url, headers=headers, json=body, timeout=10)
 
+def analisar_comprovante_claude(imagem_b64, caption=""):
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
+    conteudo = [
+        {
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/jpeg", "data": imagem_b64}
+        },
+        {
+            "type": "text",
+            "text": (
+                f'Analise este comprovante/nota fiscal/recibo e extraia os dados do gasto.\n'
+                f'Legenda enviada pelo usuário: "{caption}"\n\n'
+                f"Responda APENAS com JSON no formato:\n"
+                f'{{"descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}\n\n'
+                f"Categorias disponíveis: {', '.join(CATEGORIAS)}\n"
+                f"Data de hoje: {date.today().isoformat()}\n"
+                f"Se não conseguir identificar algum campo, use 'Outros' como categoria e a data de hoje.\n"
+                f"Se a imagem não for um comprovante de gasto, responda: {{\"erro\": \"nao_e_comprovante\"}}"
+            )
+        }
+    ]
+    body = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 500,
+        "messages": [{"role": "user", "content": conteudo}]
+    }
+    res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body, timeout=25)
+    res.raise_for_status()
+    texto = res.json()["content"][0]["text"].strip().replace("```json", "").replace("```", "").strip()
+    return json.loads(texto)
+
+def processar_imagem(fone, imagem_b64, caption=""):
+    cliente = buscar_cliente_por_fone(fone)
+    if not cliente:
+        enviar_whatsapp(fone, "Olá! Não encontrei sua conta. Cadastre-se no Controla Fácil para começar.")
+        return "cliente não encontrado"
+    if cliente["status"] != "ativo":
+        enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento no Controla Fácil.")
+        return "conta inativa"
+    try:
+        resultado = analisar_comprovante_claude(imagem_b64, caption)
+        if resultado.get("erro") == "nao_e_comprovante":
+            enviar_whatsapp(fone, "Não consegui identificar um comprovante nessa imagem. Envie a foto de um recibo ou nota fiscal.")
+            return "imagem inválida"
+        salvar_gasto(
+            cliente["id"],
+            resultado["descricao"],
+            float(resultado["valor"]),
+            resultado["categoria"],
+            resultado.get("data", date.today().isoformat())
+        )
+        resposta = (
+            f"✅ Comprovante registrado!\n"
+            f"📝 {resultado['descricao']}\n"
+            f"💰 R$ {float(resultado['valor']):.2f}\n"
+            f"📂 {resultado['categoria']}\n"
+            f"📅 {resultado.get('data', date.today().isoformat())}"
+        )
+    except Exception as e:
+        import logging, traceback
+        logging.error(f"Erro ao analisar comprovante: {e}\n{traceback.format_exc()}")
+        resposta = "Não consegui ler o comprovante. Tente uma foto mais nítida ou descreva o gasto em texto."
+    enviar_whatsapp(fone, resposta)
+    return resposta
+
 def processar_mensagem(fone, mensagem):
     """Função principal chamada pelo webhook."""
     cliente = buscar_cliente_por_fone(fone)
