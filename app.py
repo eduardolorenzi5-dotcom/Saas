@@ -415,6 +415,20 @@ def webhook_whatsapp():
         return jsonify({"output": "Desculpe, tente novamente.", "status": "erro"}), 200
 
 
+@app.route("/admin/ativar/<email>")
+def admin_ativar(email):
+    admin_key = request.args.get("key", "")
+    if admin_key != os.environ.get("ADMIN_KEY", ""):
+        return jsonify({"erro": "nao autorizado"}), 403
+    conn = get_db()
+    conn.execute("UPDATE clientes SET status='ativo' WHERE email=%s", (email,))
+    conn.commit()
+    cliente = conn.execute("SELECT id, nome, email, status FROM clientes WHERE email=%s", (email,)).fetchone()
+    conn.close()
+    if not cliente:
+        return jsonify({"erro": "cliente nao encontrado"})
+    return jsonify(dict(cliente))
+
 @app.route("/relatorio/gerar/<int:cliente_id>")
 def gerar_relatorio(cliente_id):
     from relatorio.gerador import gerar_pdf
