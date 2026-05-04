@@ -225,7 +225,8 @@ def admin_painel():
         FROM clientes c
         LEFT JOIN planos p ON c.plano_id = p.id
         LEFT JOIN gastos g ON g.cliente_id = c.id AND g.data LIKE %s
-        GROUP BY c.id, p.nome, p.preco
+        GROUP BY c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
+                 c.renda_mensal, c.google_refresh_token, p.nome, p.preco
         ORDER BY c.criado_em DESC
     """, (date.today().strftime("%Y-%m") + "%",)).fetchall()
     total_clientes = len(clientes)
