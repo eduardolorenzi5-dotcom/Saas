@@ -14,6 +14,7 @@ EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 APP_URL = os.environ.get("APP_URL", "https://saas-production-2a7a.up.railway.app")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
@@ -455,6 +456,51 @@ def analisar_comprovante_claude(imagem_b64, caption=""):
     texto = res.json()["content"][0]["text"].strip().replace("```json", "").replace("```", "").strip()
     return json.loads(texto)
 
+def transcrever_audio_groq(audio_b64, mime_type="audio/ogg"):
+    import base64, io
+    audio_bytes = base64.b64decode(audio_b64)
+    ext = "ogg"
+    if "mp4" in mime_type or "m4a" in mime_type:
+        ext = "m4a"
+    elif "webm" in mime_type:
+        ext = "webm"
+    elif "mpeg" in mime_type or "mp3" in mime_type:
+        ext = "mp3"
+    files = {"file": (f"audio.{ext}", io.BytesIO(audio_bytes), mime_type)}
+    data = {"model": "whisper-large-v3-turbo", "language": "pt", "response_format": "text"}
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    resp = requests.post(
+        "https://api.groq.com/openai/v1/audio/transcriptions",
+        headers=headers, files=files, data=data, timeout=30
+    )
+    resp.raise_for_status()
+    return resp.text.strip()
+
+def processar_audio(fone, audio_b64, mime_type="audio/ogg"):
+    cliente = buscar_cliente_por_fone(fone)
+    if not cliente:
+        enviar_whatsapp(fone, "Olá! Não encontrei sua conta. Cadastre-se no Controla Fácil para começar.")
+        return "cliente não encontrado"
+    if cliente["status"] != "ativo":
+        enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento no Controla Fácil.")
+        return "conta inativa"
+    if not GROQ_API_KEY:
+        enviar_whatsapp(fone, "Transcrição de áudio não configurada. Envie sua mensagem em texto.")
+        return "groq não configurado"
+    try:
+        texto = transcrever_audio_groq(audio_b64, mime_type)
+        if not texto:
+            enviar_whatsapp(fone, "Não consegui entender o áudio. Tente enviar em texto.")
+            return "transcrição vazia"
+        import logging
+        logging.warning(f"[ÁUDIO TRANSCRITO de {fone}]: {texto}")
+        return processar_mensagem(fone, texto, _cliente=cliente)
+    except Exception as e:
+        import logging, traceback
+        logging.error(f"Erro ao transcrever áudio: {e}\n{traceback.format_exc()}")
+        enviar_whatsapp(fone, "Não consegui processar o áudio. Tente enviar em texto.")
+        return "erro transcrição"
+
 def processar_imagem(fone, imagem_b64, caption=""):
     cliente = buscar_cliente_por_fone(fone)
     if not cliente:
@@ -490,9 +536,9 @@ def processar_imagem(fone, imagem_b64, caption=""):
     enviar_whatsapp(fone, resposta)
     return resposta
 
-def processar_mensagem(fone, mensagem):
+def processar_mensagem(fone, mensagem, _cliente=None):
     """Função principal chamada pelo webhook."""
-    cliente = buscar_cliente_por_fone(fone)
+    cliente = _cliente or buscar_cliente_por_fone(fone)
     if not cliente:
         enviar_whatsapp(fone, "Olá! Não encontrei sua conta. Cadastre-se no Controla Fácil para começar.")
         return "cliente não encontrado"
