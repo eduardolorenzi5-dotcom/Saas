@@ -118,6 +118,11 @@
                     onsubmit="return confirm('Deletar {{ c.nome }}? Todos os dados serão removidos.');">
                 <button class="action-btn btn-deletar">Deletar</button>
               </form>
+              <form method="POST" action="/admin/atualizar_whatsapp/{{ c.id }}" style="display:inline;margin-top:4px;">
+                <input type="text" name="whatsapp" placeholder="WhatsApp" value="{{ c.whatsapp or '' }}"
+                       style="border:1px solid #ddd;border-radius:5px;padding:3px 7px;font-size:11px;width:130px;"/>
+                <button class="action-btn" style="background:#e0e7ff;color:#3730a3;">Salvar Wpp</button>
+              </form>
             </div>
           </td>
         </tr>

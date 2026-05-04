@@ -266,6 +266,16 @@ def admin_deletar(cliente_id):
     conn.close()
     return redirect(url_for("admin_painel"))
 
+@app.route("/admin/atualizar_whatsapp/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_atualizar_whatsapp(cliente_id):
+    novo = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
+    conn = get_db()
+    conn.execute("UPDATE clientes SET whatsapp=%s WHERE id=%s", (novo, cliente_id))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_painel"))
+
 @app.route("/")
 def index():
     conn = get_db()
