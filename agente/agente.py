@@ -14,7 +14,8 @@ EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 APP_URL = os.environ.get("APP_URL", "https://saas-production-2a7a.up.railway.app")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
@@ -477,36 +478,61 @@ def analisar_comprovante_claude(imagem_b64, caption=""):
     texto = res.json()["content"][0]["text"].strip().replace("```json", "").replace("```", "").strip()
     return json.loads(texto)
 
-def transcrever_audio_groq(audio_b64, mime_type="audio/ogg"):
-    import base64, io, logging
+def _audio_file(audio_b64, mime_type):
+    """Retorna (audio_bytes, ext, content_type) para envio à API de transcrição."""
+    import base64
     audio_bytes = base64.b64decode(audio_b64)
-    # WhatsApp envia OGG/OPUS — usa .ogg sem codec no content-type
     if "ogg" in mime_type or "opus" in mime_type:
-        ext = "ogg"
-        ct  = "audio/ogg"
+        return audio_bytes, "ogg", "audio/ogg"
     elif "mp4" in mime_type or "m4a" in mime_type:
-        ext = "m4a"
-        ct  = "audio/mp4"
+        return audio_bytes, "m4a", "audio/mp4"
     elif "webm" in mime_type:
-        ext = "webm"
-        ct  = "audio/webm"
+        return audio_bytes, "webm", "audio/webm"
     elif "mpeg" in mime_type or "mp3" in mime_type:
-        ext = "mp3"
-        ct  = "audio/mpeg"
-    else:
-        ext = "ogg"
-        ct  = "audio/ogg"
-    logging.warning(f"[AUDIO] key_ok={bool(GROQ_API_KEY)} ext={ext} bytes={len(audio_bytes)} b64_inicio={audio_b64[:20]!r}")
+        return audio_bytes, "mp3", "audio/mpeg"
+    return audio_bytes, "ogg", "audio/ogg"
+
+def transcrever_audio_groq(audio_b64, mime_type="audio/ogg"):
+    import io, logging
+    audio_bytes, ext, ct = _audio_file(audio_b64, mime_type)
+    logging.warning(f"[AUDIO-GROQ] ext={ext} bytes={len(audio_bytes)}")
     files = {"file": (f"audio.{ext}", io.BytesIO(audio_bytes), ct)}
-    data = {"model": "whisper-large-v3", "language": "pt", "response_format": "text"}
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-    resp = requests.post(
+    data  = {"model": "whisper-large-v3", "language": "pt", "response_format": "text"}
+    resp  = requests.post(
         "https://api.groq.com/openai/v1/audio/transcriptions",
-        headers=headers, files=files, data=data, timeout=30
+        headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+        files=files, data=data, timeout=30
     )
-    logging.warning(f"[AUDIO] Groq status={resp.status_code} body={resp.text[:400]}")
+    logging.warning(f"[AUDIO-GROQ] status={resp.status_code} body={resp.text[:200]}")
     resp.raise_for_status()
     return resp.text.strip()
+
+def transcrever_audio_openai(audio_b64, mime_type="audio/ogg"):
+    import io, logging
+    audio_bytes, ext, ct = _audio_file(audio_b64, mime_type)
+    logging.warning(f"[AUDIO-OPENAI] ext={ext} bytes={len(audio_bytes)}")
+    files = {"file": (f"audio.{ext}", io.BytesIO(audio_bytes), ct)}
+    data  = {"model": "whisper-1", "language": "pt", "response_format": "text"}
+    resp  = requests.post(
+        "https://api.openai.com/v1/audio/transcriptions",
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+        files=files, data=data, timeout=30
+    )
+    logging.warning(f"[AUDIO-OPENAI] status={resp.status_code} body={resp.text[:200]}")
+    resp.raise_for_status()
+    return resp.text.strip()
+
+def transcrever_audio(audio_b64, mime_type="audio/ogg"):
+    """Tenta Groq primeiro, cai para OpenAI se Groq falhar."""
+    import logging
+    if GROQ_API_KEY:
+        try:
+            return transcrever_audio_groq(audio_b64, mime_type)
+        except Exception as e:
+            logging.error(f"[AUDIO] Groq falhou ({e}), tentando OpenAI...")
+    if OPENAI_API_KEY:
+        return transcrever_audio_openai(audio_b64, mime_type)
+    raise RuntimeError("Nenhuma chave de transcrição configurada (GROQ_API_KEY ou OPENAI_API_KEY)")
 
 def processar_audio(fone, audio_b64, mime_type="audio/ogg"):
     cliente = buscar_cliente_por_fone(fone)
@@ -516,11 +542,11 @@ def processar_audio(fone, audio_b64, mime_type="audio/ogg"):
     if cliente["status"] != "ativo":
         enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento no Controla Fácil.")
         return "conta inativa"
-    if not GROQ_API_KEY:
+    if not GROQ_API_KEY and not OPENAI_API_KEY:
         enviar_whatsapp(fone, "Transcrição de áudio não configurada. Envie sua mensagem em texto.")
-        return "groq não configurado"
+        return "transcrição não configurada"
     try:
-        texto = transcrever_audio_groq(audio_b64, mime_type)
+        texto = transcrever_audio(audio_b64, mime_type)
         if not texto:
             enviar_whatsapp(fone, "Não consegui entender o áudio. Tente enviar em texto.")
             return "transcrição vazia"
