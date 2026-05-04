@@ -297,9 +297,17 @@ def cadastro():
         token = secrets.token_urlsafe(32)
         try:
             conn = get_db()
-            wpp_existente = conn.execute(
-                "SELECT id FROM clientes WHERE whatsapp=%s", (whatsapp,)
-            ).fetchone()
+            # Verifica variantes do número (com e sem o 9º dígito)
+            wpp_variantes = [whatsapp]
+            if len(whatsapp) == 12:
+                wpp_variantes.append(whatsapp[:4] + "9" + whatsapp[4:])
+            elif len(whatsapp) == 13:
+                wpp_variantes.append(whatsapp[:4] + whatsapp[5:])
+            wpp_existente = None
+            for v in wpp_variantes:
+                wpp_existente = conn.execute("SELECT id FROM clientes WHERE whatsapp=%s", (v,)).fetchone()
+                if wpp_existente:
+                    break
             if wpp_existente:
                 conn.close()
                 return render_template("cadastro.html", erro="Esse WhatsApp já está cadastrado. Se é seu, use a recuperação de senha para acessar sua conta.")
