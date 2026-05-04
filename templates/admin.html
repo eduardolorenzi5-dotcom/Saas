@@ -38,14 +38,24 @@
 <div class="admin-wrap">
   <div class="admin-header">
     <h1>Painel Admin — Controla Fácil</h1>
-    <a href="/admin/logout" style="font-size:13px;color:#888;">Sair</a>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <form method="POST" action="/admin/backup" style="display:inline;"
+            onsubmit="return confirm('Enviar backup por e-mail agora?');">
+        <button type="submit" style="background:#e0e7ff;color:#3730a3;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;">📦 Backup</button>
+      </form>
+      <a href="/admin/logout" style="font-size:13px;color:#888;">Sair</a>
+    </div>
   </div>
 
   {% if request.args.get('ok') == 'conta_criada' %}
   <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">Conta criada com sucesso!</div>
+  {% elif request.args.get('ok') == 'backup_enviado' %}
+  <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">Backup enviado por e-mail com sucesso!</div>
   {% elif request.args.get('erro') %}
   <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">
-    {% if request.args.get('erro') == 'email_duplicado' %}E-mail já cadastrado.{% else %}Preencha todos os campos obrigatórios.{% endif %}
+    {% if request.args.get('erro') == 'email_duplicado' %}E-mail já cadastrado.
+    {% elif request.args.get('erro') == 'backup_falhou' %}Falha ao enviar backup. Verifique as variáveis BREVO_API_KEY e BACKUP_EMAIL.
+    {% else %}Preencha todos os campos obrigatórios.{% endif %}
   </div>
   {% endif %}
 

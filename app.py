@@ -308,6 +308,98 @@ def admin_atualizar_whatsapp(cliente_id):
 def privacidade():
     return render_template("privacidade.html")
 
+
+def gerar_backup_csv():
+    """Exporta clientes e gastos como dois CSVs num ZIP em memória. Retorna bytes."""
+    import csv, io, zipfile
+    conn = get_db()
+    clientes = conn.execute("SELECT id, nome, email, whatsapp, status, criado_em FROM clientes ORDER BY id").fetchall()
+    gastos = conn.execute("SELECT id, cliente_id, descricao, valor, categoria, data, fonte, criado_em FROM gastos ORDER BY id").fetchall()
+    conn.close()
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for nome_arq, rows, cabecalho in [
+            ("clientes.csv", clientes, ["id","nome","email","whatsapp","status","criado_em"]),
+            ("gastos.csv",   gastos,   ["id","cliente_id","descricao","valor","categoria","data","fonte","criado_em"]),
+        ]:
+            s = io.StringIO()
+            w = csv.writer(s)
+            w.writerow(cabecalho)
+            for r in rows:
+                w.writerow([r[c] for c in cabecalho])
+            zf.writestr(nome_arq, s.getvalue())
+    buf.seek(0)
+    return buf.read()
+
+
+def enviar_backup_email():
+    """Envia backup ZIP por e-mail via Brevo. Chamado manualmente ou por cron."""
+    import urllib.request, json as _json, base64
+    api_key = os.environ.get("BREVO_API_KEY", "")
+    sender_email = os.environ.get("BREVO_FROM_EMAIL", "")
+    sender_name = os.environ.get("BREVO_FROM_NAME", "Controla Fácil")
+    destino = os.environ.get("BACKUP_EMAIL", sender_email)
+
+    if not api_key or not sender_email or not destino:
+        raise Exception("BREVO_API_KEY, BREVO_FROM_EMAIL ou BACKUP_EMAIL não configurado")
+
+    dados = gerar_backup_csv()
+    nome_arquivo = f"backup_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+
+    payload = _json.dumps({
+        "sender": {"name": sender_name, "email": sender_email},
+        "to": [{"email": destino}],
+        "subject": f"Backup Controla Fácil — {datetime.now().strftime('%d/%m/%Y')}",
+        "textContent": f"Backup automático gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}.\nAnexo: {nome_arquivo}",
+        "attachment": [{
+            "name": nome_arquivo,
+            "content": base64.b64encode(dados).decode("utf-8"),
+        }],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={
+            "api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        if resp.status not in (200, 201):
+            raise Exception(f"Brevo retornou status {resp.status}")
+    logging.info(f"[BACKUP] Enviado para {destino} — {len(dados)} bytes")
+
+
+@app.route("/admin/backup", methods=["POST"])
+@admin_required
+def admin_backup():
+    try:
+        enviar_backup_email()
+        return redirect(url_for("admin_painel") + "?ok=backup_enviado")
+    except Exception as e:
+        logging.error(f"[BACKUP] Erro: {e}")
+        return redirect(url_for("admin_painel") + "?erro=backup_falhou")
+
+
+@app.route("/cron/backup")
+def cron_backup():
+    """Endpoint para cron job diário (Railway Cron ou UptimeRobot). Protegido por token."""
+    token = request.args.get("token", "")
+    esperado = os.environ.get("CRON_SECRET", "")
+    if not esperado or token != esperado:
+        return jsonify({"erro": "não autorizado"}), 403
+    try:
+        enviar_backup_email()
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        logging.error(f"[BACKUP] Cron erro: {e}")
+        return jsonify({"status": "erro", "msg": str(e)}), 500
+
+
 @app.route("/health")
 def health():
     try:
