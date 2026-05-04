@@ -542,6 +542,21 @@ def debug_session():
     }
     return jsonify(resultado)
 
+@app.route("/perfil/whatsapp", methods=["POST"])
+@login_required
+def atualizar_whatsapp():
+    novo = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
+    if len(novo) < 10:
+        return redirect(url_for("dashboard"))
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("UPDATE clientes SET whatsapp=%s WHERE id=%s", (novo, cid))
+    conn.commit()
+    conn.close()
+    import logging
+    logging.warning(f"[PERFIL] cliente_id={cid} whatsapp atualizado para {novo!r}")
+    return redirect(url_for("dashboard"))
+
 @app.route("/api/gastos", methods=["POST"])
 @login_required
 def adicionar_gasto():
