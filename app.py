@@ -523,6 +523,24 @@ def dashboard():
         cats_valores=_json.dumps([float(r["total"]) for r in por_cat]),
     )
 
+@app.route("/debug/session")
+@login_required
+def debug_session():
+    cid = session["cliente_id"]
+    conn = get_db()
+    cliente = conn.execute("SELECT id, nome, email, whatsapp, status FROM clientes WHERE id=%s", (cid,)).fetchone()
+    gastos_todos = conn.execute(
+        "SELECT id, descricao, valor, categoria, data, fonte, criado_em FROM gastos WHERE cliente_id=%s ORDER BY criado_em DESC LIMIT 20",
+        (cid,)
+    ).fetchall()
+    conn.close()
+    resultado = {
+        "session_cliente_id": cid,
+        "cliente": dict(cliente) if cliente else None,
+        "gastos_recentes": [dict(g) for g in gastos_todos]
+    }
+    return jsonify(resultado)
+
 @app.route("/api/gastos", methods=["POST"])
 @login_required
 def adicionar_gasto():
