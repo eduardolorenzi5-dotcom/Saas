@@ -471,7 +471,7 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    import json as _json, calendar as _cal
+    import json as _json, calendar as _cal, logging as _log
     cid = session["cliente_id"]
     mes = date.today().strftime("%Y-%m")
     hoje = date.today()
@@ -480,6 +480,7 @@ def dashboard():
         "SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
         (cid, f"{mes}%")
     ).fetchall()
+    _log.warning(f"[DASHBOARD] cliente_id={cid} mes={mes} gastos_encontrados={len(gastos)}")
     total = conn.execute(
         "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
         (cid, f"{mes}%")
