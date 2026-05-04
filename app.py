@@ -277,6 +277,10 @@ def admin_atualizar_whatsapp(cliente_id):
     conn.close()
     return redirect(url_for("admin_painel"))
 
+@app.route("/privacidade")
+def privacidade():
+    return render_template("privacidade.html")
+
 @app.route("/")
 def index():
     conn = get_db()
