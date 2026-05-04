@@ -308,6 +308,16 @@ def admin_atualizar_whatsapp(cliente_id):
 def privacidade():
     return render_template("privacidade.html")
 
+@app.route("/health")
+def health():
+    try:
+        conn = get_db()
+        conn.execute("SELECT 1")
+        conn.close()
+        return jsonify({"status": "ok", "db": "ok"}), 200
+    except Exception as e:
+        return jsonify({"status": "erro", "db": str(e)}), 500
+
 @app.route("/")
 def index():
     conn = get_db()
