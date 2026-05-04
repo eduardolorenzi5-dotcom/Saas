@@ -755,7 +755,7 @@ def webhook_whatsapp():
                         timeout=20
                     )
                     logging.warning(f"[AUDIO] Evolution response {r.status_code}: {r.text[:200]}")
-                    if r.status_code == 200:
+                    if r.status_code in (200, 201):
                         audio_b64 = r.json().get("base64") or r.json().get("data")
                         if audio_b64 and fone:
                             resposta = processar_audio(fone, audio_b64, "audio/ogg")
