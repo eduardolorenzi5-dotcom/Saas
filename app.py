@@ -471,8 +471,10 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    import json as _json, calendar as _cal
     cid = session["cliente_id"]
     mes = date.today().strftime("%Y-%m")
+    hoje = date.today()
     conn = get_db()
     gastos = conn.execute(
         "SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
@@ -486,12 +488,39 @@ def dashboard():
         "SELECT categoria, SUM(valor) as total FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY total DESC",
         (cid, f"{mes}%")
     ).fetchall()
+    # Gastos por dia para gráfico de linha
+    por_dia_rows = conn.execute(
+        "SELECT data, SUM(valor) as total FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY data ORDER BY data",
+        (cid, f"{mes}%")
+    ).fetchall()
     cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cid,)).fetchone()
     conn.close()
+
+    # Monta série acumulada por dia do mês
+    dias_no_mes = _cal.monthrange(hoje.year, hoje.month)[1]
+    gastos_por_dia = {r["data"]: float(r["total"]) for r in por_dia_rows}
+    labels_dias = [str(d) for d in range(1, hoje.day + 1)]
+    serie_diaria = []
+    acumulado = 0
+    for d in range(1, hoje.day + 1):
+        key = f"{mes}-{d:02d}"
+        acumulado += gastos_por_dia.get(key, 0)
+        serie_diaria.append(round(acumulado, 2))
+
+    renda = float(cliente["renda_mensal"]) if cliente["renda_mensal"] else None
+    saldo = round(renda - float(total), 2) if renda else None
+
+    from agente.agente import MESES_PT
+    mes_nome = f"{MESES_PT[hoje.month]} {hoje.year}"
+
     return render_template("dashboard.html",
-        gastos=gastos, total=total, por_cat=por_cat,
-        cliente=cliente, mes=mes,
-        renda=float(cliente["renda_mensal"]) if cliente["renda_mensal"] else None
+        gastos=gastos, total=float(total), por_cat=por_cat,
+        cliente=cliente, mes=mes, mes_nome=mes_nome,
+        renda=renda, saldo=saldo,
+        labels_dias=_json.dumps(labels_dias),
+        serie_diaria=_json.dumps(serie_diaria),
+        cats_labels=_json.dumps([r["categoria"] for r in por_cat]),
+        cats_valores=_json.dumps([float(r["total"]) for r in por_cat]),
     )
 
 @app.route("/api/gastos", methods=["POST"])
