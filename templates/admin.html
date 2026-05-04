@@ -24,6 +24,7 @@
     .badge { display:inline-block; padding:2px 10px; border-radius:100px; font-size:11px; font-weight:600; }
     .badge-ativo { background:#d1fae5; color:#065f46; }
     .badge-pendente { background:#fef3c7; color:#92400e; }
+    .badge-cancelado { background:#fee2e2; color:#991b1b; }
     .badge-agenda { background:#dbeafe; color:#1e40af; font-size:10px; }
     .action-btn { border:none; border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:500; }
     .btn-ativar { background:#d1fae5; color:#065f46; }
@@ -80,7 +81,7 @@
           <td style="color:#555;">{{ c.email }}</td>
           <td style="color:#555;">{{ c.whatsapp or '—' }}</td>
           <td>
-            <span class="badge {{ 'badge-ativo' if c.status == 'ativo' else 'badge-pendente' }}">
+            <span class="badge {% if c.status == 'ativo' %}badge-ativo{% elif c.status == 'cancelado' %}badge-cancelado{% else %}badge-pendente{% endif %}">
               {{ c.status }}
             </span>
           </td>
@@ -107,7 +108,7 @@
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               {% if c.status != 'ativo' %}
               <form method="POST" action="/admin/ativar/{{ c.id }}" style="display:inline;">
-                <button class="action-btn btn-ativar">Ativar</button>
+                <button class="action-btn btn-ativar">Liberar acesso</button>
               </form>
               {% else %}
               <form method="POST" action="/admin/desativar/{{ c.id }}" style="display:inline;">
