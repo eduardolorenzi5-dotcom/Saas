@@ -741,17 +741,20 @@ def webhook_whatsapp():
             # Detecta áudio no formato inputs: query = "audioMessage|<messageId>"
             if msg and msg.startswith("audioMessage|"):
                 msg_id = msg.split("|", 1)[1]
-                ev_url = os.environ.get("EVOLUTION_URL", "")
-                ev_key = os.environ.get("EVOLUTION_KEY", "")
-                ev_inst = os.environ.get("EVOLUTION_INSTANCE", "")
+                # Usa dados do próprio payload quando disponíveis
+                ev_url = inputs.get("serverUrl") or os.environ.get("EVOLUTION_URL", "")
+                ev_key = inputs.get("apiKey") or os.environ.get("EVOLUTION_KEY", "")
+                ev_inst = inputs.get("instanceName") or os.environ.get("EVOLUTION_INSTANCE", "")
+                remote_jid = inputs.get("remoteJid") or (fone + "@s.whatsapp.net")
                 import requests as _req
                 try:
                     r = _req.post(
                         f"{ev_url}/chat/getBase64FromMediaMessage/{ev_inst}",
                         headers={"apikey": ev_key, "Content-Type": "application/json"},
-                        json={"message": {"key": {"id": msg_id, "remoteJid": fone + "@s.whatsapp.net"}}},
+                        json={"message": {"key": {"id": msg_id, "remoteJid": remote_jid}}},
                         timeout=20
                     )
+                    logging.warning(f"[AUDIO] Evolution response {r.status_code}: {r.text[:200]}")
                     if r.status_code == 200:
                         audio_b64 = r.json().get("base64") or r.json().get("data")
                         if audio_b64 and fone:
