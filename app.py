@@ -578,6 +578,34 @@ def atualizar_whatsapp():
     conn.close()
     return redirect(url_for("dashboard") + "?wpp_ok=1")
 
+@app.route("/assinatura")
+@login_required
+def assinatura():
+    cid = session["cliente_id"]
+    conn = get_db()
+    cliente = conn.execute("""
+        SELECT c.*, p.nome as plano_nome, p.preco, p.descricao as plano_desc
+        FROM clientes c LEFT JOIN planos p ON c.plano_id = p.id
+        WHERE c.id = %s
+    """, (cid,)).fetchone()
+    pagamentos = conn.execute(
+        "SELECT * FROM pagamentos WHERE cliente_id=%s ORDER BY criado_em DESC LIMIT 5",
+        (cid,)
+    ).fetchall()
+    conn.close()
+    return render_template("assinatura.html", cliente=cliente, pagamentos=pagamentos)
+
+@app.route("/cancelar-assinatura", methods=["POST"])
+@login_required
+def cancelar_assinatura():
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cid,))
+    conn.commit()
+    conn.close()
+    session.clear()
+    return redirect(url_for("index") + "?cancelado=1")
+
 @app.route("/api/gastos", methods=["POST"])
 @login_required
 def adicionar_gasto():
