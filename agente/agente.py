@@ -478,22 +478,34 @@ def analisar_comprovante_claude(imagem_b64, caption=""):
     return json.loads(texto)
 
 def transcrever_audio_groq(audio_b64, mime_type="audio/ogg"):
-    import base64, io
+    import base64, io, logging
     audio_bytes = base64.b64decode(audio_b64)
-    ext = "ogg"
-    if "mp4" in mime_type or "m4a" in mime_type:
+    # WhatsApp envia OGG/OPUS — Groq aceita melhor como .opus
+    if "ogg" in mime_type or "opus" in mime_type:
+        ext = "opus"
+        ct  = "audio/ogg; codecs=opus"
+    elif "mp4" in mime_type or "m4a" in mime_type:
         ext = "m4a"
+        ct  = "audio/mp4"
     elif "webm" in mime_type:
         ext = "webm"
+        ct  = "audio/webm"
     elif "mpeg" in mime_type or "mp3" in mime_type:
         ext = "mp3"
-    files = {"file": (f"audio.{ext}", io.BytesIO(audio_bytes), mime_type)}
+        ct  = "audio/mpeg"
+    else:
+        ext = "mp3"
+        ct  = "audio/mpeg"
+    logging.warning(f"[AUDIO] enviando para Groq: ext={ext} ct={ct} bytes={len(audio_bytes)}")
+    files = {"file": (f"audio.{ext}", io.BytesIO(audio_bytes), ct)}
     data = {"model": "whisper-large-v3-turbo", "language": "pt", "response_format": "text"}
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
     resp = requests.post(
         "https://api.groq.com/openai/v1/audio/transcriptions",
         headers=headers, files=files, data=data, timeout=30
     )
+    if not resp.ok:
+        logging.error(f"[AUDIO] Groq erro {resp.status_code}: {resp.text[:300]}")
     resp.raise_for_status()
     return resp.text.strip()
 
