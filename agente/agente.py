@@ -523,16 +523,20 @@ def transcrever_audio_openai(audio_b64, mime_type="audio/ogg"):
     return resp.text.strip()
 
 def transcrever_audio(audio_b64, mime_type="audio/ogg"):
-    """Tenta Groq primeiro, cai para OpenAI se Groq falhar."""
+    """OpenAI como primário (estável), Groq como fallback gratuito."""
     import logging
+    if OPENAI_API_KEY:
+        try:
+            return transcrever_audio_openai(audio_b64, mime_type)
+        except Exception as e:
+            logging.error(f"[AUDIO] OpenAI falhou ({e}), tentando Groq...")
     if GROQ_API_KEY:
         try:
             return transcrever_audio_groq(audio_b64, mime_type)
         except Exception as e:
-            logging.error(f"[AUDIO] Groq falhou ({e}), tentando OpenAI...")
-    if OPENAI_API_KEY:
-        return transcrever_audio_openai(audio_b64, mime_type)
-    raise RuntimeError("Nenhuma chave de transcrição configurada (GROQ_API_KEY ou OPENAI_API_KEY)")
+            logging.error(f"[AUDIO] Groq também falhou ({e})")
+            raise
+    raise RuntimeError("Nenhuma chave de transcrição configurada (OPENAI_API_KEY ou GROQ_API_KEY)")
 
 def processar_audio(fone, audio_b64, mime_type="audio/ogg"):
     cliente = buscar_cliente_por_fone(fone)
