@@ -480,10 +480,10 @@ def analisar_comprovante_claude(imagem_b64, caption=""):
 def transcrever_audio_groq(audio_b64, mime_type="audio/ogg"):
     import base64, io, logging
     audio_bytes = base64.b64decode(audio_b64)
-    # WhatsApp envia OGG/OPUS — Groq aceita melhor como .opus
+    # WhatsApp envia OGG/OPUS — usa .ogg sem codec no content-type
     if "ogg" in mime_type or "opus" in mime_type:
-        ext = "opus"
-        ct  = "audio/ogg; codecs=opus"
+        ext = "ogg"
+        ct  = "audio/ogg"
     elif "mp4" in mime_type or "m4a" in mime_type:
         ext = "m4a"
         ct  = "audio/mp4"
@@ -494,18 +494,17 @@ def transcrever_audio_groq(audio_b64, mime_type="audio/ogg"):
         ext = "mp3"
         ct  = "audio/mpeg"
     else:
-        ext = "mp3"
-        ct  = "audio/mpeg"
-    logging.warning(f"[AUDIO] enviando para Groq: ext={ext} ct={ct} bytes={len(audio_bytes)}")
+        ext = "ogg"
+        ct  = "audio/ogg"
+    logging.warning(f"[AUDIO] key_ok={bool(GROQ_API_KEY)} ext={ext} bytes={len(audio_bytes)} b64_inicio={audio_b64[:20]!r}")
     files = {"file": (f"audio.{ext}", io.BytesIO(audio_bytes), ct)}
-    data = {"model": "whisper-large-v3-turbo", "language": "pt", "response_format": "text"}
+    data = {"model": "whisper-large-v3", "language": "pt", "response_format": "text"}
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
     resp = requests.post(
         "https://api.groq.com/openai/v1/audio/transcriptions",
         headers=headers, files=files, data=data, timeout=30
     )
-    if not resp.ok:
-        logging.error(f"[AUDIO] Groq erro {resp.status_code}: {resp.text[:300]}")
+    logging.warning(f"[AUDIO] Groq status={resp.status_code} body={resp.text[:400]}")
     resp.raise_for_status()
     return resp.text.strip()
 
