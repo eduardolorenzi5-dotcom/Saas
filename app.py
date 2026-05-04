@@ -558,15 +558,19 @@ def debug_session():
 def atualizar_whatsapp():
     novo = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
     if len(novo) < 10:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("dashboard") + "?wpp_erro=numero_invalido")
     cid = session["cliente_id"]
     conn = get_db()
+    existente = conn.execute(
+        "SELECT id FROM clientes WHERE whatsapp=%s AND id != %s", (novo, cid)
+    ).fetchone()
+    if existente:
+        conn.close()
+        return redirect(url_for("dashboard") + "?wpp_erro=ja_cadastrado")
     conn.execute("UPDATE clientes SET whatsapp=%s WHERE id=%s", (novo, cid))
     conn.commit()
     conn.close()
-    import logging
-    logging.warning(f"[PERFIL] cliente_id={cid} whatsapp atualizado para {novo!r}")
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("dashboard") + "?wpp_ok=1")
 
 @app.route("/api/gastos", methods=["POST"])
 @login_required

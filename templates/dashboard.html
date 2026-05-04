@@ -199,6 +199,21 @@
         </form>
       </div>
       {% endif %}
+      {% set wpp_erro = request.args.get('wpp_erro') %}
+      {% set wpp_ok = request.args.get('wpp_ok') %}
+      {% if wpp_ok %}
+      <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">
+        WhatsApp atualizado com sucesso!
+      </div>
+      {% elif wpp_erro == 'ja_cadastrado' %}
+      <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+        Esse número já está vinculado a outra conta. Se é seu, use a <a href="/recuperar-senha" style="color:#991b1b;font-weight:600;">recuperação de senha</a> para acessar essa conta.
+      </div>
+      {% elif wpp_erro == 'numero_invalido' %}
+      <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+        Número inválido. Digite o DDD + número completo.
+      </div>
+      {% endif %}
       <div class="form-card">
         <div class="form-card-title" style="display:flex;justify-content:space-between;align-items:center;">
           <span>Adicionar gasto</span>
