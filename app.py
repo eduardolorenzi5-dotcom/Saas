@@ -738,6 +738,28 @@ def webhook_whatsapp():
             fone = (inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or
                     inputs.get("user", "").replace("@s.whatsapp.net", "") or
                     payload.get("user", "").replace("@s.whatsapp.net", ""))
+            # Detecta áudio no formato inputs: query = "audioMessage|<messageId>"
+            if msg and msg.startswith("audioMessage|"):
+                msg_id = msg.split("|", 1)[1]
+                ev_url = os.environ.get("EVOLUTION_URL", "")
+                ev_key = os.environ.get("EVOLUTION_KEY", "")
+                ev_inst = os.environ.get("EVOLUTION_INSTANCE", "")
+                import requests as _req
+                try:
+                    r = _req.post(
+                        f"{ev_url}/chat/getBase64FromMediaMessage/{ev_inst}",
+                        headers={"apikey": ev_key, "Content-Type": "application/json"},
+                        json={"message": {"key": {"id": msg_id, "remoteJid": fone + "@s.whatsapp.net"}}},
+                        timeout=20
+                    )
+                    if r.status_code == 200:
+                        audio_b64 = r.json().get("base64") or r.json().get("data")
+                        if audio_b64 and fone:
+                            resposta = processar_audio(fone, audio_b64, "audio/ogg")
+                            return jsonify({"output": resposta, "status": "ok"})
+                except Exception as e:
+                    logging.error(f"Erro ao buscar áudio inputs: {e}")
+                return jsonify({"output": "Não consegui processar o áudio. Tente em texto.", "status": "ok"}), 200
             imagem_b64 = _extrair_imagem_b64(payload, inputs)
         elif payload.get("query"):
             msg = payload.get("query", "")
