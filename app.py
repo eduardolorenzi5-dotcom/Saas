@@ -267,6 +267,33 @@ def admin_deletar(cliente_id):
     conn.close()
     return redirect(url_for("admin_painel"))
 
+@app.route("/admin/criar-conta", methods=["POST"])
+@admin_required
+def admin_criar_conta():
+    nome     = request.form.get("nome", "").strip()
+    email    = request.form.get("email", "").strip().lower()
+    senha    = request.form.get("senha", "").strip()
+    whatsapp = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
+    if not all([nome, email, senha]):
+        return redirect(url_for("admin_painel") + "?erro=campos_obrigatorios")
+    conn = get_db()
+    plano = conn.execute("SELECT id FROM planos LIMIT 1").fetchone()
+    plano_id = plano["id"] if plano else None
+    try:
+        token = secrets.token_urlsafe(32)
+        conn.execute(
+            "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso, status) VALUES (%s, %s, %s, %s, %s, %s, 'ativo')",
+            (nome, email, hash_senha(senha), whatsapp or None, plano_id, token)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return redirect(url_for("admin_painel") + "?erro=email_duplicado")
+        raise
+    conn.close()
+    return redirect(url_for("admin_painel") + "?ok=conta_criada")
+
 @app.route("/admin/atualizar_whatsapp/<int:cliente_id>", methods=["POST"])
 @admin_required
 def admin_atualizar_whatsapp(cliente_id):

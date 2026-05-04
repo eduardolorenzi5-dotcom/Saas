@@ -41,6 +41,29 @@
     <a href="/admin/logout" style="font-size:13px;color:#888;">Sair</a>
   </div>
 
+  {% if request.args.get('ok') == 'conta_criada' %}
+  <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">Conta criada com sucesso!</div>
+  {% elif request.args.get('erro') %}
+  <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+    {% if request.args.get('erro') == 'email_duplicado' %}E-mail já cadastrado.{% else %}Preencha todos os campos obrigatórios.{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="admin-table-wrap" style="margin-bottom:24px;">
+    <h2>Criar conta gratuita</h2>
+    <form method="POST" action="/admin/criar-conta" style="display:flex;gap:10px;flex-wrap:wrap;padding:16px 20px;align-items:flex-end;">
+      <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Nome *</label>
+        <input type="text" name="nome" placeholder="Nome completo" required style="border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-size:13px;width:170px;"/></div>
+      <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">E-mail *</label>
+        <input type="email" name="email" placeholder="email@exemplo.com" required style="border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-size:13px;width:190px;"/></div>
+      <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Senha *</label>
+        <input type="text" name="senha" placeholder="Senha de acesso" required style="border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-size:13px;width:140px;"/></div>
+      <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">WhatsApp</label>
+        <input type="text" name="whatsapp" placeholder="61 9 9800-7328" style="border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-size:13px;width:140px;"/></div>
+      <button type="submit" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:7px 18px;font-size:13px;font-weight:600;cursor:pointer;height:34px;">+ Criar conta</button>
+    </form>
+  </div>
+
   <div class="stats-row">
     <div class="stat-box">
       <div class="label">Total de clientes</div>
