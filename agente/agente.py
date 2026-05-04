@@ -38,6 +38,7 @@ def formatar_data(data_iso):
         return data_iso
 
 def buscar_cliente_por_fone(fone):
+    import logging
     digits = "".join(c for c in fone if c.isdigit())
     if not digits.startswith("55"):
         digits = "55" + digits
@@ -49,6 +50,8 @@ def buscar_cliente_por_fone(fone):
     elif len(digits) == 13:  # com o 9 extra → tenta remover
         variantes.append(digits[:4] + digits[5:])
 
+    logging.warning(f"[BUSCA_CLIENTE] fone_raw={fone!r} variantes={variantes}")
+
     conn = get_db()
     cliente = None
     for v in variantes:
@@ -57,10 +60,27 @@ def buscar_cliente_por_fone(fone):
         ).fetchone()
         if cliente:
             break
+
+    # Fallback: busca parcial pelo sufixo do número (últimos 8 dígitos)
+    if not cliente and len(digits) >= 8:
+        sufixo = digits[-8:]
+        cliente = conn.execute(
+            "SELECT * FROM clientes WHERE whatsapp LIKE %s", (f"%{sufixo}",)
+        ).fetchone()
+        if cliente:
+            logging.warning(f"[BUSCA_CLIENTE] encontrado via sufixo {sufixo!r}: id={cliente['id']} whatsapp={cliente['whatsapp']!r}")
+
+    if cliente:
+        logging.warning(f"[BUSCA_CLIENTE] cliente encontrado: id={cliente['id']} whatsapp={cliente['whatsapp']!r}")
+    else:
+        logging.warning(f"[BUSCA_CLIENTE] cliente NAO encontrado para variantes={variantes}")
+
     conn.close()
     return cliente
 
 def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto):
+    import logging
+    logging.warning(f"[SALVAR_GASTO] cliente_id={cliente_id} descricao={descricao!r} valor={valor} data={data_gasto!r}")
     conn = get_db()
     conn.execute(
         "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -68,6 +88,7 @@ def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto):
     )
     conn.commit()
     conn.close()
+    logging.warning(f"[SALVAR_GASTO] OK - gasto salvo para cliente_id={cliente_id}")
 
 def deletar_todos_gastos(cliente_id, mes=None):
     conn = get_db()
