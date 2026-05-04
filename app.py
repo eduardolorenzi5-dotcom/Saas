@@ -297,6 +297,12 @@ def cadastro():
         token = secrets.token_urlsafe(32)
         try:
             conn = get_db()
+            wpp_existente = conn.execute(
+                "SELECT id FROM clientes WHERE whatsapp=%s", (whatsapp,)
+            ).fetchone()
+            if wpp_existente:
+                conn.close()
+                return render_template("cadastro.html", erro="Esse WhatsApp já está cadastrado. Se é seu, use a recuperação de senha para acessar sua conta.")
             conn.execute(
                 "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso) VALUES (%s, %s, %s, %s, %s, %s)",
                 (nome, email, hash_senha(senha), whatsapp, plano_id, token)
