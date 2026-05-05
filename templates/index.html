@@ -6,83 +6,460 @@
   <title>Controla Fácil — Controle seus gastos pelo WhatsApp</title>
   <meta name="google-site-verification" content="AKyjjVaMWTwfIoW_J1qvtnPIPj7W1Kl9HVet4Y-uCFw" />
   <link rel="stylesheet" href="/static/css/site.css"/>
+  <style>
+    /* ── RESET & BASE ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; background: #fff; overflow-x: hidden; }
+    a { text-decoration: none; color: inherit; }
+
+    /* ── NAV ── */
+    .nav { border-bottom: 1px solid #f0f0ee; position: sticky; top: 0; background: rgba(255,255,255,.95); backdrop-filter: blur(8px); z-index: 100; }
+    .nav-inner { max-width: 1140px; margin: 0 auto; padding: 0 28px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    .nav-logo { display: flex; align-items: center; gap: 10px; }
+    .nav-logo img { height: 36px; width: 36px; object-fit: contain; }
+    .nav-logo span { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+    .nav-links { display: flex; align-items: center; gap: 32px; font-size: 14px; color: #555; }
+    .nav-links a:hover { color: #1a1a1a; }
+    .btn-nav { background: #1D9E75; color: #fff !important; padding: 9px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: background .15s; }
+    .btn-nav:hover { background: #179162 !important; }
+
+    /* ── HERO ── */
+    .hero { background: #f8faf9; padding: 90px 28px 80px; overflow: hidden; }
+    .hero-inner { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+    .hero-tag { display: inline-block; color: #1D9E75; font-size: 14px; font-weight: 600; margin-bottom: 18px; }
+    .hero h1 { font-size: 52px; font-weight: 800; line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 20px; color: #0f1117; }
+    .hero h1 em { font-style: normal; color: #1D9E75; }
+    .hero-sub { font-size: 17px; color: #555; line-height: 1.75; margin-bottom: 36px; max-width: 480px; }
+    .hero-cta { display: inline-flex; align-items: center; gap: 8px; background: #1a1a1a; color: #fff; padding: 16px 32px; border-radius: 12px; font-size: 15px; font-weight: 700; transition: transform .15s, background .15s; }
+    .hero-cta:hover { background: #2d2d2d; transform: translateY(-1px); }
+    .hero-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .badge { display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #e5e5e3; border-radius: 100px; padding: 6px 14px; font-size: 12px; font-weight: 500; color: #444; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .badge-dot { width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; }
+
+    /* ── PHONE MOCKUPS ── */
+    .hero-visual { position: relative; display: flex; justify-content: center; align-items: flex-end; gap: -20px; }
+    .phone { width: 210px; background: #0f1117; border-radius: 36px; padding: 12px 10px; box-shadow: 0 24px 60px rgba(0,0,0,.25); flex-shrink: 0; }
+    .phone-screen { background: #fff; border-radius: 26px; overflow: hidden; min-height: 360px; }
+    .phone-bar { background: #f5f5f5; padding: 10px 12px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
+    .phone-avatar { width: 28px; height: 28px; border-radius: 50%; background: #1D9E75; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 700; flex-shrink: 0; }
+    .phone-contact { font-size: 11px; font-weight: 600; }
+    .phone-online { font-size: 9px; color: #1D9E75; }
+    .phone-msgs { padding: 10px 8px; display: flex; flex-direction: column; gap: 6px; }
+    .msg { max-width: 80%; padding: 7px 10px; border-radius: 12px; font-size: 10px; line-height: 1.45; }
+    .msg-in { background: #f0f0f0; color: #333; align-self: flex-start; border-bottom-left-radius: 3px; }
+    .msg-out { background: #dcf8c6; color: #1a1a1a; align-self: flex-end; border-bottom-right-radius: 3px; }
+    .msg-time { font-size: 8px; color: #999; margin-top: 2px; }
+    .phone-mid { transform: translateY(-24px) scale(1.05); z-index: 2; }
+    .phone-side { transform: scale(.92); opacity: .85; }
+
+    /* ── FAIXA SOCIAL PROOF ── */
+    .proof-bar { background: #1a1a1a; color: #fff; padding: 20px 28px; text-align: center; }
+    .proof-bar-inner { max-width: 1140px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 48px; flex-wrap: wrap; }
+    .proof-item { display: flex; align-items: center; gap: 10px; }
+    .proof-num { font-size: 24px; font-weight: 800; color: #1D9E75; }
+    .proof-label { font-size: 13px; color: #aaa; }
+
+    /* ── SEÇÕES GENÉRICAS ── */
+    .section { padding: 96px 28px; }
+    .section-inner { max-width: 1140px; margin: 0 auto; }
+    .section-tag { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #1D9E75; margin-bottom: 12px; }
+    .section-title { font-size: 40px; font-weight: 800; letter-spacing: -1px; line-height: 1.15; color: #0f1117; margin-bottom: 16px; }
+    .section-sub { font-size: 16px; color: #666; line-height: 1.75; }
+
+    /* ── COMO FUNCIONA ── */
+    .steps-section { background: #fff; }
+    .steps-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 32px; margin-top: 56px; }
+    .step-card { position: relative; }
+    .step-num-wrap { width: 48px; height: 48px; background: #0f1117; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+    .step-num-wrap span { font-size: 18px; font-weight: 800; color: #1D9E75; }
+    .step-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: #0f1117; }
+    .step-card p { font-size: 14px; color: #777; line-height: 1.65; }
+    .step-arrow { position: absolute; top: 24px; right: -20px; color: #ddd; font-size: 20px; }
+
+    /* ── FEATURE SECTIONS ── */
+    .feature-section { padding: 80px 28px; }
+    .feature-section.alt { background: #f8faf9; }
+    .feature-grid { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; }
+    .feature-grid.reverse { direction: rtl; }
+    .feature-grid.reverse > * { direction: ltr; }
+    .feature-text h2 { font-size: 36px; font-weight: 800; letter-spacing: -.8px; line-height: 1.2; margin-bottom: 16px; color: #0f1117; }
+    .feature-text p { font-size: 15px; color: #666; line-height: 1.8; margin-bottom: 20px; }
+    .feature-bullets { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+    .feature-bullets li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #444; }
+    .feature-bullets li::before { content: ''; width: 20px; height: 20px; border-radius: 50%; background: #e6f7f1; border: 2px solid #1D9E75; flex-shrink: 0; background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%231D9E75' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: center; }
+    .feature-cta { display: inline-flex; align-items: center; gap: 8px; background: #1D9E75; color: #fff; padding: 13px 26px; border-radius: 10px; font-size: 14px; font-weight: 700; transition: background .15s; }
+    .feature-cta:hover { background: #179162; }
+
+    /* ── CHAT MOCKUP ── */
+    .chat-mockup { background: #0f1117; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.2); max-width: 400px; }
+    .chat-header { background: #1c2030; padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.07); }
+    .chat-av { width: 36px; height: 36px; border-radius: 50%; background: #1D9E75; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; font-weight: 700; }
+    .chat-name { font-size: 14px; font-weight: 600; color: #fff; }
+    .chat-status { font-size: 11px; color: #1D9E75; }
+    .chat-body { padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; background: #161925; min-height: 300px; }
+    .cmsg { max-width: 82%; padding: 10px 13px; border-radius: 14px; font-size: 12.5px; line-height: 1.5; }
+    .cmsg-in { background: #1e2435; color: #d0d5e8; align-self: flex-start; border-bottom-left-radius: 3px; }
+    .cmsg-out { background: #1D9E75; color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
+    .cmsg-time { font-size: 9px; color: rgba(255,255,255,.4); margin-top: 3px; text-align: right; }
+    .cmsg-in .cmsg-time { color: rgba(208,213,232,.4); }
+
+    /* ── DASHBOARD MOCKUP ── */
+    .dash-mockup { background: #fff; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.12); overflow: hidden; border: 1px solid #e5e7eb; }
+    .dash-mock-nav { background: #0f1117; padding: 12px 20px; display: flex; align-items: center; gap: 20px; }
+    .dash-mock-logo { font-size: 13px; font-weight: 700; color: #1D9E75; }
+    .dash-mock-link { font-size: 11px; color: rgba(255,255,255,.4); }
+    .dash-mock-body { padding: 20px; }
+    .dash-mock-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .dash-mock-card { background: #f8faf9; border-radius: 10px; padding: 14px; border: 1px solid #e5e7eb; }
+    .dash-mock-card .dmc-label { font-size: 10px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .dash-mock-card .dmc-val { font-size: 20px; font-weight: 800; color: #0f1117; }
+    .dash-mock-card .dmc-val.green { color: #1D9E75; }
+    .dash-mock-card .dmc-val.red { color: #dc2626; }
+    .dash-bar-chart { background: #f8faf9; border-radius: 10px; padding: 14px; border: 1px solid #e5e7eb; }
+    .dash-bar-label { font-size: 11px; font-weight: 600; color: #555; margin-bottom: 10px; }
+    .dash-bars { display: flex; align-items: flex-end; gap: 6px; height: 70px; }
+    .dash-bar { flex: 1; border-radius: 4px 4px 0 0; background: #e5e7eb; }
+    .dash-bar.active { background: #1D9E75; }
+
+    /* ── AGENDA SECTION ── */
+    .agenda-section { padding: 80px 28px; text-align: center; }
+    .agenda-logos { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 36px; }
+    .agenda-logo-box { width: 72px; height: 72px; background: #f8faf9; border: 1px solid #e5e7eb; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+    .agenda-arrow { font-size: 22px; color: #ccc; }
+    .agenda-section h2 { font-size: 40px; font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
+    .agenda-section h2 em { font-style: normal; color: #1D9E75; }
+    .agenda-section p { font-size: 16px; color: #666; max-width: 600px; margin: 0 auto 36px; line-height: 1.75; }
+    .agenda-features { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 36px; }
+    .agenda-feat { font-size: 15px; color: #444; padding-bottom: 10px; border-bottom: 2px solid #1D9E75; display: inline-block; }
+
+    /* ── PLANOS ── */
+    .planos-section { background: #0f1117; padding: 96px 28px; }
+    .planos-section .section-tag { color: #1D9E75; }
+    .planos-section .section-title { color: #fff; }
+    .planos-section .section-sub { color: #6b7280; }
+    .planos-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; margin-top: 56px; }
+    .plano-card { background: #1c2030; border: 1px solid rgba(255,255,255,.08); border-radius: 20px; padding: 36px; position: relative; width: 320px; max-width: 100%; transition: transform .2s; }
+    .plano-card:hover { transform: translateY(-4px); }
+    .plano-card.destaque { border-color: #1D9E75; border-width: 2px; background: #152820; }
+    .badge-popular { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: #1D9E75; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 16px; border-radius: 100px; white-space: nowrap; letter-spacing: .05em; }
+    .plano-card h3 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px; }
+    .preco { font-size: 42px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+    .preco span { font-size: 15px; font-weight: 400; color: #6b7280; }
+    .plano-desc { font-size: 14px; color: #6b7280; line-height: 1.65; margin-bottom: 28px; }
+    .plano-btn { display: block; text-align: center; background: #1D9E75; color: #fff; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 700; transition: background .15s; }
+    .plano-btn:hover { background: #179162; }
+    .plano-card:not(.destaque) .plano-btn { background: rgba(255,255,255,.08); color: #fff; }
+    .plano-card:not(.destaque) .plano-btn:hover { background: rgba(255,255,255,.14); }
+
+    /* ── FOOTER ── */
+    .footer { background: #090c14; color: #4b5563; padding: 40px 28px; text-align: center; font-size: 13px; border-top: 1px solid rgba(255,255,255,.05); }
+    .footer a { color: #6b7280; }
+    .footer a:hover { color: #9ca3af; }
+    .footer-inner { max-width: 1140px; margin: 0 auto; }
+    .footer-links { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
+
+    /* ── RESPONSIVE ── */
+    @media(max-width:900px) {
+      .hero-inner { grid-template-columns: 1fr; gap: 48px; }
+      .hero h1 { font-size: 38px; }
+      .hero-visual { display: none; }
+      .steps-grid { grid-template-columns: 1fr 1fr; }
+      .step-arrow { display: none; }
+      .feature-grid, .feature-grid.reverse { grid-template-columns: 1fr; direction: ltr; gap: 40px; }
+      .proof-bar-inner { gap: 28px; }
+    }
+    @media(max-width:600px) {
+      .hero { padding: 60px 20px 52px; }
+      .hero h1 { font-size: 30px; }
+      .section-title { font-size: 28px; }
+      .steps-grid { grid-template-columns: 1fr; }
+      .nav-links a:not(.btn-nav):not(:last-child) { display: none; }
+      .agenda-section h2 { font-size: 28px; }
+    }
+  </style>
 </head>
 <body>
 
+<!-- NAV -->
 <nav class="nav">
   <div class="nav-inner">
-    <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
-      <img src="/static/logo.png" alt="Controla Fácil" style="height:36px;width:36px;object-fit:contain;"/>
-      <span class="logo">Controla Fácil</span>
+    <a href="/" class="nav-logo">
+      <img src="/static/logo.png" alt="Controla Fácil"/>
+      <span>Controla Fácil</span>
     </a>
     <div class="nav-links">
-      <a href="#planos">Planos</a>
       <a href="#como-funciona">Como funciona</a>
-      <a href="/login" class="btn-green">Login</a>
+      <a href="#planos">Planos</a>
+      <a href="/login" class="btn-nav">Login →</a>
     </div>
   </div>
 </nav>
 
+<!-- HERO -->
 <section class="hero">
   <div class="hero-inner">
-    <h1>Controle seus gastos<br/>pelo <span class="highlight">WhatsApp</span></h1>
-    <p class="hero-sub">Envie uma mensagem como "gastei R$50 no mercado" e nossa IA registra tudo automaticamente. No fim do mês, receba um relatório completo.</p>
-    <a href="/cadastro" class="btn-primary btn-lg">Começar agora</a>
-  </div>
-</section>
-
-<section class="como-funciona" id="como-funciona">
-  <div class="section-inner">
-    <h2>Como funciona</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <h3>Assine um plano</h3>
-        <p>Escolha o plano ideal e conclua o pagamento em segundos.</p>
+    <div>
+      <div class="hero-tag">Você sabe para onde vai seu dinheiro todo mês?</div>
+      <h1>Seu assistente financeiro no <em>WhatsApp</em>, 24h por dia.</h1>
+      <p class="hero-sub">Mande uma mensagem como "gastei R$50 no mercado" e a IA registra, categoriza e organiza tudo automaticamente. Simples assim.</p>
+      <a href="/cadastro" class="hero-cta">Começar agora →</a>
+      <div class="hero-badges">
+        <div class="badge"><div class="badge-dot"></div> IA que entende português</div>
+        <div class="badge"><div class="badge-dot"></div> Registro em segundos</div>
+        <div class="badge"><div class="badge-dot"></div> Relatório PDF profissional</div>
+        <div class="badge"><div class="badge-dot"></div> Google Agenda integrado</div>
       </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <h3>Receba o acesso</h3>
-        <p>Seu agente de IA é ativado no WhatsApp imediatamente.</p>
+    </div>
+    <div class="hero-visual">
+      <div class="phone phone-side">
+        <div class="phone-screen">
+          <div class="phone-bar">
+            <div class="phone-avatar">CF</div>
+            <div><div class="phone-contact">Controla Fácil</div><div class="phone-online">online</div></div>
+          </div>
+          <div class="phone-msgs">
+            <div class="msg msg-out">Gastei R$120 no mercado<div class="msg-time">09:14</div></div>
+            <div class="msg msg-in">✅ Registrado!<br/>📝 Mercado<br/>💰 R$ 120,00<br/>📂 Alimentação<div class="msg-time">09:14</div></div>
+          </div>
+        </div>
       </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <h3>Registre pelo WhatsApp</h3>
-        <p>Mande mensagens naturais. A IA entende e organiza tudo.</p>
+      <div class="phone phone-mid">
+        <div class="phone-screen">
+          <div class="phone-bar">
+            <div class="phone-avatar">CF</div>
+            <div><div class="phone-contact">Controla Fácil</div><div class="phone-online">online</div></div>
+          </div>
+          <div class="phone-msgs">
+            <div class="msg msg-out">Quanto gastei esse mês?<div class="msg-time">18:30</div></div>
+            <div class="msg msg-in">📊 <b>Maio 2026</b><br/><br/>💸 Total: R$ 1.240,00<br/>✅ Saldo: R$ 760,00<br/><br/>• Alimentação: R$ 480<br/>• Transporte: R$ 320<br/>• Lazer: R$ 240<br/>• Outros: R$ 200<div class="msg-time">18:30</div></div>
+          </div>
+        </div>
       </div>
-      <div class="step">
-        <div class="step-num">4</div>
-        <h3>Receba seu relatório</h3>
-        <p>Todo mês, um PDF completo com gráficos direto no seu WhatsApp.</p>
+      <div class="phone phone-side">
+        <div class="phone-screen">
+          <div class="phone-bar">
+            <div class="phone-avatar">CF</div>
+            <div><div class="phone-contact">Controla Fácil</div><div class="phone-online">online</div></div>
+          </div>
+          <div class="phone-msgs">
+            <div class="msg msg-out">Dentista sexta às 15h<div class="msg-time">10:05</div></div>
+            <div class="msg msg-in">✅ Agendado!<br/>📌 Dentista<br/>📅 09/05 às 15:00<br/>⏱ 60 min<div class="msg-time">10:05</div></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="planos" id="planos">
+<!-- PROOF BAR -->
+<div class="proof-bar">
+  <div class="proof-bar-inner">
+    <div class="proof-item">
+      <div class="proof-num">100%</div>
+      <div class="proof-label">pelo WhatsApp<br/>sem app novo</div>
+    </div>
+    <div class="proof-item">
+      <div class="proof-num">&lt;5s</div>
+      <div class="proof-label">para registrar<br/>qualquer gasto</div>
+    </div>
+    <div class="proof-item">
+      <div class="proof-num">24h</div>
+      <div class="proof-label">disponível todos<br/>os dias</div>
+    </div>
+    <div class="proof-item">
+      <div class="proof-num">PDF</div>
+      <div class="proof-label">relatório completo<br/>quando quiser</div>
+    </div>
+  </div>
+</div>
+
+<!-- COMO FUNCIONA -->
+<section class="section steps-section" id="como-funciona">
   <div class="section-inner">
-    <h2>Planos e preços</h2>
+    <div style="text-align:center;">
+      <div class="section-tag">Simples do início ao fim</div>
+      <h2 class="section-title">Como funciona</h2>
+      <p class="section-sub" style="max-width:520px;margin:0 auto;">Em menos de 2 minutos você já está registrando seus gastos.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-num-wrap"><span>1</span></div>
+        <h3>Escolha seu plano</h3>
+        <p>Selecione o plano ideal e finalize o pagamento em segundos pelo Mercado Pago.</p>
+        <div class="step-arrow">→</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num-wrap"><span>2</span></div>
+        <h3>Receba o acesso</h3>
+        <p>Seu assistente de IA é ativado imediatamente e entra em contato no WhatsApp.</p>
+        <div class="step-arrow">→</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num-wrap"><span>3</span></div>
+        <h3>Registre naturalmente</h3>
+        <p>Mande texto, áudio ou foto de comprovante. A IA entende e organiza tudo.</p>
+        <div class="step-arrow">→</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num-wrap"><span>4</span></div>
+        <h3>Acompanhe tudo</h3>
+        <p>Dashboard completo, relatório PDF e resumos pelo WhatsApp sempre que quiser.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE 1 — WhatsApp -->
+<section class="feature-section alt">
+  <div class="feature-grid">
+    <div class="feature-text">
+      <div class="section-tag">Registro inteligente</div>
+      <h2>Registre tudo<br/>pelo WhatsApp</h2>
+      <p>Chega de planilha complicada. Mande uma mensagem como se estivesse falando com um amigo — a IA entende e organiza automaticamente.</p>
+      <ul class="feature-bullets">
+        <li>Texto, áudio ou foto de comprovante</li>
+        <li>Categorização automática com IA</li>
+        <li>Registre vários gastos de uma vez</li>
+        <li>Corrija ou apague o último gasto com um comando</li>
+      </ul>
+      <a href="/cadastro" class="feature-cta">Quero registrar assim →</a>
+    </div>
+    <div>
+      <div class="chat-mockup">
+        <div class="chat-header">
+          <div class="chat-av">CF</div>
+          <div>
+            <div class="chat-name">Controla Fácil</div>
+            <div class="chat-status">● online agora</div>
+          </div>
+        </div>
+        <div class="chat-body">
+          <div class="cmsg cmsg-out">Gastei 45 no almoço e 12 no café<div class="cmsg-time">12:31 ✓✓</div></div>
+          <div class="cmsg cmsg-in">✅ 2 gastos registrados!<br/><br/>🍽️ Almoço — R$ 45,00 (Alimentação)<br/>☕ Café — R$ 12,00 (Alimentação)<br/><br/>💰 Total: R$ 57,00<div class="cmsg-time">12:31</div></div>
+          <div class="cmsg cmsg-out">Paguei o Uber por 23 reais<div class="cmsg-time">14:02 ✓✓</div></div>
+          <div class="cmsg cmsg-in">✅ Registrado!<br/>🚗 Uber — R$ 23,00<br/>📂 Transporte — 14/05/2026<div class="cmsg-time">14:02</div></div>
+          <div class="cmsg cmsg-out">Apaga o último<div class="cmsg-time">14:03 ✓✓</div></div>
+          <div class="cmsg cmsg-in">🗑️ Removido!<br/>Uber — R$ 23,00<div class="cmsg-time">14:03</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE 2 — Dashboard + PDF -->
+<section class="feature-section">
+  <div class="feature-grid reverse">
+    <div class="feature-text">
+      <div class="section-tag">Painel profissional</div>
+      <h2>Dashboard completo<br/>+ Relatório PDF</h2>
+      <p>Veja seus gastos organizados em gráficos, compare com sua renda e receba um relatório PDF profissional pelo WhatsApp quando quiser.</p>
+      <ul class="feature-bullets">
+        <li>Gráficos de evolução diária dos gastos</li>
+        <li>Categorias com percentual do orçamento</li>
+        <li>Relatório PDF com 3 tipos de gráficos</li>
+        <li>Solicite o relatório pelo WhatsApp</li>
+      </ul>
+      <a href="/cadastro" class="feature-cta">Ver meu painel →</a>
+    </div>
+    <div>
+      <div class="dash-mockup">
+        <div class="dash-mock-nav">
+          <div class="dash-mock-logo">Controla Fácil</div>
+          <div class="dash-mock-link">Dashboard</div>
+          <div class="dash-mock-link">Assinatura</div>
+        </div>
+        <div class="dash-mock-body">
+          <div class="dash-mock-cards">
+            <div class="dash-mock-card">
+              <div class="dmc-label">Total gasto</div>
+              <div class="dmc-val red">R$ 1.240</div>
+            </div>
+            <div class="dash-mock-card">
+              <div class="dmc-label">Saldo</div>
+              <div class="dmc-val green">R$ 760</div>
+            </div>
+            <div class="dash-mock-card">
+              <div class="dmc-label">Renda mensal</div>
+              <div class="dmc-val">R$ 2.000</div>
+            </div>
+            <div class="dash-mock-card">
+              <div class="dmc-label">Maior categoria</div>
+              <div class="dmc-val" style="font-size:14px;color:#6366f1;">Alimentação</div>
+            </div>
+          </div>
+          <div class="dash-bar-chart">
+            <div class="dash-bar-label">Evolução dos gastos — Maio</div>
+            <div class="dash-bars">
+              <div class="dash-bar active" style="height:30%"></div>
+              <div class="dash-bar active" style="height:45%"></div>
+              <div class="dash-bar" style="height:10%"></div>
+              <div class="dash-bar active" style="height:60%"></div>
+              <div class="dash-bar active" style="height:40%"></div>
+              <div class="dash-bar" style="height:8%"></div>
+              <div class="dash-bar active" style="height:75%"></div>
+              <div class="dash-bar active" style="height:55%"></div>
+              <div class="dash-bar" style="height:12%"></div>
+              <div class="dash-bar active" style="height:90%"></div>
+              <div class="dash-bar active" style="height:65%"></div>
+              <div class="dash-bar" style="height:5%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE 3 — Google Agenda -->
+<section class="agenda-section">
+  <div class="agenda-logos">
+    <div class="agenda-logo-box">
+      <img src="/static/logo.png" alt="Controla Fácil" style="width:40px;height:40px;object-fit:contain;"/>
+    </div>
+    <div class="agenda-arrow">⇄</div>
+    <div class="agenda-logo-box" style="font-size:36px;">📅</div>
+  </div>
+  <div class="section-tag">Integração nativa</div>
+  <h2>Integração com <em>Google Agenda</em></h2>
+  <p>Conecte sua conta Google e agende compromissos direto pelo WhatsApp. O assistente cria os eventos automaticamente na sua agenda.</p>
+  <div class="agenda-features">
+    <div class="agenda-feat">Crie eventos com uma mensagem no WhatsApp</div>
+    <div class="agenda-feat">Escolha horário, duração e cor do evento</div>
+    <div class="agenda-feat">Sincronização em tempo real com o Google</div>
+  </div>
+  <a href="/cadastro" class="hero-cta" style="background:#1D9E75;">Ativar integração →</a>
+</section>
+
+<!-- PLANOS -->
+<section class="planos-section" id="planos">
+  <div class="section-inner" style="text-align:center;">
+    <div class="section-tag">Sem surpresas</div>
+    <h2 class="section-title">Planos e preços</h2>
+    <p class="section-sub">Cancele quando quiser. Sem fidelidade, sem letra miúda.</p>
     <div class="planos-grid">
       {% for plano in planos %}
-      <div class="plano-card {% if loop.index == 2 %}destaque{% endif %}">
-        {% if loop.index == 2 %}<div class="badge-popular">Mais popular</div>{% endif %}
+      <div class="plano-card {% if loop.index == 1 %}destaque{% endif %}">
+        {% if loop.index == 1 %}<div class="badge-popular">Mais popular</div>{% endif %}
         <h3>{{ plano.nome }}</h3>
         <div class="preco">R$ {{ "%.2f"|format(plano.preco) }}<span>/mês</span></div>
         <p class="plano-desc">{{ plano.descricao }}</p>
-        <a href="/cadastro?plano={{ plano.id }}" class="btn-primary btn-block">Assinar {{ plano.nome }}</a>
+        <a href="/cadastro?plano={{ plano.id }}" class="plano-btn">Assinar agora</a>
       </div>
       {% endfor %}
     </div>
   </div>
 </section>
 
+<!-- FOOTER -->
 <footer class="footer">
-  <p>Controla Fácil &copy; 2026 — Controle financeiro inteligente</p>
-  <p style="margin-top:8px;">
-    <a href="/privacidade" style="color:#888;font-size:13px;text-decoration:none;">Política de Privacidade</a>
-    <span style="color:#888;font-size:13px;"> · </span>
-    <a href="/termos" style="color:#888;font-size:13px;text-decoration:none;">Termos de Serviço</a>
-  </p>
+  <div class="footer-inner">
+    <div>Controla Fácil &copy; 2026 — Controle financeiro inteligente pelo WhatsApp</div>
+    <div class="footer-links">
+      <a href="/privacidade">Política de Privacidade</a>
+      <a href="/termos">Termos de Serviço</a>
+      <a href="/login">Login</a>
+    </div>
+  </div>
 </footer>
 
 </body>
