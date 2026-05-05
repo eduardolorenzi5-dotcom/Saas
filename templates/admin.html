@@ -52,6 +52,10 @@
   <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">Conta criada com sucesso!</div>
   {% elif request.args.get('ok') == 'backup_enviado' %}
   <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">Backup enviado por e-mail com sucesso!</div>
+  {% elif request.args.get('ok') == 'relatorio_enviado' %}
+  <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">📊 Relatório PDF enviado via WhatsApp com sucesso!</div>
+  {% elif request.args.get('erro') == 'relatorio_falhou' %}
+  <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">Falha ao enviar o relatório. Verifique se o WhatsApp está configurado.</div>
   {% elif request.args.get('erro') %}
   <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">
     {% if request.args.get('erro') == 'email_duplicado' %}E-mail já cadastrado.
@@ -153,6 +157,10 @@
               <form method="POST" action="/admin/deletar/{{ c.id }}" style="display:inline;"
                     onsubmit="return confirm('Deletar {{ c.nome }}? Todos os dados serão removidos.');">
                 <button class="action-btn btn-deletar">Deletar</button>
+              </form>
+              <form method="POST" action="/admin/relatorio/{{ c.id }}" style="display:inline;"
+                    onsubmit="return confirm('Enviar relatório PDF para {{ c.nome }} via WhatsApp?');">
+                <button class="action-btn" style="background:#e0e7ff;color:#3730a3;">📊 Relatório</button>
               </form>
               <form method="POST" action="/admin/atualizar_whatsapp/{{ c.id }}" style="display:inline;margin-top:4px;">
                 <input type="text" name="whatsapp" placeholder="WhatsApp" value="{{ c.whatsapp or '' }}"

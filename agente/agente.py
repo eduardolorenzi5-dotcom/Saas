@@ -296,6 +296,7 @@ Ao receber uma mensagem, identifique se é:
 4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês"
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
+7. Um pedido de RELATÓRIO PDF — ex: "quero meu relatório", "manda o PDF", "relatório completo", "relatório do mês", "relatório em PDF", "extrato do mês"
 7. Um pedido para CONECTAR Google Agenda — ex: "quero conectar minha agenda", "conectar google agenda", "ativar agenda"
 8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
 9. Um REGISTRO de renda — ex: "ganho 3000 por mês", "meu salário é 5000", "recebo 2500 mensais", "minha renda é 4000"
@@ -328,6 +329,9 @@ Se for pedido de análise financeira:
 
 Se for pedido de dashboard/gráfico visual:
 {{"acao": "dashboard"}}
+
+Se for pedido de relatório PDF completo:
+{{"acao": "relatorio"}}
 
 Se for pedido para conectar Google Agenda:
 {{"acao": "conectar_agenda"}}
@@ -684,6 +688,21 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 resposta = ""
             else:
                 resposta = "Você ainda não tem gastos registrados este mês para gerar o gráfico."
+
+        elif acao == "relatorio":
+            import logging
+            mes_rel = hoje_brasil().strftime("%Y-%m")
+            enviar_whatsapp(fone, "⏳ Gerando seu relatório PDF completo, aguarde um instante...")
+            try:
+                from relatorio.gerador import gerar_e_enviar_pdf_wpp
+                ok = gerar_e_enviar_pdf_wpp(cliente["id"], mes_rel, cliente["whatsapp"])
+                if ok:
+                    resposta = ""
+                else:
+                    resposta = "Não consegui enviar o PDF. Tente novamente em instantes."
+            except Exception as e:
+                logging.error(f"[PDF] Erro ao gerar relatório: {e}")
+                resposta = "Ocorreu um erro ao gerar o relatório. Tente novamente."
 
         elif acao == "analise":
             gastos = historico_gastos(cliente["id"])

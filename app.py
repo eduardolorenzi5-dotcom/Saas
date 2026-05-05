@@ -401,6 +401,21 @@ def admin_desativar(cliente_id):
     conn.close()
     return redirect(url_for("admin_painel"))
 
+@app.route("/admin/relatorio/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_relatorio(cliente_id):
+    from relatorio.gerador import gerar_e_enviar_pdf_wpp
+    conn = get_db()
+    cliente = conn.execute("SELECT whatsapp FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    conn.close()
+    mes = hoje_brasil().strftime("%Y-%m")
+    try:
+        ok = gerar_e_enviar_pdf_wpp(cliente_id, mes, cliente["whatsapp"] if cliente else "")
+        return redirect(url_for("admin_painel") + ("?ok=relatorio_enviado" if ok else "?erro=relatorio_falhou"))
+    except Exception as e:
+        logging.error(f"[RELATORIO] Erro: {e}")
+        return redirect(url_for("admin_painel") + "?erro=relatorio_falhou")
+
 @app.route("/admin/cancelar/<int:cliente_id>", methods=["POST"])
 @admin_required
 def admin_cancelar(cliente_id):
