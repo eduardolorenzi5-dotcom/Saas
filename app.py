@@ -137,13 +137,99 @@ def init_db():
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
-def enviar_email_reset(destinatario, link):
+def _brevo_post(payload_dict):
     import urllib.request, json as _json
     api_key = os.environ.get("BREVO_API_KEY", "")
+    if not api_key:
+        raise Exception("BREVO_API_KEY não configurado")
+    payload = _json.dumps(payload_dict).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={"api-key": api_key, "Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        if resp.status not in (200, 201):
+            raise Exception(f"Brevo retornou status {resp.status}")
+
+
+def enviar_email_boas_vindas(destinatario, nome):
+    import json as _json
     sender_email = os.environ.get("BREVO_FROM_EMAIL", "")
     sender_name = os.environ.get("BREVO_FROM_NAME", "Controla Fácil")
-    if not api_key or not sender_email:
-        raise Exception("BREVO_API_KEY ou BREVO_FROM_EMAIL nao configurado")
+    numero_wpp = os.environ.get("WHATSAPP_NUMBER", "")
+
+    html = f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
+  <div style="background:#6366f1;padding:32px 24px;border-radius:12px 12px 0 0;text-align:center;">
+    <h1 style="color:#fff;margin:0;font-size:24px;">Bem-vindo ao Controla Fácil! 🎉</h1>
+  </div>
+  <div style="background:#fff;padding:32px 24px;border:1px solid #e5e5e3;border-top:none;border-radius:0 0 12px 12px;">
+    <p style="font-size:16px;">Olá, <strong>{nome}</strong>!</p>
+    <p style="font-size:15px;color:#444;">Sua conta está ativa. Agora você pode controlar seus gastos direto pelo WhatsApp de forma simples e inteligente.</p>
+
+    <div style="background:#f4f4f2;border-radius:10px;padding:20px 24px;margin:24px 0;">
+      <h2 style="font-size:16px;margin:0 0 16px;color:#6366f1;">📱 Como usar pelo WhatsApp</h2>
+      <p style="margin:0 0 8px;font-size:14px;color:#444;">Envie mensagens naturais para o nosso número:</p>
+      <p style="font-size:18px;font-weight:bold;color:#1a1a1a;margin:0 0 16px;">{numero_wpp if numero_wpp else 'Número enviado em breve'}</p>
+
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tr style="background:#e0e7ff;">
+          <th style="padding:8px 12px;text-align:left;border-radius:6px 0 0 0;">O que você diz</th>
+          <th style="padding:8px 12px;text-align:left;border-radius:0 6px 0 0;">O que acontece</th>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e5e3;">
+          <td style="padding:10px 12px;color:#333;">"Gastei R$50 no mercado"</td>
+          <td style="padding:10px 12px;color:#555;">Registra o gasto automaticamente</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e5e3;">
+          <td style="padding:10px 12px;color:#333;">"Gastei R$30 no almoço"</td>
+          <td style="padding:10px 12px;color:#555;">Categoriza como Alimentação</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e5e3;">
+          <td style="padding:10px 12px;color:#333;">"Quanto gastei esse mês?"</td>
+          <td style="padding:10px 12px;color:#555;">Envia resumo completo por categoria</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e5e3;">
+          <td style="padding:10px 12px;color:#333;">"Dashboard"</td>
+          <td style="padding:10px 12px;color:#555;">Envia gráfico visual dos gastos</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e5e3;">
+          <td style="padding:10px 12px;color:#333;">Foto de um comprovante</td>
+          <td style="padding:10px 12px;color:#555;">Lê e registra o valor automaticamente</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;color:#333;">Mensagem de voz</td>
+          <td style="padding:10px 12px;color:#555;">Transcreve e registra o gasto</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="background:#f0fdf4;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+      <h2 style="font-size:15px;margin:0 0 8px;color:#065f46;">🌐 Painel web</h2>
+      <p style="font-size:14px;color:#444;margin:0;">Acesse seu painel completo com gráficos e histórico em <a href="https://saas-production-2a7a.up.railway.app/login" style="color:#6366f1;">controlafacilai.com.br</a></p>
+    </div>
+
+    <p style="font-size:14px;color:#888;">Qualquer dúvida, responda este e-mail. Estamos aqui para ajudar!</p>
+    <p style="font-size:14px;color:#888;margin-bottom:0;">— Equipe Controla Fácil</p>
+  </div>
+</div>
+"""
+    _brevo_post({
+        "sender": {"name": sender_name, "email": sender_email},
+        "to": [{"email": destinatario, "name": nome}],
+        "subject": "Bem-vindo ao Controla Fácil — sua conta está ativa! 🎉",
+        "htmlContent": html,
+    })
+    logging.info(f"[EMAIL] Boas-vindas enviado para {destinatario}")
+
+
+def enviar_email_reset(destinatario, link):
+    sender_email = os.environ.get("BREVO_FROM_EMAIL", "")
+    sender_name = os.environ.get("BREVO_FROM_NAME", "Controla Fácil")
+    if not sender_email:
+        raise Exception("BREVO_FROM_EMAIL nao configurado")
     corpo = (
         f"Olá!\n\n"
         f"Recebemos uma solicitação para redefinir sua senha no Controla Fácil.\n\n"
@@ -152,25 +238,12 @@ def enviar_email_reset(destinatario, link):
         f"Se você não solicitou isso, ignore este e-mail.\n\n"
         f"— Equipe Controla Fácil"
     )
-    payload = _json.dumps({
+    _brevo_post({
         "sender": {"name": sender_name, "email": sender_email},
         "to": [{"email": destinatario}],
         "subject": "Redefinição de senha — Controla Fácil",
         "textContent": corpo,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.brevo.com/v3/smtp/email",
-        data=payload,
-        headers={
-            "api-key": api_key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        if resp.status not in (200, 201):
-            raise Exception(f"Brevo retornou status {resp.status}")
+    })
 
 def normalizar_whatsapp(numero):
     """Remove tudo que não é dígito e garante o formato 55DDDNUMERO."""
@@ -242,9 +315,15 @@ def admin_painel():
 @admin_required
 def admin_ativar(cliente_id):
     conn = get_db()
+    cliente = conn.execute("SELECT nome, email, status FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
     conn.commit()
     conn.close()
+    if cliente and cliente["status"] != "ativo":
+        try:
+            enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+        except Exception as e:
+            logging.error(f"[EMAIL] Falha boas-vindas para {cliente['email']}: {e}")
     return redirect(url_for("admin_painel"))
 
 @app.route("/admin/desativar/<int:cliente_id>", methods=["POST"])
@@ -292,6 +371,10 @@ def admin_criar_conta():
             return redirect(url_for("admin_painel") + "?erro=email_duplicado")
         raise
     conn.close()
+    try:
+        enviar_email_boas_vindas(email, nome)
+    except Exception as e:
+        logging.error(f"[EMAIL] Falha boas-vindas para {email}: {e}")
     return redirect(url_for("admin_painel") + "?ok=conta_criada")
 
 @app.route("/admin/atualizar_whatsapp/<int:cliente_id>", methods=["POST"])
