@@ -94,6 +94,17 @@
       .form-grid { grid-template-columns: 1fr 1fr; }
       .topbar-nav { display: none; }
     }
+    @media(max-width:600px) {
+      .topbar { padding: 0 16px; }
+      .topbar-right span { display: none; }
+      .dash-wrap { padding: 16px 12px 32px; }
+      .dash-period h1 { font-size: 16px; }
+      .wpp-bar { flex-wrap: wrap; font-size: 12px; gap: 4px; padding: 10px 14px; }
+      .card { padding: 14px 12px; }
+      .card-val { font-size: 18px; }
+      .card-label { font-size: 10px; }
+      .card-sub { font-size: 11px; }
+    }
     @media(max-width:500px) {
       .cards-row { grid-template-columns: 1fr 1fr; }
       .form-grid { grid-template-columns: 1fr; }
