@@ -362,7 +362,7 @@ def admin_painel():
 @admin_required
 def admin_ativar(cliente_id):
     conn = get_db()
-    cliente = conn.execute("SELECT nome, email, status FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    cliente = conn.execute("SELECT nome, email, whatsapp, status FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
     conn.commit()
     conn.close()
