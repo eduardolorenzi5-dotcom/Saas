@@ -162,6 +162,9 @@ def enviar_wpp_boas_vindas(whatsapp, nome):
         f"📊 *Ver resumo:*\n"
         f"\"Quanto gastei esse mês?\"\n"
         f"\"Dashboard\"\n\n"
+        f"📅 *Google Agenda:*\n"
+        f"\"Agendar dentista sexta às 14h\"\n"
+        f"_(conecte sua agenda no painel web primeiro)_\n\n"
         f"Qualquer dúvida é só me perguntar. Vamos começar? 😊"
     )
     payload = _json.dumps({
