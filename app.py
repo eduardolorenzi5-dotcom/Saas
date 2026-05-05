@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 import os, hashlib, secrets, logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
+
+def hoje_brasil():
+    return datetime.now(timezone(timedelta(hours=-3))).date()
 from functools import wraps
 from db import get_db, USE_PG
 
@@ -360,7 +363,7 @@ def admin_painel():
         GROUP BY c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
                  c.renda_mensal, c.google_refresh_token, p.nome, p.preco
         ORDER BY c.criado_em DESC
-    """, (date.today().strftime("%Y-%m") + "%",)).fetchall()
+    """, (hoje_brasil().strftime("%Y-%m") + "%",)).fetchall()
     total_clientes = len(clientes)
     ativos = sum(1 for c in clientes if c["status"] == "ativo")
     receita = sum(float(c["preco"] or 0) for c in clientes if c["status"] == "ativo")
@@ -789,8 +792,8 @@ def logout():
 def dashboard():
     import json as _json, calendar as _cal, logging as _log
     cid = session["cliente_id"]
-    mes = date.today().strftime("%Y-%m")
-    hoje = date.today()
+    mes = hoje_brasil().strftime("%Y-%m")
+    hoje = hoje_brasil()
     conn = get_db()
     gastos = conn.execute(
         "SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
@@ -914,7 +917,7 @@ def adicionar_gasto():
     conn.execute(
         "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
         (cid, data["descricao"], float(data["valor"]), data["categoria"],
-         data.get("data", date.today().isoformat()), data.get("fonte", "manual"))
+         data.get("data", hoje_brasil().isoformat()), data.get("fonte", "manual"))
     )
     conn.commit()
     conn.close()
@@ -932,7 +935,7 @@ def deletar_gasto(gid):
 @app.route("/api/gastos/mes", methods=["DELETE"])
 @login_required
 def deletar_gastos_mes():
-    mes = date.today().strftime("%Y-%m")
+    mes = hoje_brasil().strftime("%Y-%m")
     conn = get_db()
     conn.execute("DELETE FROM gastos WHERE cliente_id=%s AND data LIKE %s", (session["cliente_id"], f"{mes}%"))
     conn.commit()
@@ -1220,7 +1223,7 @@ def webhook_whatsapp():
 @app.route("/relatorio/gerar/<int:cliente_id>")
 def gerar_relatorio(cliente_id):
     from relatorio.gerador import gerar_pdf
-    mes = request.args.get("mes", date.today().strftime("%Y-%m"))
+    mes = request.args.get("mes", hoje_brasil().strftime("%Y-%m"))
     caminho = gerar_pdf(cliente_id, mes)
     return jsonify({"arquivo": caminho})
 

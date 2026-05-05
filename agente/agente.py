@@ -2,7 +2,11 @@
 Agente de WhatsApp — interpreta mensagens com Claude e salva gastos no banco.
 """
 import os, sys, json, requests
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
+
+def hoje_brasil():
+    """Retorna a data atual no fuso horário de Brasília (UTC-3)."""
+    return datetime.now(timezone(timedelta(hours=-3))).date()
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from db import get_db
@@ -27,7 +31,7 @@ MESES_PT = {
 
 def mes_ano_pt(d=None):
     if d is None:
-        d = date.today()
+        d = hoje_brasil()
     return f"{MESES_PT[d.month]}/{d.year}"
 
 def formatar_data(data_iso):
@@ -136,7 +140,7 @@ def deletar_gasto_por_descricao(cliente_id, descricao, valor=None):
 
 def historico_gastos(cliente_id):
     from datetime import timedelta
-    hoje = date.today()
+    hoje = hoje_brasil()
     tres_meses_atras = (hoje.replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)
     tres_meses_atras = tres_meses_atras.replace(day=1)
     conn = get_db()
@@ -148,7 +152,7 @@ def historico_gastos(cliente_id):
     return [dict(g) for g in gastos]
 
 def resumo_mes(cliente_id):
-    mes = date.today().strftime("%Y-%m")
+    mes = hoje_brasil().strftime("%Y-%m")
     conn = get_db()
     total = conn.execute(
         "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
@@ -185,7 +189,7 @@ Baseado nos dados, responda em português, de forma amigável e direta (máximo 
 3. 📈 Tendência para a próxima semana (baseado na frequência e padrão dos gastos)
 4. 💡 1 dica prática e personalizada
 
-Hoje: {date.today().isoformat()}
+Hoje: {hoje_brasil().isoformat()}
 Use emojis para deixar a mensagem mais visual. Seja específico com os valores.""",
         "messages": [{"role": "user", "content": f"Meus gastos dos últimos meses:\n{linhas_gastos}"}]
     }
@@ -338,7 +342,7 @@ Se for registro de renda mensal:
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
 
-Data de hoje: {date.today().isoformat()}
+Data de hoje: {hoje_brasil().isoformat()}
 Responda sempre em português. Seja breve e amigável."""
 
     headers = {
@@ -365,7 +369,7 @@ def gerar_imagem_dashboard(cliente_id):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    mes = date.today().strftime("%Y-%m")
+    mes = hoje_brasil().strftime("%Y-%m")
     conn = get_db()
     por_cat = conn.execute(
         "SELECT categoria, SUM(valor) as total FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY total DESC",
@@ -462,7 +466,7 @@ def analisar_comprovante_claude(imagem_b64, caption=""):
                 f"Responda APENAS com JSON no formato:\n"
                 f'{{"descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}\n\n'
                 f"Categorias disponíveis: {', '.join(CATEGORIAS)}\n"
-                f"Data de hoje: {date.today().isoformat()}\n"
+                f"Data de hoje: {hoje_brasil().isoformat()}\n"
                 f"Se não conseguir identificar algum campo, use 'Outros' como categoria e a data de hoje.\n"
                 f"Se a imagem não for um comprovante de gasto, responda: {{\"erro\": \"nao_e_comprovante\"}}"
             )
@@ -576,7 +580,7 @@ def processar_imagem(fone, imagem_b64, caption=""):
         if resultado.get("erro") == "nao_e_comprovante":
             enviar_whatsapp(fone, "Não consegui identificar um comprovante nessa imagem. Envie a foto de um recibo ou nota fiscal.")
             return "imagem inválida"
-        data_comp = resultado.get("data", date.today().isoformat())
+        data_comp = resultado.get("data", hoje_brasil().isoformat())
         salvar_gasto(
             cliente["id"],
             resultado["descricao"],
@@ -619,9 +623,9 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 resultado["descricao"],
                 float(resultado["valor"]),
                 resultado["categoria"],
-                resultado.get("data", date.today().isoformat())
+                resultado.get("data", hoje_brasil().isoformat())
             )
-            data_gasto = resultado.get("data", date.today().isoformat())
+            data_gasto = resultado.get("data", hoje_brasil().isoformat())
             resposta = (
                 f"✅ Registrado!\n"
                 f"📝 {resultado['descricao']}\n"
@@ -635,7 +639,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             total = 0.0
             linhas = ["✅ Gastos registrados!\n"]
             for g in gastos:
-                data_g = g.get("data", date.today().isoformat())
+                data_g = g.get("data", hoje_brasil().isoformat())
                 salvar_gasto(
                     cliente["id"],
                     g["descricao"],
