@@ -401,6 +401,15 @@ def admin_desativar(cliente_id):
     conn.close()
     return redirect(url_for("admin_painel"))
 
+@app.route("/admin/cancelar/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_cancelar(cliente_id):
+    conn = get_db()
+    conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cliente_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_painel"))
+
 @app.route("/admin/deletar/<int:cliente_id>", methods=["POST"])
 @admin_required
 def admin_deletar(cliente_id):

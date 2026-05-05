@@ -29,7 +29,8 @@
     .action-btn { border:none; border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:500; }
     .btn-ativar { background:#d1fae5; color:#065f46; }
     .btn-desativar { background:#fef3c7; color:#92400e; }
-    .btn-deletar { background:#fee2e2; color:#991b1b; }
+    .btn-cancelar { background:#fee2e2; color:#991b1b; }
+    .btn-deletar { background:#fecaca; color:#7f1d1d; border:1px solid #fca5a5; }
     .admin-footer { text-align:right; padding:12px 20px; font-size:12px; color:#aaa; }
     @media(max-width:700px){ .stats-row{grid-template-columns:1fr;} table{font-size:12px;} th,td{padding:8px 10px;} }
   </style>
@@ -144,8 +145,9 @@
                 <button class="action-btn btn-ativar">Liberar acesso</button>
               </form>
               {% else %}
-              <form method="POST" action="/admin/desativar/{{ c.id }}" style="display:inline;">
-                <button class="action-btn btn-desativar">Desativar</button>
+              <form method="POST" action="/admin/cancelar/{{ c.id }}" style="display:inline;"
+                    onsubmit="return confirm('Cancelar assinatura de {{ c.nome }}? O acesso será bloqueado.');">
+                <button class="action-btn btn-cancelar">Cancelar assinatura</button>
               </form>
               {% endif %}
               <form method="POST" action="/admin/deletar/{{ c.id }}" style="display:inline;"
