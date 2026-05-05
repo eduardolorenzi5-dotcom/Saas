@@ -839,9 +839,32 @@ def logout():
 @login_required
 def dashboard():
     import json as _json, calendar as _cal, logging as _log
+    from datetime import date as _date
     cid = session["cliente_id"]
-    mes = hoje_brasil().strftime("%Y-%m")
     hoje = hoje_brasil()
+
+    # Permite navegar por mês via ?mes=YYYY-MM
+    mes_param = request.args.get("mes", "")
+    try:
+        ano, mnum = [int(x) for x in mes_param.split("-")]
+        mes_dt = _date(ano, mnum, 1)
+    except Exception:
+        mes_dt = _date(hoje.year, hoje.month, 1)
+    mes = mes_dt.strftime("%Y-%m")
+
+    # Mês anterior e próximo para navegação
+    if mes_dt.month == 1:
+        mes_ant = _date(mes_dt.year - 1, 12, 1).strftime("%Y-%m")
+    else:
+        mes_ant = _date(mes_dt.year, mes_dt.month - 1, 1).strftime("%Y-%m")
+    if mes_dt.month == 12:
+        mes_prox = _date(mes_dt.year + 1, 1, 1).strftime("%Y-%m")
+    else:
+        mes_prox = _date(mes_dt.year, mes_dt.month + 1, 1).strftime("%Y-%m")
+
+    mes_atual = hoje.strftime("%Y-%m")
+    is_mes_atual = (mes == mes_atual)
+
     conn = get_db()
     gastos = conn.execute(
         "SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
@@ -856,7 +879,6 @@ def dashboard():
         "SELECT categoria, SUM(valor) as total FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY total DESC",
         (cid, f"{mes}%")
     ).fetchall()
-    # Gastos por dia para gráfico de linha
     por_dia_rows = conn.execute(
         "SELECT data, SUM(valor) as total FROM gastos WHERE cliente_id=%s AND data LIKE %s GROUP BY data ORDER BY data",
         (cid, f"{mes}%")
@@ -864,13 +886,14 @@ def dashboard():
     cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cid,)).fetchone()
     conn.close()
 
-    # Monta série acumulada por dia do mês
-    dias_no_mes = _cal.monthrange(hoje.year, hoje.month)[1]
+    # Série acumulada por dia
+    dias_no_mes = _cal.monthrange(mes_dt.year, mes_dt.month)[1]
+    ultimo_dia = hoje.day if is_mes_atual else dias_no_mes
     gastos_por_dia = {r["data"]: float(r["total"]) for r in por_dia_rows}
-    labels_dias = [str(d) for d in range(1, hoje.day + 1)]
+    labels_dias = [str(d) for d in range(1, ultimo_dia + 1)]
     serie_diaria = []
     acumulado = 0
-    for d in range(1, hoje.day + 1):
+    for d in range(1, ultimo_dia + 1):
         key = f"{mes}-{d:02d}"
         acumulado += gastos_por_dia.get(key, 0)
         serie_diaria.append(round(acumulado, 2))
@@ -879,7 +902,7 @@ def dashboard():
     saldo = round(renda - float(total), 2) if renda else None
 
     from agente.agente import MESES_PT
-    mes_nome = f"{MESES_PT[hoje.month]} {hoje.year}"
+    mes_nome = f"{MESES_PT[mes_dt.month]} {mes_dt.year}"
 
     return render_template("dashboard.html",
         gastos=gastos, total=float(total), por_cat=por_cat,
@@ -889,6 +912,8 @@ def dashboard():
         serie_diaria=_json.dumps(serie_diaria),
         cats_labels=_json.dumps([r["categoria"] for r in por_cat]),
         cats_valores=_json.dumps([float(r["total"]) for r in por_cat]),
+        mes_ant=mes_ant, mes_prox=mes_prox,
+        is_mes_atual=is_mes_atual,
     )
 
 @app.route("/debug/session")

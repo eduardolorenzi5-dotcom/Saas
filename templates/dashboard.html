@@ -26,6 +26,11 @@
     .dash-period { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
     .dash-period h1 { font-size: 20px; font-weight: 700; }
     .period-badge { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 14px; font-size: 13px; color: #555; }
+    .mes-nav { display: flex; align-items: center; gap: 8px; }
+    .mes-nav a { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb; color: #555; font-size: 16px; text-decoration: none; transition: background .15s; }
+    .mes-nav a:hover { background: #f3f4f6; }
+    .mes-nav a.disabled { opacity: .35; pointer-events: none; }
+    .mes-nav .mes-label { font-size: 14px; font-weight: 600; color: #1a1a1a; min-width: 130px; text-align: center; }
 
     /* CARDS ROW */
     .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
@@ -132,7 +137,11 @@
   <!-- PERIOD HEADER -->
   <div class="dash-period">
     <h1>Visão Geral</h1>
-    <div class="period-badge">📅 {{ mes_nome }}</div>
+    <div class="mes-nav">
+      <a href="/dashboard?mes={{ mes_ant }}" title="Mês anterior">&#8249;</a>
+      <span class="mes-label">📅 {{ mes_nome }}</span>
+      <a href="/dashboard?mes={{ mes_prox }}" title="Próximo mês" class="{{ 'disabled' if is_mes_atual else '' }}">&#8250;</a>
+    </div>
   </div>
 
   <!-- WPP INFO -->
