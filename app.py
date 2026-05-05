@@ -246,16 +246,25 @@ def enviar_email_boas_vindas(destinatario, nome):
           <td style="padding:10px 12px;color:#333;">Foto de um comprovante</td>
           <td style="padding:10px 12px;color:#555;">Lê e registra o valor automaticamente</td>
         </tr>
-        <tr>
+        <tr style="border-bottom:1px solid #e5e5e3;">
           <td style="padding:10px 12px;color:#333;">Mensagem de voz</td>
           <td style="padding:10px 12px;color:#555;">Transcreve e registra o gasto</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;color:#333;">"Agendar dentista sexta às 14h"</td>
+          <td style="padding:10px 12px;color:#555;">Cria evento no Google Agenda</td>
         </tr>
       </table>
     </div>
 
+    <div style="background:#eff6ff;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <h2 style="font-size:15px;margin:0 0 8px;color:#1e40af;">📅 Google Agenda</h2>
+      <p style="font-size:14px;color:#444;margin:0;">Para usar o agendamento, conecte sua conta Google no painel web. Depois é só pedir pelo WhatsApp!</p>
+    </div>
+
     <div style="background:#f0fdf4;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
       <h2 style="font-size:15px;margin:0 0 8px;color:#065f46;">🌐 Painel web</h2>
-      <p style="font-size:14px;color:#444;margin:0;">Acesse seu painel completo com gráficos e histórico em <a href="https://saas-production-2a7a.up.railway.app/login" style="color:#6366f1;">controlafacilai.com.br</a></p>
+      <p style="font-size:14px;color:#444;margin:0;">Acesse seu painel completo com gráficos e histórico em <a href="https://controlafacilai.com.br/login" style="color:#6366f1;">controlafacilai.com.br</a></p>
     </div>
 
     <p style="font-size:14px;color:#888;">Qualquer dúvida, responda este e-mail. Estamos aqui para ajudar!</p>
