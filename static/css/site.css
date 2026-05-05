@@ -114,7 +114,7 @@ a { text-decoration: none; color: inherit; }
 
 @media (max-width: 768px) {
   /* Nav: esconde links de texto, mantém só botões */
-  .nav-links a:not(.btn-outline):not(.btn-primary):not(.btn-green) { display: none; }
+  .nav-links a:not(.btn-outline):not(.btn-primary):not(.btn-green):not(.btn-nav) { display: none; }
   .nav-links { gap: 10px; }
 
   .hero { padding: 56px 20px; }
