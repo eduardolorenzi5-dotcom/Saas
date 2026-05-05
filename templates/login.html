@@ -1,19 +1,307 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Login — Controla Fácil</title><link rel="stylesheet" href="/static/css/site.css"/></head>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Login — Controla Fácil</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d0d14; color: #fff; min-height: 100vh; display: flex; }
+
+    /* ── LADO ESQUERDO ── */
+    .left {
+      width: 45%;
+      background: #0d0d14;
+      padding: 48px 52px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+    .left::before {
+      content: '';
+      position: absolute;
+      bottom: -120px;
+      left: -80px;
+      width: 420px;
+      height: 420px;
+      background: radial-gradient(circle, rgba(29,158,117,.22) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .left::after {
+      content: '';
+      position: absolute;
+      top: -80px;
+      right: -60px;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(99,102,241,.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 40px; height: 40px; object-fit: contain; }
+    .brand-name { font-size: 20px; font-weight: 700; color: #fff; }
+
+    .left-hero { position: relative; z-index: 1; }
+    .left-hero h1 {
+      font-size: 52px;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+    }
+    .left-hero h1 span { color: #1D9E75; }
+    .left-hero p { font-size: 15px; color: #8b8fa8; line-height: 1.7; max-width: 340px; }
+
+    .features { display: flex; flex-direction: column; gap: 12px; position: relative; z-index: 1; }
+    .feature-card {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      backdrop-filter: blur(8px);
+    }
+    .feature-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .fi-green { background: rgba(29,158,117,.2); }
+    .fi-purple { background: rgba(99,102,241,.2); }
+    .fi-amber { background: rgba(245,158,11,.2); }
+    .feature-card strong { font-size: 13px; font-weight: 600; display: block; margin-bottom: 2px; }
+    .feature-card span { font-size: 12px; color: #6b7080; }
+
+    /* ── LADO DIREITO ── */
+    .right {
+      flex: 1;
+      background: #13131f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 40px;
+      position: relative;
+    }
+    .right::before {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .form-box { width: 100%; max-width: 420px; position: relative; z-index: 1; }
+    .form-box h2 { font-size: 30px; font-weight: 800; margin-bottom: 6px; letter-spacing: -.5px; }
+    .form-box .subtitle { font-size: 14px; color: #6b7080; margin-bottom: 36px; }
+
+    .erro-box {
+      background: rgba(220,38,38,.12);
+      border: 1px solid rgba(220,38,38,.3);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #fca5a5;
+      margin-bottom: 20px;
+    }
+
+    .field-group { margin-bottom: 20px; }
+    .field-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #1D9E75;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .field-label a { color: #6366f1; font-size: 11px; text-decoration: none; text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .field-label a:hover { color: #818cf8; }
+
+    .input-wrap {
+      background: #1c1c2e;
+      border: 1.5px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: #1D9E75; }
+    .input-wrap svg { opacity: .4; flex-shrink: 0; }
+    .input-wrap input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: #e5e7eb;
+      font-size: 14px;
+      height: 52px;
+      font-family: inherit;
+    }
+    .input-wrap input::placeholder { color: #4b5063; }
+    .toggle-pass { background: none; border: none; cursor: pointer; opacity: .4; padding: 4px; transition: opacity .15s; }
+    .toggle-pass:hover { opacity: .8; }
+
+    .btn-submit {
+      width: 100%;
+      height: 54px;
+      background: #1D9E75;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background .2s, transform .1s;
+    }
+    .btn-submit:hover { background: #17856100; background: #179162; }
+    .btn-submit:active { transform: scale(.99); }
+
+    .form-footer { text-align: center; margin-top: 28px; font-size: 13px; color: #6b7080; }
+    .form-footer a { color: #1D9E75; font-weight: 600; text-decoration: none; }
+    .form-footer a:hover { color: #22c990; }
+    .copy { text-align: center; margin-top: 20px; font-size: 11px; color: #3d3f52; }
+
+    /* MOBILE */
+    @media(max-width: 768px) {
+      body { flex-direction: column; }
+      .left { width: 100%; padding: 32px 24px 28px; }
+      .left-hero h1 { font-size: 34px; }
+      .features { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+      .feature-card { flex: 1; min-width: 140px; }
+      .right { padding: 32px 24px; }
+    }
+  </style>
+</head>
 <body>
-<div class="auth-wrap">
-  <div class="auth-card">
-    <h2>Entrar</h2>
-    <p class="sub">Bem-vindo de volta</p>
-    {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
-    <form method="POST">
-      <div class="field"><label>E-mail</label><input type="email" name="email" placeholder="seu@email.com" required/></div>
-      <div class="field"><label>Senha</label><input type="password" name="senha" placeholder="Sua senha" required/></div>
-      <button type="submit" class="btn-primary btn-block" style="margin-top:8px;">Entrar</button>
-    </form>
-    <div class="auth-footer" style="margin-top:12px;"><a href="/esqueci-senha">Esqueci minha senha</a></div>
-    <div class="auth-footer">Não tem conta? <a href="/cadastro">Criar conta</a></div>
+
+<!-- LADO ESQUERDO -->
+<div class="left">
+  <div class="brand">
+    <img src="/static/logo.png" alt="Controla Fácil"/>
+    <span class="brand-name">Controla Fácil</span>
+  </div>
+
+  <div class="left-hero">
+    <h1>Controle.<br/><span>Inteligência.</span><br/>Liberdade.</h1>
+    <p>Registre seus gastos pelo WhatsApp com IA e tenha clareza total sobre sua vida financeira.</p>
+  </div>
+
+  <div class="features">
+    <div class="feature-card">
+      <div class="feature-icon fi-green">💬</div>
+      <div>
+        <strong>IA pelo WhatsApp</strong>
+        <span>Registre gastos em linguagem natural</span>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon fi-purple">📊</div>
+      <div>
+        <strong>Relatórios em PDF</strong>
+        <span>Gráficos profissionais do seu mês</span>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon fi-amber">📅</div>
+      <div>
+        <strong>Google Agenda</strong>
+        <span>Agende compromissos pelo WhatsApp</span>
+      </div>
+    </div>
   </div>
 </div>
-</body></html>
+
+<!-- LADO DIREITO -->
+<div class="right">
+  <div class="form-box">
+    <h2>Bem-vindo de volta!</h2>
+    <p class="subtitle">Insira suas credenciais para acessar sua conta.</p>
+
+    {% if erro %}
+    <div class="erro-box">{{ erro }}</div>
+    {% endif %}
+
+    <form method="POST">
+      <div class="field-group">
+        <div class="field-label">E-mail</div>
+        <div class="input-wrap">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          <input type="email" name="email" placeholder="seu@email.com" required autocomplete="email"/>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">
+          <span>Senha</span>
+          <a href="/esqueci-senha">Esqueceu?</a>
+        </div>
+        <div class="input-wrap">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+          <input type="password" name="senha" id="senha" placeholder="••••••••" required autocomplete="current-password"/>
+          <button type="button" class="toggle-pass" onclick="toggleSenha()" title="Mostrar/ocultar senha">
+            <svg id="eye-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit">
+        Acessar Painel
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+        </svg>
+      </button>
+    </form>
+
+    <div class="form-footer">
+      Não possui cadastro? <a href="/cadastro">Criar Conta</a>
+    </div>
+    <div class="copy">© 2026 Controla Fácil. Todos os direitos reservados.</div>
+  </div>
+</div>
+
+<script>
+function toggleSenha() {
+  const input = document.getElementById('senha');
+  const icon = document.getElementById('eye-icon');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.innerHTML = `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>`;
+  } else {
+    input.type = 'password';
+    icon.innerHTML = `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>`;
+  }
+}
+</script>
+</body>
+</html>
