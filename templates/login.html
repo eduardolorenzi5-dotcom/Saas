@@ -153,6 +153,13 @@
       font-family: inherit;
     }
     .input-wrap input::placeholder { color: #4b5063; }
+    .input-wrap input:-webkit-autofill,
+    .input-wrap input:-webkit-autofill:hover,
+    .input-wrap input:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0 1000px #1c1c2e inset !important;
+      -webkit-text-fill-color: #e5e7eb !important;
+      caret-color: #e5e7eb;
+    }
     .toggle-pass { background: none; border: none; cursor: pointer; opacity: .4; padding: 4px; transition: opacity .15s; }
     .toggle-pass:hover { opacity: .8; }
 
