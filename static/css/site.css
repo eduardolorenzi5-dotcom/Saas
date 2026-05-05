@@ -16,6 +16,8 @@ a { text-decoration: none; color: inherit; }
 .btn-outline:hover { background: #f5f5f3; }
 .btn-lg { padding: 14px 32px; font-size: 16px; }
 .btn-block { display: block; text-align: center; width: 100%; margin-top: 20px; }
+.btn-green { background: #1D9E75; color: #fff; padding: 9px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; display: inline-block; transition: opacity .15s; }
+.btn-green:hover { opacity: .85; }
 
 /* Hero */
 .hero { background: #f9f9f7; padding: 80px 24px; text-align: center; }
@@ -112,7 +114,7 @@ a { text-decoration: none; color: inherit; }
 
 @media (max-width: 768px) {
   /* Nav: esconde links de texto, mantém só botões */
-  .nav-links a:not(.btn-outline):not(.btn-primary) { display: none; }
+  .nav-links a:not(.btn-outline):not(.btn-primary):not(.btn-green) { display: none; }
   .nav-links { gap: 10px; }
 
   .hero { padding: 56px 20px; }
