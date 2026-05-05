@@ -184,8 +184,10 @@
 
     /* MOBILE */
     @media(max-width: 768px) {
+      body { flex-direction: column; }
       .left { display: none; }
-      .right { padding: 40px 24px; min-height: 100vh; }
+      .right { width: 100%; flex: none; min-height: 100vh; padding: 48px 24px; }
+      .form-box { max-width: 100%; }
       .form-box h2 { font-size: 24px; }
     }
   </style>
