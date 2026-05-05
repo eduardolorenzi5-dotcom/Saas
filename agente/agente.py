@@ -300,7 +300,8 @@ Ao receber uma mensagem, identifique se é:
 7. Um pedido para CONECTAR Google Agenda — ex: "quero conectar minha agenda", "conectar google agenda", "ativar agenda"
 8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
 9. Um REGISTRO de renda — ex: "ganho 3000 por mês", "meu salário é 5000", "recebo 2500 mensais", "minha renda é 4000"
-10. Outra mensagem — responda de forma amigável
+10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
+11. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(CATEGORIAS)}
 
@@ -342,6 +343,13 @@ Se for um agendamento (extraia título, data/hora, duração em minutos e cor op
 
 Se for registro de renda mensal:
 {{"acao": "registrar_renda", "valor": 0.00}}
+
+Se for um LEMBRETE (extraia mensagem, hora no formato HH:MM, data se mencionada, e se é recorrente):
+{{"acao": "lembrete", "mensagem": "passear com os cachorros", "hora": "14:00", "data": "YYYY-MM-DD", "recorrente": false}}
+- Se for "todo dia" / "todos os dias" / "diariamente": recorrente=true, omita data
+- Se for hoje ou sem data específica: use a data de hoje, recorrente=false
+- Se for amanhã: use data de amanhã, recorrente=false
+- Hora sempre no formato HH:MM (ex: 14:00, 09:30, 08:00)
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -779,6 +787,39 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     import logging, traceback
                     logging.error(f"Erro ao criar evento: {e}\n{traceback.format_exc()}")
                     resposta = "Não consegui criar o evento na agenda. Tente novamente."
+
+        elif acao == "lembrete":
+            from db import get_db, USE_PG
+            import datetime as _datetime
+            mensagem_lem = resultado.get("mensagem", "").strip()
+            hora_lem = resultado.get("hora", "").strip()
+            data_lem = resultado.get("data")
+            recorrente = resultado.get("recorrente", False)
+
+            if not mensagem_lem or not hora_lem:
+                resposta = "Não entendi o lembrete. Tente: *me lembre de passear com os cachorros às 14h*"
+            else:
+                # Garante hora no formato HH:MM
+                if len(hora_lem) == 4 and ":" not in hora_lem:
+                    hora_lem = hora_lem[:2] + ":" + hora_lem[2:]
+                if not data_lem and not recorrente:
+                    data_lem = hoje_brasil().isoformat()
+                conn_lem = get_db()
+                ph = "%s" if USE_PG else "?"
+                conn_lem.execute(
+                    f"INSERT INTO lembretes (cliente_id, mensagem, hora, data, recorrente) VALUES ({ph},{ph},{ph},{ph},{ph})",
+                    (cliente["id"], mensagem_lem, hora_lem, data_lem if not recorrente else None, recorrente)
+                )
+                conn_lem.commit()
+                conn_lem.close()
+                if recorrente:
+                    resposta = f"⏰ Lembrete criado!\nTodo dia às *{hora_lem}* vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara cancelar, me diga *'cancelar lembrete de {mensagem_lem}'*"
+                else:
+                    try:
+                        data_fmt = _datetime.date.fromisoformat(data_lem).strftime("%d/%m/%Y")
+                    except Exception:
+                        data_fmt = data_lem
+                    resposta = f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_"
 
         else:
             resposta = resultado.get("texto", "Como posso te ajudar?")

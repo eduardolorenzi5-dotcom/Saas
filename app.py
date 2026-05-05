@@ -59,6 +59,19 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS lembretes (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                mensagem TEXT NOT NULL,
+                hora TEXT NOT NULL,
+                data TEXT,
+                recorrente BOOLEAN DEFAULT FALSE,
+                ativo BOOLEAN DEFAULT TRUE,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -96,6 +109,17 @@ def init_db():
                 valor REAL NOT NULL,
                 status TEXT DEFAULT 'pendente',
                 referencia TEXT,
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
+            CREATE TABLE IF NOT EXISTS lembretes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                mensagem TEXT NOT NULL,
+                hora TEXT NOT NULL,
+                data TEXT,
+                recorrente INTEGER DEFAULT 0,
+                ativo INTEGER DEFAULT 1,
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
@@ -1253,6 +1277,51 @@ def gerar_relatorio(cliente_id):
 
 with app.app_context():
     init_db()
+
+# ── THREAD DE LEMBRETES ──────────────────────────────────────────────────────
+def _verificar_lembretes():
+    """Roda em background, verifica lembretes a cada minuto e envia via WhatsApp."""
+    import time as _time
+    _time.sleep(10)  # aguarda app subir
+    while True:
+        try:
+            from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+            agora = _dt.now(_tz(_td(hours=-3)))
+            hora_atual = agora.strftime("%H:%M")
+            data_atual = agora.strftime("%Y-%m-%d")
+            with app.app_context():
+                conn = get_db()
+                ph = "%s" if USE_PG else "?"
+                lembretes = conn.execute(f"""
+                    SELECT l.id, l.mensagem, l.hora, l.recorrente,
+                           c.whatsapp, c.nome
+                    FROM lembretes l
+                    JOIN clientes c ON l.cliente_id = c.id
+                    WHERE l.ativo = {'true' if USE_PG else '1'}
+                      AND l.hora = {ph}
+                      AND (l.data = {ph} OR l.recorrente = {'true' if USE_PG else '1'})
+                      AND c.status = 'ativo'
+                """, (hora_atual, data_atual)).fetchall()
+                for lem in lembretes:
+                    try:
+                        from agente.agente import enviar_whatsapp
+                        enviar_whatsapp(lem["whatsapp"],
+                            f"⏰ *Lembrete:* {lem['mensagem']}")
+                        if not lem["recorrente"]:
+                            conn.execute(f"UPDATE lembretes SET ativo = {'false' if USE_PG else '0'} WHERE id = {ph}", (lem["id"],))
+                            conn.commit()
+                        logging.info(f"[LEMBRETE] Enviado para {lem['whatsapp']}: {lem['mensagem']}")
+                    except Exception as e:
+                        logging.error(f"[LEMBRETE] Erro ao enviar: {e}")
+                conn.close()
+        except Exception as e:
+            logging.error(f"[LEMBRETE] Erro no loop: {e}")
+        import time as _time
+        _time.sleep(60)
+
+import threading as _threading
+_t = _threading.Thread(target=_verificar_lembretes, daemon=True)
+_t.start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
