@@ -137,6 +137,53 @@ def init_db():
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
 
+def enviar_wpp_boas_vindas(whatsapp, nome):
+    """Envia mensagem de boas-vindas pelo WhatsApp via Evolution API."""
+    import urllib.request, json as _json
+    url = os.environ.get("EVOLUTION_URL", "").rstrip("/")
+    instance = os.environ.get("EVOLUTION_INSTANCE", "")
+    key = os.environ.get("EVOLUTION_KEY", "")
+    if not url or not instance or not key:
+        logging.warning("[WPP] EVOLUTION_URL/INSTANCE/KEY não configurados")
+        return
+    numero = "".join(c for c in (whatsapp or "") if c.isdigit())
+    if not numero:
+        logging.warning("[WPP] Número inválido para boas-vindas")
+        return
+    mensagem = (
+        f"Olá, {nome}! 👋\n\n"
+        f"Sou o seu assistente financeiro do *Controla Fácil*! Estou aqui para te ajudar a organizar suas finanças de forma simples.\n\n"
+        f"Veja o que você pode me enviar:\n\n"
+        f"💬 *Registrar gasto:*\n"
+        f"\"Gastei R$50 no mercado\"\n"
+        f"\"Paguei R$120 de conta de luz\"\n\n"
+        f"🎤 *Mensagem de voz:* é só falar o gasto\n\n"
+        f"📸 *Foto de comprovante:* manda a foto que eu leio e registro\n\n"
+        f"📊 *Ver resumo:*\n"
+        f"\"Quanto gastei esse mês?\"\n"
+        f"\"Dashboard\"\n\n"
+        f"Qualquer dúvida é só me perguntar. Vamos começar? 😊"
+    )
+    payload = _json.dumps({
+        "number": numero,
+        "text": mensagem,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{url}/message/sendText/{instance}",
+        data=payload,
+        headers={
+            "apikey": key,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            logging.info(f"[WPP] Boas-vindas enviado para {numero} — status {resp.status}")
+    except Exception as e:
+        logging.error(f"[WPP] Falha ao enviar boas-vindas para {numero}: {e}")
+
+
 def _brevo_post(payload_dict):
     import urllib.request, json as _json
     api_key = os.environ.get("BREVO_API_KEY", "")
@@ -324,6 +371,10 @@ def admin_ativar(cliente_id):
             enviar_email_boas_vindas(cliente["email"], cliente["nome"])
         except Exception as e:
             logging.error(f"[EMAIL] Falha boas-vindas para {cliente['email']}: {e}")
+        try:
+            enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+        except Exception as e:
+            logging.error(f"[WPP] Falha boas-vindas para {cliente['whatsapp']}: {e}")
     return redirect(url_for("admin_painel"))
 
 @app.route("/admin/desativar/<int:cliente_id>", methods=["POST"])
@@ -655,6 +706,14 @@ def webhook_mercadopago():
                                 (cliente_id, payment.get("transaction_amount", 0), "aprovado", str(payment_id))
                             )
                             conn.commit()
+                            try:
+                                enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+                            except Exception as e:
+                                logging.error(f"[EMAIL] Boas-vindas pós-pagamento: {e}")
+                            try:
+                                enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+                            except Exception as e:
+                                logging.error(f"[WPP] Boas-vindas pós-pagamento: {e}")
                         conn.close()
     except Exception as e:
         logging.error(f"Erro webhook MP: {e}")
