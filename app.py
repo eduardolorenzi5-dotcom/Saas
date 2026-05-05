@@ -454,6 +454,10 @@ def admin_atualizar_whatsapp(cliente_id):
 def privacidade():
     return render_template("privacidade.html")
 
+@app.route("/termos")
+def termos():
+    return render_template("termos.html")
+
 
 def gerar_backup_csv():
     """Exporta clientes e gastos como dois CSVs num ZIP em memória. Retorna bytes."""
