@@ -6,7 +6,8 @@
   <title>Login — Controla Fácil</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d0d14; color: #fff; min-height: 100vh; display: flex; }
+    html, body { height: 100%; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #13131f; color: #fff; min-height: 100vh; display: flex; }
 
     /* ── LADO ESQUERDO ── */
     .left {
@@ -184,11 +185,17 @@
 
     /* MOBILE */
     @media(max-width: 768px) {
-      body { flex-direction: column; }
       .left { display: none; }
-      .right { width: 100%; flex: none; min-height: 100vh; padding: 48px 24px; }
-      .form-box { max-width: 100%; }
-      .form-box h2 { font-size: 24px; }
+      .right {
+        width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: 48px 24px;
+        align-items: flex-start;
+        padding-top: 60px;
+      }
+      .form-box { width: 100%; max-width: 100%; }
+      .form-box h2 { font-size: 26px; }
     }
   </style>
 </head>
