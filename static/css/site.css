@@ -111,8 +111,15 @@ a { text-decoration: none; color: inherit; }
 .dash-mobile-bar { display: none; }
 
 @media (max-width: 768px) {
+  /* Nav: esconde links de texto, mantém só botões */
+  .nav-links a:not(.btn-outline):not(.btn-primary) { display: none; }
+  .nav-links { gap: 10px; }
+
+  .hero { padding: 56px 20px; }
   .hero h1 { font-size: 32px; }
-  .steps { grid-template-columns: 1fr 1fr; }
+  .hero-sub { font-size: 16px; }
+
+  .steps { grid-template-columns: 1fr 1fr; gap: 20px; }
   .planos-grid { grid-template-columns: 1fr; }
   .cards-row { grid-template-columns: 1fr 1fr; }
   .form-row { grid-template-columns: 1fr 1fr; }
@@ -137,6 +144,12 @@ a { text-decoration: none; color: inherit; }
   .stat-val { font-size: 20px; }
   .form-row { grid-template-columns: 1fr; }
   .wpp-info { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .steps { grid-template-columns: 1fr; }
+  .nav-links .btn-outline { display: none; }
+  .hero h1 { font-size: 28px; }
 }
 
 @media (max-width: 400px) {
