@@ -109,6 +109,26 @@ a { text-decoration: none; color: inherit; }
 /* Footer */
 .footer { background: #1a1a1a; color: #888; text-align: center; padding: 24px; font-size: 13px; }
 
+/* Botão flutuante WhatsApp */
+.wpp-float {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  width: 56px;
+  height: 56px;
+  background: #25D366;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(37,211,102,.5);
+  transition: transform .2s, box-shadow .2s;
+  text-decoration: none;
+}
+.wpp-float:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(37,211,102,.6); }
+.wpp-float svg { width: 30px; height: 30px; fill: #fff; }
+
 /* Mobile nav bar (dashboard) */
 .dash-mobile-bar { display: none; }
 
