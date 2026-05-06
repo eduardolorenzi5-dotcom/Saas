@@ -489,6 +489,11 @@ def admin_criar_conta():
         enviar_email_boas_vindas(email, nome)
     except Exception as e:
         logging.error(f"[EMAIL] Falha boas-vindas para {email}: {e}")
+    if whatsapp:
+        try:
+            enviar_wpp_boas_vindas(whatsapp, nome)
+        except Exception as e:
+            logging.error(f"[WPP] Falha boas-vindas para {whatsapp}: {e}")
     return redirect(url_for("admin_painel") + "?ok=conta_criada")
 
 @app.route("/admin/atualizar_whatsapp/<int:cliente_id>", methods=["POST"])
