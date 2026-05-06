@@ -1178,6 +1178,29 @@ def _extrair_imagem_b64(payload, inputs):
             logging.warning(f"Falha ao baixar imagem de {media_url}: {e}")
     return None
 
+def _buscar_midia_evolution(msg_id, remote_jid):
+    """Busca base64 de qualquer mídia (imagem, áudio, documento) via Evolution API."""
+    import requests as _req
+    ev_url = os.environ.get("EVOLUTION_URL", "")
+    ev_key = os.environ.get("EVOLUTION_KEY", "")
+    ev_inst = os.environ.get("EVOLUTION_INSTANCE", "")
+    if not ev_url or not msg_id:
+        return None
+    try:
+        r = _req.post(
+            f"{ev_url}/chat/getBase64FromMediaMessage/{ev_inst}",
+            headers={"apikey": ev_key, "Content-Type": "application/json"},
+            json={"message": {"key": {"id": msg_id, "remoteJid": remote_jid}}},
+            timeout=20
+        )
+        logging.warning(f"[MIDIA] Evolution getBase64 status={r.status_code} body={r.text[:200]}")
+        if r.status_code in (200, 201):
+            data = r.json()
+            return data.get("base64") or data.get("data")
+    except Exception as e:
+        logging.warning(f"Falha ao buscar mídia via Evolution API: {e}")
+    return None
+
 def _extrair_audio_b64(payload):
     """Tenta extrair áudio em base64 do payload do webhook via Evolution API."""
     import base64 as _b64
@@ -1187,26 +1210,26 @@ def _extrair_audio_b64(payload):
     if not audio_msg:
         return None, None
     mime_type = audio_msg.get("mimetype", "audio/ogg")
-    fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
+    remote_jid = data.get("key", {}).get("remoteJid", "")
     msg_id = data.get("key", {}).get("id", "")
-    ev_url = os.environ.get("EVOLUTION_URL", "")
-    ev_key = os.environ.get("EVOLUTION_KEY", "")
-    ev_inst = os.environ.get("EVOLUTION_INSTANCE", "")
-    try:
-        import requests as _req
-        r = _req.post(
-            f"{ev_url}/chat/getBase64FromMediaMessage/{ev_inst}",
-            headers={"apikey": ev_key, "Content-Type": "application/json"},
-            json={"message": {"key": {"id": msg_id, "remoteJid": fone + "@s.whatsapp.net"}}},
-            timeout=20
-        )
-        if r.status_code == 200:
-            b64 = r.json().get("base64") or r.json().get("data")
-            if b64:
-                return b64, mime_type
-    except Exception as e:
-        logging.warning(f"Falha ao buscar áudio via Evolution API: {e}")
+    b64 = _buscar_midia_evolution(msg_id, remote_jid)
+    if b64:
+        return b64, mime_type
     return None, None
+
+def _extrair_imagem_b64_evolution(payload):
+    """Extrai imagem de payload da Evolution API usando getBase64FromMediaMessage."""
+    import base64 as _b64, requests as _req
+    data = payload.get("data", {})
+    msg = data.get("message", {})
+    img_msg = msg.get("imageMessage")
+    if not img_msg:
+        return None, ""
+    caption = img_msg.get("caption", "")
+    remote_jid = data.get("key", {}).get("remoteJid", "")
+    msg_id = data.get("key", {}).get("id", "")
+    b64 = _buscar_midia_evolution(msg_id, remote_jid)
+    return b64, caption
 
 @app.route("/webhook/whatsapp", methods=["POST"])
 def webhook_whatsapp():
@@ -1258,17 +1281,23 @@ def webhook_whatsapp():
             imagem_b64 = _extrair_imagem_b64(payload, {})
         elif payload.get("data"):
             data = payload["data"]
+            fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
             # Detecta áudio
             audio_b64, audio_mime = _extrair_audio_b64(payload)
             if audio_b64:
-                fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
                 if fone:
                     resposta = processar_audio(fone, audio_b64, audio_mime)
                     return jsonify({"output": resposta, "status": "ok"})
-            img_msg = data.get("message", {}).get("imageMessage", {})
-            msg = img_msg.get("caption") or data.get("message", {}).get("conversation") or data.get("body", "")
-            fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
-            imagem_b64 = _extrair_imagem_b64(payload, img_msg)
+            # Detecta imagem via Evolution API
+            imagem_b64, caption_img = _extrair_imagem_b64_evolution(payload)
+            if imagem_b64:
+                if fone:
+                    resposta = processar_imagem(fone, imagem_b64, caption_img)
+                    return jsonify({"output": resposta, "status": "ok"})
+            # Mensagem de texto normal
+            msg = data.get("message", {}).get("conversation") or \
+                  data.get("message", {}).get("extendedTextMessage", {}).get("text") or \
+                  data.get("body", "")
         elif payload.get("body"):
             msg = payload.get("body", "")
             fone = payload.get("from", "").replace("@s.whatsapp.net", "")
