@@ -72,6 +72,17 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS categorias (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                nome TEXT NOT NULL,
+                emoji TEXT DEFAULT '📦',
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                UNIQUE (cliente_id, nome)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -123,6 +134,15 @@ def init_db():
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
+            CREATE TABLE IF NOT EXISTS categorias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                nome TEXT NOT NULL,
+                emoji TEXT DEFAULT '📦',
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                UNIQUE (cliente_id, nome)
+            );
         """)
     # Adiciona colunas extras se não existirem
     if USE_PG:
@@ -139,6 +159,35 @@ def init_db():
             except Exception:
                 pass
     conn.commit()
+
+    # Migração: popula categorias padrão para clientes que ainda não têm nenhuma
+    CATS_PADRAO = [
+        ("Alimentação","🍽️"), ("Transporte","🚗"), ("Saúde","💊"),
+        ("Lazer","🎉"), ("Moradia","🏠"), ("Educação","📚"),
+        ("Roupas","👕"), ("Outros","📦")
+    ]
+    try:
+        clientes_sem_cat = conn.execute(
+            "SELECT id FROM clientes WHERE id NOT IN (SELECT DISTINCT cliente_id FROM categorias)"
+        ).fetchall()
+        for c in clientes_sem_cat:
+            for nome, emoji in CATS_PADRAO:
+                try:
+                    if USE_PG:
+                        conn.execute(
+                            "INSERT INTO categorias (cliente_id, nome, emoji) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                            (c["id"], nome, emoji)
+                        )
+                    else:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO categorias (cliente_id, nome, emoji) VALUES (?, ?, ?)",
+                            (c["id"], nome, emoji)
+                        )
+                except Exception:
+                    pass
+        conn.commit()
+    except Exception as e:
+        import logging as _log; _log.warning(f"[CATS] migração: {e}")
 
     # Garante plano único sem deletar (evita violação de FK com clientes existentes)
     descricao_plano = "Controle de gastos via WhatsApp com IA + dashboard + relatórios"
@@ -163,6 +212,29 @@ def init_db():
 
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
+
+CATS_PADRAO = [
+    ("Alimentação","🍽️"), ("Transporte","🚗"), ("Saúde","💊"),
+    ("Lazer","🎉"), ("Moradia","🏠"), ("Educação","📚"),
+    ("Roupas","👕"), ("Outros","📦")
+]
+
+def _popular_categorias_padrao(conn, cliente_id):
+    """Insere categorias padrão para um novo cliente."""
+    for nome, emoji in CATS_PADRAO:
+        try:
+            if USE_PG:
+                conn.execute(
+                    "INSERT INTO categorias (cliente_id, nome, emoji) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                    (cliente_id, nome, emoji)
+                )
+            else:
+                conn.execute(
+                    "INSERT OR IGNORE INTO categorias (cliente_id, nome, emoji) VALUES (?, ?, ?)",
+                    (cliente_id, nome, emoji)
+                )
+        except Exception:
+            pass
 
 def enviar_wpp_boas_vindas(whatsapp, nome):
     """Envia mensagem de boas-vindas pelo WhatsApp via Evolution API."""
@@ -478,6 +550,9 @@ def admin_criar_conta():
             "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso, status) VALUES (%s, %s, %s, %s, %s, %s, 'ativo')",
             (nome, email, hash_senha(senha), whatsapp or None, plano_id, token)
         )
+        novo = conn.execute("SELECT id FROM clientes WHERE email=%s", (email,)).fetchone()
+        if novo:
+            _popular_categorias_padrao(conn, novo["id"])
         conn.commit()
     except Exception as e:
         conn.close()
@@ -889,6 +964,9 @@ def dashboard():
         (cid, f"{mes}%")
     ).fetchall()
     cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cid,)).fetchone()
+    cats_usuario = conn.execute(
+        "SELECT nome, emoji FROM categorias WHERE cliente_id=%s ORDER BY nome", (cid,)
+    ).fetchall()
     conn.close()
 
     # Série acumulada por dia
@@ -919,6 +997,7 @@ def dashboard():
         cats_valores=_json.dumps([float(r["total"]) for r in por_cat]),
         mes_ant=mes_ant, mes_prox=mes_prox,
         is_mes_atual=is_mes_atual,
+        cats_usuario=cats_usuario,
     )
 
 @app.route("/debug/session")
@@ -1016,6 +1095,64 @@ def deletar_gastos_mes():
     mes = hoje_brasil().strftime("%Y-%m")
     conn = get_db()
     conn.execute("DELETE FROM gastos WHERE cliente_id=%s AND data LIKE %s", (session["cliente_id"], f"{mes}%"))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/categorias", methods=["GET"])
+@login_required
+def listar_categorias():
+    cid = session["cliente_id"]
+    conn = get_db()
+    cats = conn.execute(
+        "SELECT nome, emoji FROM categorias WHERE cliente_id=%s ORDER BY nome", (cid,)
+    ).fetchall()
+    conn.close()
+    return jsonify([{"nome": c["nome"], "emoji": c["emoji"]} for c in cats])
+
+@app.route("/api/categorias", methods=["POST"])
+@login_required
+def adicionar_categoria():
+    cid = session["cliente_id"]
+    data = request.json or {}
+    nome = (data.get("nome") or "").strip()
+    emoji = (data.get("emoji") or "📦").strip() or "📦"
+    if not nome:
+        return jsonify({"erro": "Nome obrigatório"}), 400
+    if len(nome) > 40:
+        return jsonify({"erro": "Nome muito longo"}), 400
+    conn = get_db()
+    try:
+        if USE_PG:
+            conn.execute(
+                "INSERT INTO categorias (cliente_id, nome, emoji) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                (cid, nome, emoji)
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO categorias (cliente_id, nome, emoji) VALUES (?, ?, ?)",
+                (cid, nome, emoji)
+            )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        return jsonify({"erro": str(e)}), 500
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/categorias/<nome>", methods=["DELETE"])
+@login_required
+def deletar_categoria(nome):
+    cid = session["cliente_id"]
+    conn = get_db()
+    # Não permite deletar se houver gastos com essa categoria neste mês
+    em_uso = conn.execute(
+        "SELECT COUNT(*) as n FROM gastos WHERE cliente_id=%s AND categoria=%s", (cid, nome)
+    ).fetchone()
+    if em_uso and em_uso["n"] > 0:
+        conn.close()
+        return jsonify({"erro": f"Categoria em uso em {em_uso['n']} gasto(s). Altere os gastos antes de remover."}), 400
+    conn.execute("DELETE FROM categorias WHERE cliente_id=%s AND nome=%s", (cid, nome))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})

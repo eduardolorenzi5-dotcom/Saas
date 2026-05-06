@@ -124,7 +124,7 @@
   <div class="topbar-nav">
     <a href="/dashboard" class="ativo">Visão Geral</a>
     <a href="#transacoes">Transações</a>
-    <a href="#categorias">Categorias</a>
+    <a href="#gerenciar-categorias">Categorias</a>
     <a href="/assinatura">Assinatura</a>
   </div>
   <div class="topbar-right">
@@ -252,9 +252,13 @@
           <div class="form-field"><label>Valor (R$)</label><input type="number" id="inp-val" placeholder="0,00" step="0.01"/></div>
           <div class="form-field"><label>Categoria</label>
             <select id="inp-cat">
+              {% for c in cats_usuario %}
+              <option value="{{ c.nome }}">{{ c.emoji }} {{ c.nome }}</option>
+              {% else %}
               <option>Alimentação</option><option>Transporte</option><option>Saúde</option>
               <option>Lazer</option><option>Moradia</option><option>Educação</option>
               <option>Roupas</option><option>Outros</option>
+              {% endfor %}
             </select>
           </div>
           <div class="form-field"><label>Data</label><input type="date" id="inp-data"/></div>
@@ -325,6 +329,26 @@
     </div>
 
   </div>
+
+  <!-- GERENCIAR CATEGORIAS -->
+  <div class="form-card" style="margin-top:24px;" id="gerenciar-categorias">
+    <div class="form-card-title">🏷️ Minhas categorias</div>
+    <div id="cats-lista" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      {% for c in cats_usuario %}
+      <div class="cat-chip" id="chip-{{ c.nome|replace(' ','_') }}" style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:100px;padding:5px 12px;font-size:13px;">
+        <span>{{ c.emoji }} {{ c.nome }}</span>
+        <button onclick="deletarCategoria('{{ c.nome }}')" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:0;line-height:1;" title="Remover">×</button>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="nova-cat-emoji" placeholder="🏷️" style="width:52px;border:1px solid #e5e7eb;border-radius:8px;padding:7px 8px;font-size:18px;text-align:center;" maxlength="2"/>
+      <input type="text" id="nova-cat-nome" placeholder="Nome da categoria" style="border:1px solid #e5e7eb;border-radius:8px;padding:7px 12px;font-size:13px;width:200px;" maxlength="40"/>
+      <button class="btn-add" onclick="adicionarCategoria()" style="padding:8px 18px;">+ Adicionar</button>
+    </div>
+    <div id="cat-msg" style="font-size:12px;margin-top:8px;color:#ef4444;display:none;"></div>
+  </div>
+
 </div>
 
 <script src="/static/js/dashboard.js"></script>
@@ -360,6 +384,53 @@ if (labels.length > 0) {
       }
     }
   });
+}
+
+// CATEGORIAS
+async function adicionarCategoria() {
+  const emoji = document.getElementById('nova-cat-emoji').value.trim() || '📦';
+  const nome = document.getElementById('nova-cat-nome').value.trim();
+  const msg = document.getElementById('cat-msg');
+  if (!nome) { msg.textContent = 'Digite um nome para a categoria.'; msg.style.display='block'; return; }
+  const r = await fetch('/api/categorias', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nome, emoji})
+  });
+  const data = await r.json();
+  if (!r.ok) { msg.textContent = data.erro || 'Erro ao adicionar.'; msg.style.display='block'; return; }
+  msg.style.display='none';
+  // Adiciona chip na lista
+  const lista = document.getElementById('cats-lista');
+  const chip = document.createElement('div');
+  const id = nome.replace(/ /g,'_');
+  chip.id = `chip-${id}`;
+  chip.className = 'cat-chip';
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:100px;padding:5px 12px;font-size:13px;';
+  chip.innerHTML = `<span>${emoji} ${nome}</span><button onclick="deletarCategoria('${nome}')" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:0;line-height:1;">×</button>`;
+  lista.appendChild(chip);
+  // Adiciona no select
+  const sel = document.getElementById('inp-cat');
+  const opt = document.createElement('option');
+  opt.value = nome; opt.textContent = `${emoji} ${nome}`;
+  sel.appendChild(opt);
+  document.getElementById('nova-cat-nome').value = '';
+  document.getElementById('nova-cat-emoji').value = '';
+}
+
+async function deletarCategoria(nome) {
+  const msg = document.getElementById('cat-msg');
+  const r = await fetch(`/api/categorias/${encodeURIComponent(nome)}`, {method: 'DELETE'});
+  const data = await r.json();
+  if (!r.ok) { msg.textContent = data.erro; msg.style.display='block'; return; }
+  msg.style.display='none';
+  const chip = document.getElementById(`chip-${nome.replace(/ /g,'_')}`);
+  if (chip) chip.remove();
+  // Remove do select
+  const sel = document.getElementById('inp-cat');
+  for (let i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === nome) { sel.remove(i); break; }
+  }
 }
 
 // DONUT CHART

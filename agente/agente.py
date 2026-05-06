@@ -23,6 +23,26 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
+def get_categorias_cliente(cliente_id):
+    """Retorna lista de categorias personalizadas do cliente, ou padrão."""
+    try:
+        conn = get_db()
+        USE_PG = bool(os.environ.get("DATABASE_URL"))
+        if USE_PG:
+            rows = conn.execute(
+                "SELECT nome FROM categorias WHERE cliente_id=%s ORDER BY nome", (cliente_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT nome FROM categorias WHERE cliente_id=? ORDER BY nome", (cliente_id,)
+            ).fetchall()
+        conn.close()
+        if rows:
+            return [r["nome"] for r in rows]
+    except Exception:
+        pass
+    return CATEGORIAS
+
 MESES_PT = {
     1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",
     5:"Maio",6:"Junho",7:"Julho",8:"Agosto",
@@ -283,8 +303,9 @@ def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60, cor=N
         resp.raise_for_status()
         return resp.json().get("htmlLink")
 
-def chamar_claude(mensagem, historico=[]):
+def chamar_claude(mensagem, historico=[], categorias=None):
     """Chama a API do Claude para interpretar a mensagem."""
+    cats_list = categorias if categorias else CATEGORIAS
     system = f"""Você é um assistente financeiro amigável via WhatsApp.
 Seu papel é ajudar o usuário a registrar gastos e consultar o resumo financeiro.
 
@@ -303,7 +324,8 @@ Ao receber uma mensagem, identifique se é:
 10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
 11. Outra mensagem — responda de forma amigável
 
-Categorias disponíveis: {', '.join(CATEGORIAS)}
+Categorias disponíveis: {', '.join(cats_list)}
+(Use SEMPRE uma das categorias listadas acima. Se nenhuma se encaixar, use a última da lista.)
 
 Se for um registro de UM gasto, responda APENAS com JSON no formato:
 {{"acao": "registrar", "descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}
@@ -459,7 +481,8 @@ def enviar_whatsapp(fone, mensagem):
     body = {"number": fone, "text": mensagem}
     requests.post(url, headers=headers, json=body, timeout=10)
 
-def analisar_comprovante_claude(imagem_b64, caption=""):
+def analisar_comprovante_claude(imagem_b64, caption="", categorias=None):
+    cats_list = categorias if categorias else CATEGORIAS
     headers = {
         "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
@@ -477,9 +500,9 @@ def analisar_comprovante_claude(imagem_b64, caption=""):
                 f'Legenda enviada pelo usuário: "{caption}"\n\n'
                 f"Responda APENAS com JSON no formato:\n"
                 f'{{"descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}\n\n'
-                f"Categorias disponíveis: {', '.join(CATEGORIAS)}\n"
+                f"Categorias disponíveis: {', '.join(cats_list)}\n"
                 f"Data de hoje: {hoje_brasil().isoformat()}\n"
-                f"Se não conseguir identificar algum campo, use 'Outros' como categoria e a data de hoje.\n"
+                f"Use SEMPRE uma das categorias listadas. Se não souber qual, use a última da lista.\n"
                 f"Se a imagem não for um comprovante de gasto, responda: {{\"erro\": \"nao_e_comprovante\"}}"
             )
         }
@@ -588,7 +611,8 @@ def processar_imagem(fone, imagem_b64, caption=""):
         enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento no Controla Fácil.")
         return "conta inativa"
     try:
-        resultado = analisar_comprovante_claude(imagem_b64, caption)
+        cats = get_categorias_cliente(cliente["id"])
+        resultado = analisar_comprovante_claude(imagem_b64, caption, categorias=cats)
         if resultado.get("erro") == "nao_e_comprovante":
             enviar_whatsapp(fone, "Não consegui identificar um comprovante nessa imagem. Envie a foto de um recibo ou nota fiscal.")
             return "imagem inválida"
@@ -626,7 +650,8 @@ def processar_mensagem(fone, mensagem, _cliente=None):
         return "conta inativa"
 
     try:
-        resultado = chamar_claude(mensagem)
+        cats = get_categorias_cliente(cliente["id"])
+        resultado = chamar_claude(mensagem, categorias=cats)
         acao = resultado.get("acao")
 
         if acao == "registrar":
