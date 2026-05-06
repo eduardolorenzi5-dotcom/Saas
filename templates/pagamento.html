@@ -6,6 +6,19 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Pagamento — Controla Fácil</title>
   <link rel="stylesheet" href="/static/css/site.css"/>
+  {% if META_PIXEL_ID %}
+  <script>
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '{{ META_PIXEL_ID }}');
+  fbq('track', 'PageView');
+  fbq('track', 'Lead');
+  </script>
+  <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id={{ META_PIXEL_ID }}&ev=PageView&noscript=1"/></noscript>
+  {% endif %}
 </head>
 <body>
 <div class="pag-wrap">
@@ -19,11 +32,24 @@
     {% if erro %}
     <div class="erro" style="margin-bottom:16px;">{{ erro }}</div>
     {% endif %}
-    <form method="POST" action="/pagamento/checkout/{{ cliente.id }}">
+    <form method="POST" action="/pagamento/checkout/{{ cliente.id }}" onsubmit="trackCheckout()">
       <button type="submit" class="btn-primary btn-block" style="background:#009EE3;font-size:16px;padding:14px;">
         💳 Pagar com Mercado Pago
       </button>
     </form>
+    {% if META_PIXEL_ID %}
+    <script>
+    function trackCheckout() {
+      if (typeof fbq !== 'undefined') {
+        fbq('track', 'InitiateCheckout', {
+          value: {{ cliente.preco }},
+          currency: 'BRL',
+          content_name: '{{ cliente.plano_nome }}'
+        });
+      }
+    }
+    </script>
+    {% endif %}
     <p style="font-size:12px;color:#aaa;margin-top:16px;text-align:center;">Pix, cartão de crédito e débito aceitos</p>
   </div>
 </div>

@@ -1,7 +1,26 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head><link rel="icon" type="image/x-icon" href="/static/favicon.ico"/>
-  <meta charset="UTF-8"/><title>Conta ativada — Controla Fácil</title><link rel="stylesheet" href="/static/css/site.css"/></head>
+  <meta charset="UTF-8"/><title>Conta ativada — Controla Fácil</title><link rel="stylesheet" href="/static/css/site.css"/>
+  {% if META_PIXEL_ID %}
+  <script>
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '{{ META_PIXEL_ID }}');
+  fbq('track', 'PageView');
+  fbq('track', 'Purchase', {
+    value: {{ cliente.plano_preco or 14.90 }},
+    currency: 'BRL',
+    content_name: '{{ cliente.plano_nome or "Controla Fácil" }}',
+    content_type: 'product'
+  });
+  </script>
+  <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id={{ META_PIXEL_ID }}&ev=Purchase&noscript=1"/></noscript>
+  {% endif %}
+</head>
 <body>
 <div class="sucesso-wrap">
   <div class="sucesso-card">

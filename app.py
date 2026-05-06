@@ -10,6 +10,10 @@ from db import get_db, USE_PG
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
+@app.context_processor
+def inject_pixel():
+    return {"META_PIXEL_ID": os.environ.get("META_PIXEL_ID", "")}
+
 def init_db():
     conn = get_db()
     if USE_PG:
@@ -886,7 +890,7 @@ def confirmar_pagamento(cliente_id):
 @app.route("/sucesso/<int:cliente_id>")
 def sucesso(cliente_id):
     conn = get_db()
-    cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    cliente = conn.execute("SELECT c.*, p.preco as plano_preco, p.nome as plano_nome FROM clientes c LEFT JOIN planos p ON c.plano_id = p.id WHERE c.id=%s", (cliente_id,)).fetchone()
     conn.close()
     return render_template("sucesso.html", cliente=cliente)
 
