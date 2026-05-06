@@ -1273,6 +1273,31 @@ def webhook_whatsapp():
                 except Exception as e:
                     logging.error(f"Erro ao buscar áudio inputs: {e}")
                 return jsonify({"output": "Não consegui processar o áudio. Tente em texto.", "status": "ok"}), 200
+            # Detecta imagem no formato inputs: query = "imageMessage|<messageId>"
+            if msg and msg.startswith("imageMessage|"):
+                msg_id = msg.split("|", 1)[1]
+                ev_url = inputs.get("serverUrl") or os.environ.get("EVOLUTION_URL", "")
+                ev_key = inputs.get("apiKey") or os.environ.get("EVOLUTION_KEY", "")
+                ev_inst = inputs.get("instanceName") or os.environ.get("EVOLUTION_INSTANCE", "")
+                remote_jid = inputs.get("remoteJid") or (fone + "@s.whatsapp.net")
+                caption = inputs.get("caption") or inputs.get("text") or ""
+                import requests as _req2
+                try:
+                    r2 = _req2.post(
+                        f"{ev_url}/chat/getBase64FromMediaMessage/{ev_inst}",
+                        headers={"apikey": ev_key, "Content-Type": "application/json"},
+                        json={"message": {"key": {"id": msg_id, "remoteJid": remote_jid}}},
+                        timeout=20
+                    )
+                    logging.warning(f"[IMAGEM] Evolution response {r2.status_code}: {r2.text[:200]}")
+                    if r2.status_code in (200, 201):
+                        img_b64 = r2.json().get("base64") or r2.json().get("data")
+                        if img_b64 and fone:
+                            resposta = processar_imagem(fone, img_b64, caption)
+                            return jsonify({"output": resposta, "status": "ok"})
+                except Exception as e:
+                    logging.error(f"Erro ao buscar imagem inputs: {e}")
+                return jsonify({"output": "Não consegui processar a imagem. Tente descrever o valor em texto.", "status": "ok"}), 200
             imagem_b64 = _extrair_imagem_b64(payload, inputs)
         elif payload.get("query"):
             msg = payload.get("query", "")
