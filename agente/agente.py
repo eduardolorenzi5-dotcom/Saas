@@ -331,7 +331,7 @@ Ao receber uma mensagem, identifique se é:
 2. Uma EXCLUSÃO do último gasto — ex: "apaga o último", "cancela o último gasto"
 3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
 4. Uma EXCLUSÃO de todos os gastos — ex: "apaga tudo", "zera meus gastos", "limpa o histórico", "apaga todos os gastos do mês"
-4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês"
+4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês", "quanto ganhei?", "qual meu saldo?", "como estou esse mês?", "quanto tenho de saldo?", "quanto entrou esse mês?", "qual minha renda esse mês?"
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
 7. Um pedido de RELATÓRIO PDF — ex: "quero meu relatório", "manda o PDF", "relatório completo", "relatório do mês", "relatório em PDF", "extrato do mês"
