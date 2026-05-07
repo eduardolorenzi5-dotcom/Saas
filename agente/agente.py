@@ -765,21 +765,26 @@ def processar_mensagem(fone, mensagem, _cliente=None):
         elif acao == "resumo":
             total, por_cat = resumo_mes(cliente["id"])
             renda_estatica = float(cliente["renda_mensal"]) if cliente.get("renda_mensal") else None
-            # Busca rendas do mês atual
-            USE_PG = bool(os.environ.get("DATABASE_URL"))
-            conn_r = get_db()
-            mes_atual = hoje_brasil().strftime("%Y-%m")
-            if USE_PG:
-                rendas_rows = conn_r.execute(
-                    "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY tipo, valor DESC",
-                    (cliente["id"], f"{mes_atual}%")
-                ).fetchall()
-            else:
-                rendas_rows = conn_r.execute(
-                    "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=? AND data LIKE ? ORDER BY tipo, valor DESC",
-                    (cliente["id"], f"{mes_atual}%")
-                ).fetchall()
-            conn_r.close()
+            # Busca rendas do mês atual (com fallback caso tabela não exista ainda)
+            rendas_rows = []
+            try:
+                USE_PG = bool(os.environ.get("DATABASE_URL"))
+                conn_r = get_db()
+                mes_atual = hoje_brasil().strftime("%Y-%m")
+                if USE_PG:
+                    rendas_rows = conn_r.execute(
+                        "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY tipo, valor DESC",
+                        (cliente["id"], f"{mes_atual}%")
+                    ).fetchall()
+                else:
+                    rendas_rows = conn_r.execute(
+                        "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=? AND data LIKE ? ORDER BY tipo, valor DESC",
+                        (cliente["id"], f"{mes_atual}%")
+                    ).fetchall()
+                conn_r.close()
+            except Exception as e_renda:
+                import logging as _log
+                _log.warning(f"[RESUMO] Erro ao buscar rendas: {e_renda}")
             total_renda = sum(float(r["valor"]) for r in rendas_rows)
             renda_fixa = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "fixo")
             renda_extra = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "extra")
