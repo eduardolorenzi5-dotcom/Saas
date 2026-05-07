@@ -339,7 +339,9 @@ Ao receber uma mensagem, identifique se é:
 8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
 9. Um REGISTRO de renda — ex: "recebi meu salário de 3000", "caiu meu salário", "recebi um freela de 500", "entrou 200 de renda extra", "ganho 3000 por mês", "meu salário é 5000"
 10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
-11. Outra mensagem — responda de forma amigável
+11. EXCLUIR um lembrete — ex: "exclua esse lembrete", "cancela o lembrete do médico", "excluir lembrete", "remove o lembrete de passear com os cachorros", "apagar lembrete"
+12. LISTAR lembretes ativos — ex: "quais meus lembretes?", "ver lembretes", "meus lembretes ativos"
+13. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(cats_list)}
 (Use SEMPRE uma das categorias listadas acima. Se nenhuma se encaixar, use a última da lista.)
@@ -393,6 +395,14 @@ Se for um LEMBRETE (extraia mensagem, hora no formato HH:MM, data se mencionada,
 - Se for hoje ou sem data específica: use a data de hoje, recorrente=false
 - Se for amanhã: use data de amanhã, recorrente=false
 - Hora sempre no formato HH:MM (ex: 14:00, 09:30, 08:00)
+
+Se for EXCLUIR lembrete (inclui "exclua esse lembrete", "cancela lembrete", "apagar lembrete", "excluir"):
+{{"acao": "deletar_lembrete", "descricao": "palavra-chave do lembrete ou vazio se não informado"}}
+- Se o usuário não mencionar qual lembrete (ex: "exclua esse lembrete"), deixe descricao como string vazia ""
+- Se mencionar qual (ex: "cancela o lembrete do médico"), coloque a palavra-chave: "médico"
+
+Se for LISTAR lembretes:
+{{"acao": "listar_lembretes"}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -904,13 +914,99 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 conn_lem.commit()
                 conn_lem.close()
                 if recorrente:
-                    resposta = f"⏰ Lembrete criado!\nTodo dia às *{hora_lem}* vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara cancelar, me diga *'cancelar lembrete de {mensagem_lem}'*"
+                    resposta = f"⏰ Lembrete criado!\nTodo dia às *{hora_lem}* vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
                 else:
                     try:
                         data_fmt = _datetime.date.fromisoformat(data_lem).strftime("%d/%m/%Y")
                     except Exception:
                         data_fmt = data_lem
-                    resposta = f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_"
+                    resposta = f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
+
+        elif acao == "deletar_lembrete":
+            from db import get_db, USE_PG
+            descricao_busca = resultado.get("descricao", "").strip()
+            conn_lem = get_db()
+            ph = "%s" if USE_PG else "?"
+            try:
+                if descricao_busca:
+                    # Busca por palavra-chave na mensagem
+                    if USE_PG:
+                        lembretes_ativos = conn_lem.execute(
+                            "SELECT id, mensagem, hora FROM lembretes WHERE cliente_id=%s AND ativo=TRUE AND mensagem ILIKE %s",
+                            (cliente["id"], f"%{descricao_busca}%")
+                        ).fetchall()
+                    else:
+                        lembretes_ativos = conn_lem.execute(
+                            "SELECT id, mensagem, hora FROM lembretes WHERE cliente_id=? AND ativo=1 AND mensagem LIKE ?",
+                            (cliente["id"], f"%{descricao_busca}%")
+                        ).fetchall()
+                else:
+                    # Sem palavra-chave: busca o lembrete mais recente ativo
+                    if USE_PG:
+                        lembretes_ativos = conn_lem.execute(
+                            "SELECT id, mensagem, hora FROM lembretes WHERE cliente_id=%s AND ativo=TRUE ORDER BY id DESC LIMIT 1",
+                            (cliente["id"],)
+                        ).fetchall()
+                    else:
+                        lembretes_ativos = conn_lem.execute(
+                            "SELECT id, mensagem, hora FROM lembretes WHERE cliente_id=? AND ativo=1 ORDER BY id DESC LIMIT 1",
+                            (cliente["id"],)
+                        ).fetchall()
+
+                if not lembretes_ativos:
+                    resposta = "Não encontrei nenhum lembrete ativo para excluir. Envie *meus lembretes* para ver a lista."
+                elif len(lembretes_ativos) == 1:
+                    lem = lembretes_ativos[0]
+                    conn_lem.execute(f"UPDATE lembretes SET ativo=FALSE WHERE id={ph}", (lem["id"],)) if USE_PG else conn_lem.execute("UPDATE lembretes SET ativo=0 WHERE id=?", (lem["id"],))
+                    conn_lem.commit()
+                    resposta = f"🗑️ Lembrete excluído!\n_{lem['mensagem']}_ (às {lem['hora']})"
+                else:
+                    # Múltiplos encontrados — exclui todos que batem
+                    ids = [l["id"] for l in lembretes_ativos]
+                    for lid in ids:
+                        if USE_PG:
+                            conn_lem.execute("UPDATE lembretes SET ativo=FALSE WHERE id=%s", (lid,))
+                        else:
+                            conn_lem.execute("UPDATE lembretes SET ativo=0 WHERE id=?", (lid,))
+                    conn_lem.commit()
+                    nomes = ", ".join([f"_{l['mensagem']}_" for l in lembretes_ativos])
+                    resposta = f"🗑️ {len(ids)} lembretes excluídos: {nomes}"
+            except Exception as e_del:
+                import logging; logging.error(f"Erro deletar lembrete: {e_del}")
+                resposta = "Não consegui excluir o lembrete. Tente: *excluir lembrete do médico*"
+            finally:
+                conn_lem.close()
+
+        elif acao == "listar_lembretes":
+            from db import get_db, USE_PG
+            conn_lem = get_db()
+            try:
+                if USE_PG:
+                    lembretes_ativos = conn_lem.execute(
+                        "SELECT mensagem, hora, data, recorrente FROM lembretes WHERE cliente_id=%s AND ativo=TRUE ORDER BY hora",
+                        (cliente["id"],)
+                    ).fetchall()
+                else:
+                    lembretes_ativos = conn_lem.execute(
+                        "SELECT mensagem, hora, data, recorrente FROM lembretes WHERE cliente_id=? AND ativo=1 ORDER BY hora",
+                        (cliente["id"],)
+                    ).fetchall()
+                conn_lem.close()
+                if not lembretes_ativos:
+                    resposta = "Você não tem lembretes ativos no momento.\n\nPara criar um, diga: *me lembre de ir ao médico amanhã às 14h*"
+                else:
+                    linhas = [f"⏰ *Seus lembretes ativos ({len(lembretes_ativos)}):*", ""]
+                    for l in lembretes_ativos:
+                        tipo = "🔁 Todo dia" if l["recorrente"] else f"📅 {l['data'] or 'hoje'}"
+                        linhas.append(f"• _{l['mensagem']}_ — {tipo} às *{l['hora']}*")
+                    linhas.append("\nPara excluir, diga: *excluir lembrete do [nome]*")
+                    resposta = "\n".join(linhas)
+            except Exception as e_list:
+                import logging; logging.error(f"Erro listar lembretes: {e_list}")
+                resposta = "Não consegui buscar seus lembretes. Tente novamente."
+            finally:
+                try: conn_lem.close()
+                except: pass
 
         else:
             resposta = resultado.get("texto", "Como posso te ajudar?")

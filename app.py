@@ -1602,7 +1602,7 @@ def _verificar_lembretes():
                     try:
                         from agente.agente import enviar_whatsapp
                         enviar_whatsapp(lem["whatsapp"],
-                            f"⏰ *Lembrete:* {lem['mensagem']}")
+                            f"⏰ *Lembrete:* {lem['mensagem']}\n\nPara excluir este lembrete, responda: *excluir lembrete*")
                         if not lem["recorrente"]:
                             conn.execute(f"UPDATE lembretes SET ativo = {'false' if USE_PG else '0'} WHERE id = {ph}", (lem["id"],))
                             conn.commit()
