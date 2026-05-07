@@ -383,12 +383,11 @@ Se for um agendamento (extraia título, data/hora, duração em minutos e cor op
 {{"acao": "agendar", "titulo": "...", "data_hora": "YYYY-MM-DDTHH:MM:00", "duracao_min": 60, "cor": "vermelho"}}
 (use 60 minutos como padrão se não informado. Interprete datas relativas como "amanhã", "sexta", "dia 10" com base em hoje. Omita "cor" se não mencionada. Cores possíveis: vermelho, laranja, amarelo, verde, azul, azul-escuro, roxo, rosa, cinza.)
 
-Se for registro de renda (salário fixo ou renda extra):
+Se for registro de renda:
 {{"acao": "registrar_renda", "descricao": "...", "valor": 0.00, "tipo": "fixo", "data": "YYYY-MM-DD"}}
-- Use tipo "fixo" para salário, pagamento mensal, pro-labore
-- Use tipo "extra" para freela, comissão, bico, venda, renda extra
+- Use tipo "extra" SOMENTE se o usuário usar explicitamente as palavras "extra", "renda extra" ou "adicional"
+- Em TODOS os outros casos use tipo "fixo" (salário, freela, comissão, bico, venda, qualquer renda)
 - descricao: nome da renda (ex: "Salário", "Freela design", "Comissão de vendas")
-- Se for definição de renda mensal fixa (ex: "meu salário é 3000"), use tipo "fixo" e registre normalmente
 
 Se for EXCLUIR renda:
 {{"acao": "deletar_renda", "tipo": "extra", "descricao": ""}}
