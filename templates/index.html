@@ -152,6 +152,33 @@
     .plano-card:not(.destaque) .plano-btn { background: rgba(255,255,255,.08); color: #fff; }
     .plano-card:not(.destaque) .plano-btn:hover { background: rgba(255,255,255,.14); }
 
+    /* ── DEPOIMENTOS ── */
+    .dep-section { background: #f8faf9; padding: 96px 28px; }
+    .dep-section .section-inner { text-align: center; }
+    .dep-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-top: 52px; text-align: left; }
+    .dep-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+    .dep-stars { color: #f59e0b; font-size: 16px; letter-spacing: 2px; }
+    .dep-texto { font-size: 14px; color: #444; line-height: 1.75; flex: 1; }
+    .dep-autor { display: flex; align-items: center; gap: 12px; }
+    .dep-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .dep-nome { font-size: 14px; font-weight: 700; color: #0f1117; }
+    .dep-cargo { font-size: 12px; color: #9ca3af; }
+
+    /* ── FAQ ── */
+    .faq-section { background: #fff; padding: 96px 28px; }
+    .faq-inner { max-width: 780px; margin: 0 auto; }
+    .faq-inner h2 { font-size: 36px; font-weight: 800; letter-spacing: -.8px; text-align: center; margin-bottom: 12px; color: #0f1117; }
+    .faq-sub { text-align: center; color: #666; font-size: 15px; margin-bottom: 52px; }
+    .faq-item { border-bottom: 1px solid #f0f0ee; }
+    .faq-q { width: 100%; background: none; border: none; text-align: left; padding: 22px 0; font-size: 16px; font-weight: 600; color: #0f1117; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .faq-q:hover { color: #1D9E75; }
+    .faq-icon { font-size: 20px; color: #1D9E75; flex-shrink: 0; transition: transform .2s; }
+    .faq-a { font-size: 15px; color: #555; line-height: 1.8; padding-bottom: 20px; display: none; }
+    .faq-item.open .faq-a { display: block; }
+    .faq-item.open .faq-icon { transform: rotate(45deg); }
+    .faq-cta { text-align: center; margin-top: 52px; }
+    .faq-cta p { font-size: 15px; color: #666; margin-bottom: 20px; }
+
     /* ── FOOTER ── */
     .footer { background: #090c14; color: #4b5563; padding: 40px 28px; text-align: center; font-size: 13px; border-top: 1px solid rgba(255,255,255,.05); }
     .footer a { color: #6b7280; }
@@ -168,6 +195,7 @@
       .step-arrow { display: none; }
       .feature-grid, .feature-grid.reverse { grid-template-columns: 1fr; direction: ltr; gap: 40px; }
       .proof-bar-inner { gap: 28px; }
+      .dep-grid { grid-template-columns: 1fr; }
     }
     @media(max-width:600px) {
       .hero { padding: 60px 20px 52px; }
@@ -176,6 +204,7 @@
       .steps-grid { grid-template-columns: 1fr; }
       .nav-links a:not(.btn-nav):not(:last-child) { display: none; }
       .agenda-section h2 { font-size: 28px; }
+      .faq-inner h2 { font-size: 28px; }
     }
   </style>
   {% if META_PIXEL_ID %}
@@ -465,6 +494,116 @@
   </div>
 </section>
 
+<!-- DEPOIMENTOS -->
+<section class="dep-section">
+  <div class="section-inner">
+    <div class="section-tag">Quem já usa</div>
+    <h2 class="section-title">O que nossos usuários dizem</h2>
+    <p class="section-sub">Pessoas reais que transformaram sua relação com o dinheiro.</p>
+    <div class="dep-grid">
+
+      <div class="dep-card">
+        <div class="dep-stars">★★★★★</div>
+        <p class="dep-texto">"Eu nunca consegui manter uma planilha por mais de uma semana. Com o Controla Fácil é diferente — mando mensagem no WhatsApp e pronto. Em 3 meses já percebi onde eu estava gastando dinheiro à toa."</p>
+        <div class="dep-autor">
+          <div class="dep-avatar" style="background:#6366f1;">AM</div>
+          <div>
+            <div class="dep-nome">Ana Mota</div>
+            <div class="dep-cargo">Professora, Brasília</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <div class="dep-stars">★★★★★</div>
+        <p class="dep-texto">"Como autônomo, meu maior problema era saber o que sobrava no mês. Agora registro tudo pelo WhatsApp — até mando foto do comprovante — e o sistema organiza tudo. O relatório PDF impressiona meus clientes também."</p>
+        <div class="dep-autor">
+          <div class="dep-avatar" style="background:#1D9E75;">RS</div>
+          <div>
+            <div class="dep-nome">Ricardo Santos</div>
+            <div class="dep-cargo">Designer freelancer, SP</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <div class="dep-stars">★★★★★</div>
+        <p class="dep-texto">"Meu marido e eu usamos juntos. A gente manda os gastos ao longo do dia e no final do mês vemos o resumo. Paramos de brigar por dinheiro porque agora temos tudo registrado. Melhor R$14,90 que já gastei."</p>
+        <div class="dep-autor">
+          <div class="dep-avatar" style="background:#f59e0b;">CL</div>
+          <div>
+            <div class="dep-nome">Camila Lima</div>
+            <div class="dep-cargo">Enfermeira, Goiânia</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section">
+  <div class="faq-inner">
+    <div class="section-tag" style="text-align:center;">Tire suas dúvidas</div>
+    <h2>Perguntas frequentes</h2>
+    <p class="faq-sub">Tudo que você precisa saber antes de começar.</p>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Precisa instalar algum aplicativo?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Não. Tudo funciona pelo WhatsApp que você já usa. Não tem app para baixar, não tem cadastro complicado. Só precisa do número de celular com WhatsApp.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Como funciona o pagamento?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">O pagamento é mensal via Mercado Pago — aceita Pix, cartão de crédito e débito. A cobrança é automática todo mês e você pode cancelar quando quiser sem multa.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Posso cancelar a qualquer momento?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Sim, sem fidelidade e sem burocracia. Basta cancelar pela plataforma ou entrar em contato pelo WhatsApp. Não há multa nem taxa de cancelamento.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        A IA realmente entende o que eu escrevo?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Sim! A IA é treinada para entender português natural. Você pode escrever "gastei 50 no mercado", mandar um áudio falando o gasto, ou até tirar foto do comprovante — ela interpreta tudo automaticamente.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Meus dados financeiros são seguros?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Sim. Seus dados ficam armazenados com segurança em servidor dedicado, com acesso exclusivo por senha. Não compartilhamos nenhuma informação com terceiros.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Funciona para empresas ou só para pessoa física?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-a">Funciona para os dois! Muitos autônomos e pequenos empresários usam para controlar as despesas do negócio separadas das pessoais. As categorias são personalizáveis.</div>
+    </div>
+
+    <div class="faq-cta">
+      <p>Ainda tem dúvidas? Fala com a gente no WhatsApp.</p>
+      <a href="https://wa.me/5561998007328" class="hero-cta" style="display:inline-flex;">💬 Falar no WhatsApp →</a>
+    </div>
+  </div>
+</section>
+
 <!-- FOOTER -->
 <footer class="footer">
   <div class="footer-inner">
@@ -480,5 +619,13 @@
 <a href="https://wa.me/5561998007328" target="_blank" rel="noopener" class="wpp-float" title="Falar no WhatsApp">
   <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
 </a>
+<script>
+function toggleFaq(btn) {
+  const item = btn.closest('.faq-item');
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item.open').forEach(el => el.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
+}
+</script>
 </body>
 </html>
