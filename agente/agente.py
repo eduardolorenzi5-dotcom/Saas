@@ -338,6 +338,7 @@ Ao receber uma mensagem, identifique se é:
 7. Um pedido para CONECTAR Google Agenda — ex: "quero conectar minha agenda", "conectar google agenda", "ativar agenda"
 8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
 9. Um REGISTRO de renda — ex: "recebi meu salário de 3000", "caiu meu salário", "recebi um freela de 500", "entrou 200 de renda extra", "ganho 3000 por mês", "meu salário é 5000"
+9b. EXCLUIR renda — ex: "excluir minha renda extra", "apagar renda de freela", "remover renda do mês", "excluir informações de renda", "deletar renda extra", "apaga minha renda"
 10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
 11. EXCLUIR um lembrete — ex: "exclua esse lembrete", "cancela o lembrete do médico", "excluir lembrete", "remove o lembrete de passear com os cachorros", "apagar lembrete"
 12. LISTAR lembretes ativos — ex: "quais meus lembretes?", "ver lembretes", "meus lembretes ativos"
@@ -388,6 +389,11 @@ Se for registro de renda (salário fixo ou renda extra):
 - Use tipo "extra" para freela, comissão, bico, venda, renda extra
 - descricao: nome da renda (ex: "Salário", "Freela design", "Comissão de vendas")
 - Se for definição de renda mensal fixa (ex: "meu salário é 3000"), use tipo "fixo" e registre normalmente
+
+Se for EXCLUIR renda:
+{{"acao": "deletar_renda", "tipo": "extra", "descricao": ""}}
+- tipo: "fixo", "extra" ou "todos" (se quiser apagar tudo)
+- descricao: palavra-chave da renda (ex: "freela") ou vazio para apagar todas do tipo
 
 Se for um LEMBRETE (extraia mensagem, hora no formato HH:MM, data se mencionada, e se é recorrente):
 {{"acao": "lembrete", "mensagem": "passear com os cachorros", "hora": "14:00", "data": "YYYY-MM-DD", "recorrente": false}}
@@ -921,6 +927,77 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     except Exception:
                         data_fmt = data_lem
                     resposta = f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
+
+        elif acao == "deletar_renda":
+            from db import get_db, USE_PG
+            tipo_del = resultado.get("tipo", "todos").strip()
+            descricao_del = resultado.get("descricao", "").strip()
+            mes_atual = hoje_brasil().strftime("%Y-%m")
+            conn_r = get_db()
+            ph = "%s" if USE_PG else "?"
+            try:
+                # Monta query de acordo com filtros
+                if descricao_del:
+                    # Tem palavra-chave
+                    if USE_PG:
+                        rows = conn_r.execute(
+                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=%s AND data LIKE %s AND mensagem ILIKE %s",
+                            (cliente["id"], f"{mes_atual}%", f"%{descricao_del}%")
+                        ).fetchall()
+                        if not rows:
+                            rows = conn_r.execute(
+                                "SELECT id, descricao, valor FROM rendas WHERE cliente_id=%s AND descricao ILIKE %s",
+                                (cliente["id"], f"%{descricao_del}%")
+                            ).fetchall()
+                    else:
+                        rows = conn_r.execute(
+                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=? AND descricao LIKE ?",
+                            (cliente["id"], f"%{descricao_del}%")
+                        ).fetchall()
+                elif tipo_del == "todos":
+                    if USE_PG:
+                        rows = conn_r.execute(
+                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=%s AND data LIKE %s",
+                            (cliente["id"], f"{mes_atual}%")
+                        ).fetchall()
+                    else:
+                        rows = conn_r.execute(
+                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=? AND data LIKE ?",
+                            (cliente["id"], f"{mes_atual}%")
+                        ).fetchall()
+                else:
+                    if USE_PG:
+                        rows = conn_r.execute(
+                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=%s AND data LIKE %s AND tipo=%s",
+                            (cliente["id"], f"{mes_atual}%", tipo_del)
+                        ).fetchall()
+                    else:
+                        rows = conn_r.execute(
+                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=? AND data LIKE ? AND tipo=?",
+                            (cliente["id"], f"{mes_atual}%", tipo_del)
+                        ).fetchall()
+
+                if not rows:
+                    resposta = "Não encontrei nenhuma renda para excluir com esse critério. Envie *resumo* para ver suas rendas registradas."
+                else:
+                    for row in rows:
+                        if USE_PG:
+                            conn_r.execute("DELETE FROM rendas WHERE id=%s", (row["id"],))
+                        else:
+                            conn_r.execute("DELETE FROM rendas WHERE id=?", (row["id"],))
+                    conn_r.commit()
+                    if len(rows) == 1:
+                        r = rows[0]
+                        resposta = f"🗑️ Renda excluída!\n_{r['descricao']}_ — R$ {float(r['valor']):.2f}"
+                    else:
+                        total_del = sum(float(r["valor"]) for r in rows)
+                        resposta = f"🗑️ {len(rows)} rendas excluídas! Total removido: R$ {total_del:.2f}"
+            except Exception as e_rd:
+                import logging; logging.error(f"Erro deletar renda: {e_rd}")
+                resposta = "Não consegui excluir a renda. Tente: *excluir renda extra* ou *apagar renda de freela*"
+            finally:
+                try: conn_r.close()
+                except: pass
 
         elif acao == "deletar_lembrete":
             from db import get_db, USE_PG
