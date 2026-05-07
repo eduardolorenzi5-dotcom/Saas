@@ -223,6 +223,23 @@ def salvar_renda(cliente_id, valor):
     conn.commit()
     conn.close()
 
+def registrar_entrada_renda(cliente_id, descricao, valor, tipo, data):
+    """Registra uma entrada de renda na tabela rendas."""
+    USE_PG = bool(os.environ.get("DATABASE_URL"))
+    conn = get_db()
+    if USE_PG:
+        conn.execute(
+            "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
+            (cliente_id, descricao, valor, tipo, data, "whatsapp")
+        )
+    else:
+        conn.execute(
+            "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte) VALUES (?, ?, ?, ?, ?, ?)",
+            (cliente_id, descricao, valor, tipo, data, "whatsapp")
+        )
+    conn.commit()
+    conn.close()
+
 def verificar_agenda_conectada(cliente_id):
     conn = get_db()
     row = conn.execute("SELECT google_refresh_token FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
@@ -320,7 +337,7 @@ Ao receber uma mensagem, identifique se é:
 7. Um pedido de RELATÓRIO PDF — ex: "quero meu relatório", "manda o PDF", "relatório completo", "relatório do mês", "relatório em PDF", "extrato do mês"
 7. Um pedido para CONECTAR Google Agenda — ex: "quero conectar minha agenda", "conectar google agenda", "ativar agenda"
 8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
-9. Um REGISTRO de renda — ex: "ganho 3000 por mês", "meu salário é 5000", "recebo 2500 mensais", "minha renda é 4000"
+9. Um REGISTRO de renda — ex: "recebi meu salário de 3000", "caiu meu salário", "recebi um freela de 500", "entrou 200 de renda extra", "ganho 3000 por mês", "meu salário é 5000"
 10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
 11. Outra mensagem — responda de forma amigável
 
@@ -363,8 +380,12 @@ Se for um agendamento (extraia título, data/hora, duração em minutos e cor op
 {{"acao": "agendar", "titulo": "...", "data_hora": "YYYY-MM-DDTHH:MM:00", "duracao_min": 60, "cor": "vermelho"}}
 (use 60 minutos como padrão se não informado. Interprete datas relativas como "amanhã", "sexta", "dia 10" com base em hoje. Omita "cor" se não mencionada. Cores possíveis: vermelho, laranja, amarelo, verde, azul, azul-escuro, roxo, rosa, cinza.)
 
-Se for registro de renda mensal:
-{{"acao": "registrar_renda", "valor": 0.00}}
+Se for registro de renda (salário fixo ou renda extra):
+{{"acao": "registrar_renda", "descricao": "...", "valor": 0.00, "tipo": "fixo", "data": "YYYY-MM-DD"}}
+- Use tipo "fixo" para salário, pagamento mensal, pro-labore
+- Use tipo "extra" para freela, comissão, bico, venda, renda extra
+- descricao: nome da renda (ex: "Salário", "Freela design", "Comissão de vendas")
+- Se for definição de renda mensal fixa (ex: "meu salário é 3000"), use tipo "fixo" e registre normalmente
 
 Se for um LEMBRETE (extraia mensagem, hora no formato HH:MM, data se mencionada, e se é recorrente):
 {{"acao": "lembrete", "mensagem": "passear com os cachorros", "hora": "14:00", "data": "YYYY-MM-DD", "recorrente": false}}
@@ -743,17 +764,46 @@ def processar_mensagem(fone, mensagem, _cliente=None):
 
         elif acao == "resumo":
             total, por_cat = resumo_mes(cliente["id"])
-            renda = float(cliente["renda_mensal"]) if cliente.get("renda_mensal") else None
+            renda_estatica = float(cliente["renda_mensal"]) if cliente.get("renda_mensal") else None
+            # Busca rendas do mês atual
+            USE_PG = bool(os.environ.get("DATABASE_URL"))
+            conn_r = get_db()
+            mes_atual = hoje_brasil().strftime("%Y-%m")
+            if USE_PG:
+                rendas_rows = conn_r.execute(
+                    "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY tipo, valor DESC",
+                    (cliente["id"], f"{mes_atual}%")
+                ).fetchall()
+            else:
+                rendas_rows = conn_r.execute(
+                    "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=? AND data LIKE ? ORDER BY tipo, valor DESC",
+                    (cliente["id"], f"{mes_atual}%")
+                ).fetchall()
+            conn_r.close()
+            total_renda = sum(float(r["valor"]) for r in rendas_rows)
+            renda_fixa = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "fixo")
+            renda_extra = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "extra")
+            renda_ref = total_renda if total_renda > 0 else renda_estatica
             linhas = [f"📊 *Resumo de {mes_ano_pt()}*", ""]
-            if renda:
-                saldo = renda - total
-                pct = (total / renda * 100) if renda else 0
-                linhas.append(f"💵 Renda: R$ {renda:.2f}")
+            if renda_ref:
+                saldo = renda_ref - total
+                pct = (total / renda_ref * 100) if renda_ref else 0
+                if total_renda > 0:
+                    linhas.append(f"💵 *Receitas do mês: R$ {total_renda:.2f}*")
+                    if renda_fixa > 0:
+                        linhas.append(f"  💼 Fixa: R$ {renda_fixa:.2f}")
+                    if renda_extra > 0:
+                        linhas.append(f"  ⚡ Extra: R$ {renda_extra:.2f}")
+                    for r in rendas_rows:
+                        emoji = "💼" if r["tipo"] == "fixo" else "⚡"
+                        linhas.append(f"  {emoji} {r['descricao']}: R$ {float(r['valor']):.2f}")
+                else:
+                    linhas.append(f"💵 Renda: R$ {renda_ref:.2f}")
                 linhas.append(f"💸 Gasto: R$ {total:.2f} ({pct:.1f}%)")
                 linhas.append(f"{'✅' if saldo >= 0 else '⚠️'} Saldo: R$ {saldo:.2f}")
             else:
                 linhas.append(f"💰 Total gasto: R$ {total:.2f}")
-                linhas.append("💡 _Dica: informe sua renda com 'meu salário é 3000' para ver o saldo_")
+                linhas.append("💡 _Dica: informe sua renda com 'recebi meu salário de 3000' para ver o saldo_")
             linhas.append("")
             for c in por_cat:
                 linhas.append(f"  • {c['categoria']}: R$ {c['s']:.2f}")
@@ -761,15 +811,26 @@ def processar_mensagem(fone, mensagem, _cliente=None):
 
         elif acao == "registrar_renda":
             valor = float(resultado.get("valor", 0))
+            descricao = resultado.get("descricao", "Renda").strip() or "Renda"
+            tipo = resultado.get("tipo", "extra")
+            data_renda = resultado.get("data", hoje_brasil().isoformat())
             if valor > 0:
-                salvar_renda(cliente["id"], valor)
+                # Registra entrada na tabela rendas
+                registrar_entrada_renda(cliente["id"], descricao, valor, tipo, data_renda)
+                # Se for fixo, também atualiza renda_mensal de referência
+                if tipo == "fixo":
+                    salvar_renda(cliente["id"], valor)
+                emoji_tipo = "💼" if tipo == "fixo" else "⚡"
+                label_tipo = "Renda fixa" if tipo == "fixo" else "Renda extra"
                 resposta = (
-                    f"✅ Renda mensal registrada: R$ {valor:.2f}\n\n"
-                    f"Agora consigo te mostrar quanto você já gastou em relação à sua renda. "
-                    f"Envie *resumo* para ver!"
+                    f"✅ {label_tipo} registrada!\n"
+                    f"{emoji_tipo} {descricao}\n"
+                    f"💰 R$ {valor:.2f}\n"
+                    f"📅 {formatar_data(data_renda)}\n\n"
+                    f"Envie *resumo* para ver seu saldo do mês!"
                 )
             else:
-                resposta = "Não consegui identificar o valor da renda. Tente: *meu salário é 3000*"
+                resposta = "Não consegui identificar o valor da renda. Tente: *recebi meu salário de 3000* ou *freela de 500*"
 
         elif acao == "conectar_agenda":
             link = gerar_link_agenda(cliente["id"])

@@ -90,6 +90,19 @@ def init_db():
                 UNIQUE (cliente_id, nome)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rendas (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL NOT NULL,
+                tipo TEXT DEFAULT 'extra',
+                data TEXT NOT NULL,
+                fonte TEXT DEFAULT 'whatsapp',
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -149,6 +162,17 @@ def init_db():
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id),
                 UNIQUE (cliente_id, nome)
+            );
+            CREATE TABLE IF NOT EXISTS rendas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL NOT NULL,
+                tipo TEXT DEFAULT 'extra',
+                data TEXT NOT NULL,
+                fonte TEXT DEFAULT 'whatsapp',
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
         """)
     # Adiciona colunas extras se não existirem
@@ -974,7 +998,14 @@ def dashboard():
     cats_usuario = conn.execute(
         "SELECT nome, emoji FROM categorias WHERE cliente_id=%s ORDER BY nome", (cid,)
     ).fetchall()
+    rendas_mes = conn.execute(
+        "SELECT id, descricao, valor, tipo, data FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
+        (cid, f"{mes}%")
+    ).fetchall()
     conn.close()
+    total_renda_mes = sum(float(r["valor"]) for r in rendas_mes)
+    renda_fixa_mes = sum(float(r["valor"]) for r in rendas_mes if r["tipo"] == "fixo")
+    renda_extra_mes = sum(float(r["valor"]) for r in rendas_mes if r["tipo"] == "extra")
 
     # Série acumulada por dia
     dias_no_mes = _cal.monthrange(mes_dt.year, mes_dt.month)[1]
@@ -989,15 +1020,18 @@ def dashboard():
         serie_diaria.append(round(acumulado, 2))
 
     renda = float(cliente["renda_mensal"]) if cliente["renda_mensal"] else None
-    saldo = round(renda - float(total), 2) if renda else None
 
     from agente.agente import MESES_PT
     mes_nome = f"{MESES_PT[mes_dt.month]} {mes_dt.year}"
 
+    # Usa renda do mês (rendas registradas) se existir, senão usa renda_mensal estática
+    renda_efetiva = total_renda_mes if total_renda_mes > 0 else renda
+    saldo = round(renda_efetiva - float(total), 2) if renda_efetiva else None
+
     return render_template("dashboard.html",
         gastos=gastos, total=float(total), por_cat=por_cat,
         cliente=cliente, mes=mes, mes_nome=mes_nome,
-        renda=renda, saldo=saldo,
+        renda=renda_efetiva, saldo=saldo,
         labels_dias=_json.dumps(labels_dias),
         serie_diaria=_json.dumps(serie_diaria),
         cats_labels=_json.dumps([r["categoria"] for r in por_cat]),
@@ -1005,6 +1039,10 @@ def dashboard():
         mes_ant=mes_ant, mes_prox=mes_prox,
         is_mes_atual=is_mes_atual,
         cats_usuario=cats_usuario,
+        rendas_mes=rendas_mes,
+        total_renda_mes=total_renda_mes,
+        renda_fixa_mes=renda_fixa_mes,
+        renda_extra_mes=renda_extra_mes,
     )
 
 @app.route("/debug/session")
@@ -1160,6 +1198,36 @@ def deletar_categoria(nome):
         conn.close()
         return jsonify({"erro": f"Categoria em uso em {em_uso['n']} gasto(s). Altere os gastos antes de remover."}), 400
     conn.execute("DELETE FROM categorias WHERE cliente_id=%s AND nome=%s", (cid, nome))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/rendas", methods=["POST"])
+@login_required
+def adicionar_renda():
+    cid = session["cliente_id"]
+    data = request.json or {}
+    descricao = (data.get("descricao") or "").strip()
+    valor = float(data.get("valor", 0))
+    tipo = data.get("tipo", "extra")
+    data_renda = data.get("data", hoje_brasil().isoformat())
+    if not descricao or valor <= 0:
+        return jsonify({"erro": "Dados inválidos"}), 400
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
+        (cid, descricao, valor, tipo, data_renda, data.get("fonte", "manual"))
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/rendas/<int:rid>", methods=["DELETE"])
+@login_required
+def deletar_renda(rid):
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("DELETE FROM rendas WHERE id=%s AND cliente_id=%s", (rid, cid))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})

@@ -97,6 +97,7 @@
     @media(max-width:900px) {
       .cards-row { grid-template-columns: repeat(2,1fr); }
       .charts-row, .bottom-row { grid-template-columns: 1fr; }
+      #rendas-section { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr 1fr; }
       .topbar-nav { display: none; }
     }
@@ -330,6 +331,66 @@
 
   </div>
 
+  <!-- RENDAS DO MÊS -->
+  <div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;" id="rendas-section">
+    <!-- Lista de rendas -->
+    <div class="list-card">
+      <div class="list-card-header">
+        <span>💰 Receitas de {{ mes_nome }}</span>
+        <small>R$ {{ "%.2f"|format(total_renda_mes) }}</small>
+      </div>
+      {% if rendas_mes %}
+        {% if renda_fixa_mes > 0 and renda_extra_mes > 0 %}
+        <div style="display:flex;gap:0;border-bottom:1px solid #f3f4f6;">
+          <div style="flex:1;padding:12px 22px;text-align:center;border-right:1px solid #f3f4f6;">
+            <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">💼 Renda Fixa</div>
+            <div style="font-size:18px;font-weight:700;color:#059669;margin-top:4px;">R$ {{ "%.2f"|format(renda_fixa_mes) }}</div>
+          </div>
+          <div style="flex:1;padding:12px 22px;text-align:center;">
+            <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">⚡ Renda Extra</div>
+            <div style="font-size:18px;font-weight:700;color:#6366f1;margin-top:4px;">R$ {{ "%.2f"|format(renda_extra_mes) }}</div>
+          </div>
+        </div>
+        {% endif %}
+        {% for r in rendas_mes %}
+        <div class="tx-item" id="renda-{{ r.id }}">
+          <div>
+            <div class="tx-desc">{{ '💼' if r.tipo == 'fixo' else '⚡' }} {{ r.descricao }}</div>
+            <div class="tx-meta">{{ 'Renda fixa' if r.tipo == 'fixo' else 'Renda extra' }} · {{ r.data }}</div>
+          </div>
+          <div style="display:flex;align-items:center;">
+            <span style="font-size:14px;font-weight:700;color:#059669;">+ R$ {{ "%.2f"|format(r.valor) }}</span>
+            <button class="tx-del" onclick="delRenda({{ r.id }})">×</button>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="text-align:center;color:#9ca3af;padding:24px;font-size:13px;">
+          Nenhuma receita registrada.<br/>
+          <span style="font-size:12px;">Envie <em>"recebi meu salário de 3000"</em> no WhatsApp</span>
+        </div>
+      {% endif %}
+    </div>
+    <!-- Formulário adicionar renda -->
+    <div class="form-card" style="margin-bottom:0;">
+      <div class="form-card-title">+ Adicionar receita</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div class="form-field"><label>Descrição</label><input type="text" id="renda-desc" placeholder="Ex: Salário, Freela, Comissão"/></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-field"><label>Valor (R$)</label><input type="number" id="renda-val" placeholder="0,00" step="0.01"/></div>
+          <div class="form-field"><label>Tipo</label>
+            <select id="renda-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#f9fafb;">
+              <option value="fixo">💼 Renda Fixa</option>
+              <option value="extra">⚡ Renda Extra</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field"><label>Data</label><input type="date" id="renda-data"/></div>
+        <button class="btn-add" onclick="addRenda()" style="width:100%;">+ Adicionar receita</button>
+      </div>
+    </div>
+  </div>
+
   <!-- GERENCIAR CATEGORIAS -->
   <div class="form-card" style="margin-top:24px;" id="gerenciar-categorias">
     <div class="form-card-title">🏷️ Minhas categorias</div>
@@ -384,6 +445,29 @@ if (labels.length > 0) {
       }
     }
   });
+}
+
+// RENDAS
+async function addRenda() {
+  const desc = document.getElementById('renda-desc').value.trim();
+  const val = parseFloat(document.getElementById('renda-val').value);
+  const tipo = document.getElementById('renda-tipo').value;
+  const data = document.getElementById('renda-data').value || new Date().toISOString().slice(0,10);
+  if (!desc || !val || val <= 0) { alert('Preencha descrição e valor.'); return; }
+  const r = await fetch('/api/rendas', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({descricao: desc, valor: val, tipo, data, fonte: 'manual'})
+  });
+  if (r.ok) { location.reload(); }
+}
+
+async function delRenda(id) {
+  if (!confirm('Remover esta receita?')) return;
+  const r = await fetch(`/api/rendas/${id}`, {method: 'DELETE'});
+  if (r.ok) {
+    document.getElementById(`renda-${id}`)?.remove();
+  }
 }
 
 // CATEGORIAS
