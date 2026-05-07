@@ -12,7 +12,10 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 @app.context_processor
 def inject_pixel():
-    return {"META_PIXEL_ID": os.environ.get("META_PIXEL_ID", "")}
+    return {
+        "META_PIXEL_ID": os.environ.get("META_PIXEL_ID", ""),
+        "GA_MEASUREMENT_ID": os.environ.get("GA_MEASUREMENT_ID", ""),
+    }
 
 def init_db():
     conn = get_db()
