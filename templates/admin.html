@@ -129,7 +129,15 @@
           <td style="color:#aaa;">{{ c.id }}</td>
           <td><strong>{{ c.nome }}</strong></td>
           <td><span class="email-cell" style="color:#555;" title="{{ c.email }}">{{ c.email }}</span></td>
-          <td><span class="wpp-cell" style="color:#555;">{{ c.whatsapp or '—' }}</span></td>
+          <td>
+            <form method="POST" action="/admin/atualizar_whatsapp/{{ c.id }}" class="wpp-inline">
+              <input type="text" name="whatsapp" value="{{ c.whatsapp or '' }}" placeholder="55619..."
+                     style="border:1px solid #ddd;border-radius:5px;padding:3px 6px;font-size:11px;width:115px;color:#555;"
+                     title="Editar WhatsApp — pressione Enter para salvar"
+                     onblur="if(this.value !== '{{ c.whatsapp or '' }}') this.form.submit();"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}"/>
+            </form>
+          </td>
           <td>
             <span class="badge {% if c.status == 'ativo' %}badge-ativo{% elif c.status == 'cancelado' %}badge-cancelado{% else %}badge-pendente{% endif %}">
               {{ c.status }}
@@ -186,10 +194,6 @@
               <form method="POST" action="/admin/deletar/{{ c.id }}"
                     onsubmit="return confirm('Deletar {{ c.nome }}? Todos os dados serão removidos.');">
                 <button class="action-btn btn-deletar">🗑</button>
-              </form>
-              <form method="POST" action="/admin/atualizar_whatsapp/{{ c.id }}" class="wpp-inline">
-                <input type="text" name="whatsapp" placeholder="55619..." value="{{ c.whatsapp or '' }}"/>
-                <button class="action-btn" style="background:#e0e7ff;color:#3730a3;">Wpp</button>
               </form>
             </div>
           </td>
