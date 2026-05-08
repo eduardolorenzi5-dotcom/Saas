@@ -828,6 +828,9 @@ def checkout_mercadopago(cliente_id):
             "frequency_type": "months",
             "transaction_amount": float(cliente["preco"]),
             "currency_id": "BRL",
+            "payment_methods_allowed": {
+                "payment_types": [{"id": "credit_card"}]
+            },
         },
         "payer_email": cliente["email"],
         "back_url": f"{base_url}/pagamento/sucesso/{cliente_id}",
