@@ -984,6 +984,11 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                             conn_r.execute("DELETE FROM rendas WHERE id=%s", (row["id"],))
                         else:
                             conn_r.execute("DELETE FROM rendas WHERE id=?", (row["id"],))
+                    # Limpa renda_mensal estática para não aparecer no fallback do resumo
+                    if USE_PG:
+                        conn_r.execute("UPDATE clientes SET renda_mensal=NULL WHERE id=%s", (cliente["id"],))
+                    else:
+                        conn_r.execute("UPDATE clientes SET renda_mensal=NULL WHERE id=?", (cliente["id"],))
                     conn_r.commit()
                     if len(rows) == 1:
                         r = rows[0]
