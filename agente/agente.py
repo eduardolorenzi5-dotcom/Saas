@@ -783,6 +783,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             # Busca rendas do mês atual (com fallback caso tabela não exista ainda)
             rendas_rows = []
             try:
+                import logging as _log
                 USE_PG = bool(os.environ.get("DATABASE_URL"))
                 conn_r = get_db()
                 mes_atual = hoje_brasil().strftime("%Y-%m")
@@ -797,12 +798,14 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                         (cliente["id"], f"{mes_atual}%")
                     ).fetchall()
                 conn_r.close()
+                _log.warning(f"[RESUMO] cliente_id={cliente['id']} mes={mes_atual} rendas_rows={[dict(r) for r in rendas_rows]} renda_mensal={cliente.get('renda_mensal')}")
             except Exception as e_renda:
                 import logging as _log
                 _log.warning(f"[RESUMO] Erro ao buscar rendas: {e_renda}")
             total_renda = sum(float(r["valor"]) for r in rendas_rows)
             renda_fixa = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "fixo")
             renda_extra = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "extra")
+            import logging as _log2; _log2.warning(f"[RESUMO] total_renda={total_renda} renda_fixa={renda_fixa} renda_extra={renda_extra} renda_estatica={renda_estatica}")
             # Se há renda extra na tabela mas a fixa ainda está só no campo legado,
             # soma os dois para não ignorar a renda fixa estática
             if renda_estatica and renda_fixa == 0 and renda_extra > 0:
