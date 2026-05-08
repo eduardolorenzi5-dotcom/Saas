@@ -111,6 +111,16 @@
       .card-val { font-size: 18px; }
       .card-label { font-size: 10px; }
       .card-sub { font-size: 11px; }
+      #rendas-section { grid-template-columns: 1fr !important; }
+      .list-card-header { flex-wrap: nowrap; gap: 8px; }
+      .list-card-header span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+      .list-card-header small { white-space: nowrap; flex-shrink: 0; }
+      .tx-item { padding: 10px 14px; flex-wrap: nowrap; gap: 8px; }
+      .tx-item > div:first-child { min-width: 0; flex: 1; }
+      .tx-item > div:last-child { flex-shrink: 0; }
+      .tx-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+      .tx-meta { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tx-val { font-size: 13px !important; }
     }
     @media(max-width:500px) {
       .cards-row { grid-template-columns: 1fr 1fr; }
@@ -335,9 +345,9 @@
   <div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;" id="rendas-section">
     <!-- Lista de rendas -->
     <div class="list-card">
-      <div class="list-card-header">
-        <span>💰 Receitas de {{ mes_nome }}</span>
-        <small>R$ {{ "%.2f"|format(total_renda_mes) }}</small>
+      <div class="list-card-header" style="flex-wrap:nowrap;gap:8px;">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">💰 Receitas de {{ mes_nome }}</span>
+        <small style="white-space:nowrap;flex-shrink:0;font-weight:600;">R$ {{ "%.2f"|format(total_renda_mes) }}</small>
       </div>
       {% if rendas_mes %}
         {% if renda_fixa_mes > 0 and renda_extra_mes > 0 %}
@@ -356,10 +366,10 @@
         <div class="tx-item" id="renda-{{ r.id }}">
           <div>
             <div class="tx-desc">{{ '💼' if r.tipo == 'fixo' else '⚡' }} {{ r.descricao }}</div>
-            <div class="tx-meta">{{ 'Renda fixa' if r.tipo == 'fixo' else 'Renda extra' }} · {{ r.data }}</div>
+            <div class="tx-meta">{{ 'Fixa' if r.tipo == 'fixo' else 'Extra' }} · {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] if r.data else '' }}</div>
           </div>
-          <div style="display:flex;align-items:center;">
-            <span style="font-size:14px;font-weight:700;color:#059669;">+ R$ {{ "%.2f"|format(r.valor) }}</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span class="tx-val" style="font-size:14px;font-weight:700;color:#059669;white-space:nowrap;">+ R$ {{ "%.2f"|format(r.valor) }}</span>
             <button class="tx-del" onclick="delRenda({{ r.id }})">×</button>
           </div>
         </div>
