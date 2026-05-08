@@ -19,11 +19,13 @@
     .admin-table-wrap { background:#fff; border-radius:12px; border:1px solid #e5e5e3; overflow:hidden; }
     .admin-table-wrap h2 { font-size:15px; font-weight:700; padding:16px 20px; border-bottom:1px solid #e5e5e3; }
     .table-scroll { overflow-x:auto; width:100%; }
-    table { width:100%; border-collapse:collapse; font-size:13px; min-width:900px; }
-    th { text-align:left; padding:10px 12px; background:#f9f9f7; color:#888; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #e5e5e3; white-space:nowrap; }
-    td { padding:10px 12px; border-bottom:1px solid #f0f0ee; vertical-align:middle; }
+    table { width:100%; border-collapse:collapse; font-size:12px; min-width:1100px; }
+    th { text-align:left; padding:8px 10px; background:#f9f9f7; color:#888; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #e5e5e3; white-space:nowrap; }
+    td { padding:8px 10px; border-bottom:1px solid #f0f0ee; vertical-align:middle; }
     tr:last-child td { border-bottom:none; }
     tr:hover td { background:#fafaf8; }
+    .email-cell { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+    .wpp-cell { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
     .badge { display:inline-block; padding:2px 10px; border-radius:100px; font-size:11px; font-weight:600; white-space:nowrap; }
     .badge-ativo { background:#d1fae5; color:#065f46; }
     .badge-pendente { background:#fef3c7; color:#92400e; }
@@ -34,9 +36,10 @@
     .btn-desativar { background:#fef3c7; color:#92400e; }
     .btn-cancelar { background:#fee2e2; color:#991b1b; }
     .btn-deletar { background:#fecaca; color:#7f1d1d; border:1px solid #fca5a5; }
-    .acoes-wrap { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
-    .wpp-inline { display:flex; gap:4px; align-items:center; flex-wrap:nowrap; }
-    .wpp-inline input { border:1px solid #ddd; border-radius:5px; padding:3px 7px; font-size:11px; width:110px; }
+    .acoes-wrap { display:flex; flex-wrap:nowrap; gap:3px; align-items:center; }
+    .wpp-inline { display:flex; gap:3px; align-items:center; flex-wrap:nowrap; }
+    .wpp-inline input { border:1px solid #ddd; border-radius:5px; padding:3px 6px; font-size:11px; width:90px; }
+    .action-btn { padding:3px 7px; font-size:11px; }
     .admin-footer { text-align:right; padding:12px 20px; font-size:12px; color:#aaa; }
     @media(max-width:900px){ .stats-row{grid-template-columns:1fr 1fr;} }
     @media(max-width:600px){ .stats-row{grid-template-columns:1fr;} .admin-wrap{padding:16px 12px;} }
@@ -125,8 +128,8 @@
         <tr>
           <td style="color:#aaa;">{{ c.id }}</td>
           <td><strong>{{ c.nome }}</strong></td>
-          <td style="color:#555;">{{ c.email }}</td>
-          <td style="color:#555;">{{ c.whatsapp or '—' }}</td>
+          <td><span class="email-cell" style="color:#555;" title="{{ c.email }}">{{ c.email }}</span></td>
+          <td><span class="wpp-cell" style="color:#555;">{{ c.whatsapp or '—' }}</span></td>
           <td>
             <span class="badge {% if c.status == 'ativo' %}badge-ativo{% elif c.status == 'cancelado' %}badge-cancelado{% else %}badge-pendente{% endif %}">
               {{ c.status }}
@@ -142,7 +145,7 @@
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               </a>
             {% else %}
-              <span style="color:#ccc;font-size:12px;">sem assinatura</span>
+              <span style="color:#ccc;font-size:11px;">—</span>
             {% endif %}
           </td>
           <td>
