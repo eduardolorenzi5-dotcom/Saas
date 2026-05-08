@@ -396,10 +396,13 @@ Se for EXCLUIR renda:
 
 Se for um LEMBRETE (extraia mensagem, hora no formato HH:MM, data se mencionada, e se é recorrente):
 {{"acao": "lembrete", "mensagem": "passear com os cachorros", "hora": "14:00", "data": "YYYY-MM-DD", "recorrente": false}}
-- Se for "todo dia" / "todos os dias" / "diariamente": recorrente=true, omita data
+- Se for "todo dia" / "todos os dias" / "diariamente": recorrente=true, omita data e dia_mes
+- Se for "todo dia X" / "todo mês no dia X" / "dia X de cada mês" (ex: "todo dia 10 pagar energia"): use dia_mes=X, recorrente=false, omita data
+  Exemplo: {{"acao": "lembrete", "mensagem": "pagar conta de energia", "hora": "09:00", "dia_mes": 10, "recorrente": false}}
 - Se for hoje ou sem data específica: use a data de hoje, recorrente=false
 - Se for amanhã: use data de amanhã, recorrente=false
 - Hora sempre no formato HH:MM (ex: 14:00, 09:30, 08:00)
+- Se o usuário não informar hora, use 09:00 como padrão
 
 Se for EXCLUIR lembrete (inclui "exclua esse lembrete", "cancela lembrete", "apagar lembrete", "excluir"):
 {{"acao": "deletar_lembrete", "descricao": "palavra-chave do lembrete ou vazio se não informado"}}
@@ -905,27 +908,39 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             USE_PG = bool(os.environ.get("DATABASE_URL"))
             import datetime as _datetime
             mensagem_lem = resultado.get("mensagem", "").strip()
-            hora_lem = resultado.get("hora", "").strip()
+            hora_lem = (resultado.get("hora") or "09:00").strip()
             data_lem = resultado.get("data")
             recorrente = resultado.get("recorrente", False)
+            dia_mes = resultado.get("dia_mes")  # int ou None — lembrete mensal
 
-            if not mensagem_lem or not hora_lem:
-                resposta = "Não entendi o lembrete. Tente: *me lembre de passear com os cachorros às 14h*"
+            if not mensagem_lem:
+                resposta = "Não entendi o lembrete. Tente: *me lembre de todo dia 10 pagar a conta de energia*"
             else:
                 # Garante hora no formato HH:MM
                 if len(hora_lem) == 4 and ":" not in hora_lem:
                     hora_lem = hora_lem[:2] + ":" + hora_lem[2:]
-                if not data_lem and not recorrente:
+                # Só define data pontual se não for recorrente diário nem mensal
+                if not data_lem and not recorrente and not dia_mes:
                     data_lem = hoje_brasil().isoformat()
                 conn_lem = get_db()
                 ph = "%s" if USE_PG else "?"
                 conn_lem.execute(
-                    f"INSERT INTO lembretes (cliente_id, mensagem, hora, data, recorrente) VALUES ({ph},{ph},{ph},{ph},{ph})",
-                    (cliente["id"], mensagem_lem, hora_lem, data_lem if not recorrente else None, recorrente)
+                    f"INSERT INTO lembretes (cliente_id, mensagem, hora, data, recorrente, dia_mes) VALUES ({ph},{ph},{ph},{ph},{ph},{ph})",
+                    (cliente["id"], mensagem_lem, hora_lem,
+                     data_lem if not recorrente and not dia_mes else None,
+                     recorrente, dia_mes)
                 )
                 conn_lem.commit()
                 conn_lem.close()
-                if recorrente:
+                if dia_mes:
+                    resposta = (
+                        f"⏰ Lembrete mensal criado!\n"
+                        f"Todo dia *{dia_mes}* às *{hora_lem}* vou te lembrar de:\n\n"
+                        f"_{mensagem_lem}_\n\n"
+                        f"Você só precisou cadastrar uma vez — eu lembro todo mês automaticamente! 🗓️\n"
+                        f"Para excluir, responda: *excluir lembrete*"
+                    )
+                elif recorrente:
                     resposta = f"⏰ Lembrete criado!\nTodo dia às *{hora_lem}* vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
                 else:
                     try:
@@ -1071,21 +1086,26 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             try:
                 if USE_PG:
                     lembretes_ativos = conn_lem.execute(
-                        "SELECT mensagem, hora, data, recorrente FROM lembretes WHERE cliente_id=%s AND ativo=TRUE ORDER BY hora",
+                        "SELECT mensagem, hora, data, recorrente, dia_mes FROM lembretes WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_mes NULLS LAST, hora",
                         (cliente["id"],)
                     ).fetchall()
                 else:
                     lembretes_ativos = conn_lem.execute(
-                        "SELECT mensagem, hora, data, recorrente FROM lembretes WHERE cliente_id=? AND ativo=1 ORDER BY hora",
+                        "SELECT mensagem, hora, data, recorrente, dia_mes FROM lembretes WHERE cliente_id=? AND ativo=1 ORDER BY dia_mes, hora",
                         (cliente["id"],)
                     ).fetchall()
                 conn_lem.close()
                 if not lembretes_ativos:
-                    resposta = "Você não tem lembretes ativos no momento.\n\nPara criar um, diga: *me lembre de ir ao médico amanhã às 14h*"
+                    resposta = "Você não tem lembretes ativos no momento.\n\nPara criar um, diga: *me lembre de todo dia 10 pagar a conta de energia*"
                 else:
                     linhas = [f"⏰ *Seus lembretes ativos ({len(lembretes_ativos)}):*", ""]
                     for l in lembretes_ativos:
-                        tipo = "🔁 Todo dia" if l["recorrente"] else f"📅 {l['data'] or 'hoje'}"
+                        if l["dia_mes"]:
+                            tipo = f"🗓️ Todo dia {l['dia_mes']} do mês"
+                        elif l["recorrente"]:
+                            tipo = "🔁 Todo dia"
+                        else:
+                            tipo = f"📅 {l['data'] or 'hoje'}"
                         linhas.append(f"• _{l['mensagem']}_ — {tipo} às *{l['hora']}*")
                     linhas.append("\nPara excluir, diga: *excluir lembrete do [nome]*")
                     resposta = "\n".join(linhas)

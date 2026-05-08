@@ -181,6 +181,8 @@ def init_db():
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
                     "renda_mensal REAL", "mp_subscription_id TEXT"]:
             conn.execute(f"ALTER TABLE clientes ADD COLUMN IF NOT EXISTS {col}")
+        # Migration: dia_mes para lembretes mensais recorrentes
+        conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS dia_mes INTEGER")
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
@@ -189,6 +191,10 @@ def init_db():
                 conn.execute(f"ALTER TABLE clientes ADD COLUMN {col}")
             except Exception:
                 pass
+        try:
+            conn.execute("ALTER TABLE lembretes ADD COLUMN dia_mes INTEGER")
+        except Exception:
+            pass
     conn.commit()
 
     # Migração: popula categorias padrão para clientes que ainda não têm nenhuma
@@ -1690,22 +1696,32 @@ def _verificar_lembretes():
             with app.app_context():
                 conn = get_db()
                 ph = "%s" if USE_PG else "?"
+                dia_mes_atual = int(agora.strftime("%d"))
                 lembretes = conn.execute(f"""
-                    SELECT l.id, l.mensagem, l.hora, l.recorrente,
+                    SELECT l.id, l.mensagem, l.hora, l.recorrente, l.dia_mes,
                            c.whatsapp, c.nome
                     FROM lembretes l
                     JOIN clientes c ON l.cliente_id = c.id
                     WHERE l.ativo = {'true' if USE_PG else '1'}
                       AND l.hora = {ph}
-                      AND (l.data = {ph} OR l.recorrente = {'true' if USE_PG else '1'})
+                      AND (
+                          l.data = {ph}
+                          OR l.recorrente = {'true' if USE_PG else '1'}
+                          OR l.dia_mes = {ph}
+                      )
                       AND c.status = 'ativo'
-                """, (hora_atual, data_atual)).fetchall()
+                """, (hora_atual, data_atual, dia_mes_atual)).fetchall()
                 for lem in lembretes:
                     try:
                         from agente.agente import enviar_whatsapp
+                        if lem["dia_mes"]:
+                            msg_extra = f"\n\n_Lembrete mensal — todo dia {lem['dia_mes']}_\nPara excluir: *excluir lembrete*"
+                        else:
+                            msg_extra = "\n\nPara excluir este lembrete, responda: *excluir lembrete*"
                         enviar_whatsapp(lem["whatsapp"],
-                            f"⏰ *Lembrete:* {lem['mensagem']}\n\nPara excluir este lembrete, responda: *excluir lembrete*")
-                        if not lem["recorrente"]:
+                            f"⏰ *Lembrete:* {lem['mensagem']}{msg_extra}")
+                        # Desativa apenas lembretes pontuais (sem recorrência)
+                        if not lem["recorrente"] and not lem["dia_mes"]:
                             conn.execute(f"UPDATE lembretes SET ativo = {'false' if USE_PG else '0'} WHERE id = {ph}", (lem["id"],))
                             conn.commit()
                         logging.info(f"[LEMBRETE] Enviado para {lem['whatsapp']}: {lem['mensagem']}")
