@@ -906,7 +906,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     resposta = "Não consegui criar o evento na agenda. Tente novamente."
 
         elif acao == "lembrete":
-            from db import get_db, USE_PG
+            USE_PG = bool(os.environ.get("DATABASE_URL"))
             import datetime as _datetime
             mensagem_lem = resultado.get("mensagem", "").strip()
             hora_lem = resultado.get("hora", "").strip()
@@ -939,7 +939,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     resposta = f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
 
         elif acao == "deletar_renda":
-            from db import get_db, USE_PG
+            USE_PG = bool(os.environ.get("DATABASE_URL"))
             tipo_del = resultado.get("tipo", "todos").strip()
             descricao_del = resultado.get("descricao", "").strip()
             mes_atual = hoje_brasil().strftime("%Y-%m")
@@ -1015,7 +1015,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 except: pass
 
         elif acao == "deletar_lembrete":
-            from db import get_db, USE_PG
+            USE_PG = bool(os.environ.get("DATABASE_URL"))
             descricao_busca = resultado.get("descricao", "").strip()
             conn_lem = get_db()
             ph = "%s" if USE_PG else "?"
@@ -1070,7 +1070,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 conn_lem.close()
 
         elif acao == "listar_lembretes":
-            from db import get_db, USE_PG
+            USE_PG = bool(os.environ.get("DATABASE_URL"))
             conn_lem = get_db()
             try:
                 if USE_PG:
