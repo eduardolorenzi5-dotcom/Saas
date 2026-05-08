@@ -559,11 +559,18 @@ def admin_cancelar(cliente_id):
 @admin_required
 def admin_deletar(cliente_id):
     conn = get_db()
-    conn.execute("DELETE FROM gastos WHERE cliente_id=%s", (cliente_id,))
-    conn.execute("DELETE FROM pagamentos WHERE cliente_id=%s", (cliente_id,))
+    cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    # Remove todas as tabelas filhas antes de deletar o cliente
+    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas"):
+        try:
+            conn.execute(f"DELETE FROM {tabela} WHERE cliente_id=%s", (cliente_id,))
+        except Exception as e:
+            logging.warning(f"[DELETAR] tabela {tabela}: {e}")
     conn.execute("DELETE FROM clientes WHERE id=%s", (cliente_id,))
     conn.commit()
     conn.close()
+    if cliente and cliente["mp_subscription_id"]:
+        cancelar_assinatura_mp(cliente["mp_subscription_id"])
     return redirect(url_for("admin_painel"))
 
 @app.route("/admin/criar-conta", methods=["POST"])
