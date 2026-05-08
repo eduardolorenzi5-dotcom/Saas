@@ -803,13 +803,21 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             total_renda = sum(float(r["valor"]) for r in rendas_rows)
             renda_fixa = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "fixo")
             renda_extra = sum(float(r["valor"]) for r in rendas_rows if r["tipo"] == "extra")
-            renda_ref = total_renda if total_renda > 0 else renda_estatica
+            # Se há renda extra na tabela mas a fixa ainda está só no campo legado,
+            # soma os dois para não ignorar a renda fixa estática
+            if renda_estatica and renda_fixa == 0 and renda_extra > 0:
+                renda_ref = renda_estatica + renda_extra
+                renda_fixa = renda_estatica   # exibe como fixa no resumo
+            elif total_renda > 0:
+                renda_ref = total_renda
+            else:
+                renda_ref = renda_estatica
             linhas = [f"📊 *Resumo de {mes_ano_pt()}*", ""]
             if renda_ref:
                 saldo = renda_ref - total
                 pct = (total / renda_ref * 100) if renda_ref else 0
-                if total_renda > 0:
-                    linhas.append(f"💵 *Receitas do mês: R$ {total_renda:.2f}*")
+                if renda_ref > 0 and (total_renda > 0 or renda_estatica):
+                    linhas.append(f"💵 *Receitas do mês: R$ {renda_ref:.2f}*")
                     if renda_fixa > 0:
                         linhas.append(f"  💼 Fixa: R$ {renda_fixa:.2f}")
                     if renda_extra > 0:
