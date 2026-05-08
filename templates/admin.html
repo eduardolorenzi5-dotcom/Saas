@@ -179,21 +179,21 @@
             <div class="acoes-wrap">
               {% if c.status != 'ativo' %}
               <form method="POST" action="/admin/ativar/{{ c.id }}">
-                <button class="action-btn btn-ativar">✓ Liberar</button>
+                <button class="action-btn btn-ativar" title="Liberar acesso">✓</button>
               </form>
               {% else %}
               <form method="POST" action="/admin/cancelar/{{ c.id }}"
                     onsubmit="return confirm('Cancelar assinatura de {{ c.nome }}?');">
-                <button class="action-btn btn-cancelar">✕ Cancelar</button>
+                <button class="action-btn btn-cancelar" title="Cancelar assinatura">✕</button>
               </form>
               {% endif %}
               <form method="POST" action="/admin/relatorio/{{ c.id }}"
                     onsubmit="return confirm('Enviar relatório PDF para {{ c.nome }} via WhatsApp?');">
-                <button class="action-btn" style="background:#e0e7ff;color:#3730a3;">📊 PDF</button>
+                <button class="action-btn" style="background:#e0e7ff;color:#3730a3;" title="Enviar PDF por WhatsApp">📊</button>
               </form>
               <form method="POST" action="/admin/deletar/{{ c.id }}"
                     onsubmit="return confirm('Deletar {{ c.nome }}? Todos os dados serão removidos.');">
-                <button class="action-btn btn-deletar">🗑</button>
+                <button class="action-btn btn-deletar" title="Deletar cliente">🗑</button>
               </form>
             </div>
           </td>
