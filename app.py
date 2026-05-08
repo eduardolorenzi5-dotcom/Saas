@@ -179,12 +179,12 @@ def init_db():
     if USE_PG:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
-                    "renda_mensal REAL"]:
+                    "renda_mensal REAL", "mp_subscription_id TEXT"]:
             conn.execute(f"ALTER TABLE clientes ADD COLUMN IF NOT EXISTS {col}")
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
-                    "renda_mensal REAL"]:
+                    "renda_mensal REAL", "mp_subscription_id TEXT"]:
             try:
                 conn.execute(f"ALTER TABLE clientes ADD COLUMN {col}")
             except Exception:
@@ -547,9 +547,12 @@ def admin_relatorio(cliente_id):
 @admin_required
 def admin_cancelar(cliente_id):
     conn = get_db()
+    cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cliente_id,))
     conn.commit()
     conn.close()
+    if cliente and cliente["mp_subscription_id"]:
+        cancelar_assinatura_mp(cliente["mp_subscription_id"])
     return redirect(url_for("admin_painel"))
 
 @app.route("/admin/deletar/<int:cliente_id>", methods=["POST"])
@@ -783,6 +786,22 @@ def pagamento(cliente_id):
     conn.close()
     return render_template("pagamento.html", cliente=cliente)
 
+def cancelar_assinatura_mp(subscription_id):
+    """Cancela a assinatura recorrente no Mercado Pago."""
+    import requests as _req
+    mp_token = os.environ.get("MP_ACCESS_TOKEN", "")
+    if not mp_token or not subscription_id:
+        return
+    try:
+        _req.put(
+            f"https://api.mercadopago.com/preapproval/{subscription_id}",
+            headers={"Authorization": f"Bearer {mp_token}", "Content-Type": "application/json"},
+            json={"status": "cancelled"}, timeout=10
+        )
+        logging.warning(f"[MP] Assinatura {subscription_id} cancelada no Mercado Pago")
+    except Exception as e:
+        logging.error(f"[MP] Erro ao cancelar assinatura {subscription_id}: {e}")
+
 @app.route("/pagamento/checkout/<int:cliente_id>", methods=["POST"])
 def checkout_mercadopago(cliente_id):
     import requests as _req
@@ -803,32 +822,36 @@ def checkout_mercadopago(cliente_id):
 
     base_url = os.environ.get("BASE_URL", "https://saas-production-2a7a.up.railway.app")
     payload = {
-        "items": [{
-            "title": f"Controla Fácil — Plano {cliente['plano_nome']}",
-            "quantity": 1,
+        "reason": f"Controla Fácil — Plano {cliente['plano_nome']}",
+        "auto_recurring": {
+            "frequency": 1,
+            "frequency_type": "months",
+            "transaction_amount": float(cliente["preco"]),
             "currency_id": "BRL",
-            "unit_price": float(cliente["preco"]),
-        }],
-        "payer": {"email": cliente["email"]},
-        "back_urls": {
-            "success": f"{base_url}/pagamento/sucesso/{cliente_id}",
-            "failure": f"{base_url}/pagamento/{cliente_id}",
-            "pending": f"{base_url}/pagamento/sucesso/{cliente_id}",
         },
-        "auto_return": "approved",
-        "notification_url": f"{base_url}/webhook/mercadopago",
+        "payer_email": cliente["email"],
+        "back_url": f"{base_url}/pagamento/sucesso/{cliente_id}",
         "external_reference": str(cliente_id),
+        "notification_url": f"{base_url}/webhook/mercadopago",
+        "status": "pending",
     }
     resp = _req.post(
-        "https://api.mercadopago.com/checkout/preferences",
+        "https://api.mercadopago.com/preapproval",
         headers={"Authorization": f"Bearer {mp_token}", "Content-Type": "application/json"},
         json=payload, timeout=15
     )
-    if resp.status_code != 201:
-        logging.error(f"MP erro: {resp.text}")
+    if resp.status_code not in (200, 201):
+        logging.error(f"MP preapproval erro: {resp.text}")
         return render_template("pagamento.html", cliente=cliente,
-            erro="Erro ao criar pagamento. Tente novamente.")
-    init_point = resp.json().get("init_point")
+            erro="Erro ao criar assinatura. Tente novamente.")
+    data = resp.json()
+    init_point = data.get("init_point")
+    subscription_id = data.get("id")
+    # Salva subscription_id para controle futuro
+    conn = get_db()
+    conn.execute("UPDATE clientes SET mp_subscription_id=%s WHERE id=%s", (subscription_id, cliente_id))
+    conn.commit()
+    conn.close()
     return redirect(init_point)
 
 def _get_cliente_plano(cliente_id):
@@ -864,7 +887,76 @@ def webhook_mercadopago():
     try:
         data = request.json or {}
         logging.warning(f"MP WEBHOOK: {data}")
-        if data.get("type") == "payment":
+        event_type = data.get("type", "")
+
+        # ── Assinatura criada / status alterado ──────────────────────────────
+        if event_type == "subscription_preapproval":
+            sub_id = data.get("data", {}).get("id")
+            if sub_id:
+                resp = _req.get(
+                    f"https://api.mercadopago.com/preapproval/{sub_id}",
+                    headers={"Authorization": f"Bearer {mp_token}"}, timeout=10
+                )
+                sub = resp.json()
+                status_sub = sub.get("status")          # authorized | paused | cancelled
+                ext_ref = sub.get("external_reference", "0")
+                cliente_id = int(ext_ref) if ext_ref and str(ext_ref).isdigit() else 0
+                logging.warning(f"[MP SUB] id={sub_id} status={status_sub} cliente_id={cliente_id}")
+                if cliente_id:
+                    conn = get_db()
+                    cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+                    if cliente:
+                        if status_sub == "authorized":
+                            # Salva subscription_id e ativa conta se ainda não estava ativa
+                            conn.execute(
+                                "UPDATE clientes SET mp_subscription_id=%s WHERE id=%s",
+                                (sub_id, cliente_id)
+                            )
+                            if cliente["status"] != "ativo":
+                                conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
+                                conn.commit()
+                                try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+                                except Exception as e: logging.error(f"[EMAIL] boas-vindas: {e}")
+                                try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+                                except Exception as e: logging.error(f"[WPP] boas-vindas: {e}")
+                            else:
+                                conn.commit()
+                        elif status_sub in ("paused", "cancelled"):
+                            conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cliente_id,))
+                            conn.commit()
+                            logging.warning(f"[MP SUB] Cliente {cliente_id} desativado (assinatura {status_sub})")
+                    conn.close()
+
+        # ── Pagamento recorrente aprovado ────────────────────────────────────
+        elif event_type == "subscription_authorized_payment":
+            pag_id = data.get("data", {}).get("id")
+            if pag_id:
+                resp = _req.get(
+                    f"https://api.mercadopago.com/authorized_payments/{pag_id}",
+                    headers={"Authorization": f"Bearer {mp_token}"}, timeout=10
+                )
+                pag = resp.json()
+                sub_id = pag.get("preapproval_id")
+                status_pag = pag.get("status")
+                logging.warning(f"[MP PAG REC] id={pag_id} sub={sub_id} status={status_pag}")
+                if sub_id and status_pag == "authorized":
+                    conn = get_db()
+                    cliente = conn.execute(
+                        "SELECT * FROM clientes WHERE mp_subscription_id=%s", (sub_id,)
+                    ).fetchone()
+                    if cliente:
+                        conn.execute(
+                            "INSERT INTO pagamentos (cliente_id, valor, status, referencia) VALUES (%s, %s, %s, %s)",
+                            (cliente["id"], pag.get("transaction_amount", 0), "aprovado", str(pag_id))
+                        )
+                        # Reativa caso estivesse suspenso
+                        if cliente["status"] != "ativo":
+                            conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente["id"],))
+                        conn.commit()
+                    conn.close()
+
+        # ── Pagamento avulso (compatibilidade retroativa) ────────────────────
+        elif event_type == "payment":
             payment_id = data.get("data", {}).get("id")
             if payment_id:
                 resp = _req.get(
@@ -884,15 +976,12 @@ def webhook_mercadopago():
                                 (cliente_id, payment.get("transaction_amount", 0), "aprovado", str(payment_id))
                             )
                             conn.commit()
-                            try:
-                                enviar_email_boas_vindas(cliente["email"], cliente["nome"])
-                            except Exception as e:
-                                logging.error(f"[EMAIL] Boas-vindas pós-pagamento: {e}")
-                            try:
-                                enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
-                            except Exception as e:
-                                logging.error(f"[WPP] Boas-vindas pós-pagamento: {e}")
+                            try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+                            except Exception as e: logging.error(f"[EMAIL] boas-vindas: {e}")
+                            try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+                            except Exception as e: logging.error(f"[WPP] boas-vindas: {e}")
                         conn.close()
+
     except Exception as e:
         logging.error(f"Erro webhook MP: {e}")
     return jsonify({"ok": True}), 200
@@ -1104,9 +1193,12 @@ def assinatura():
 def cancelar_assinatura():
     cid = session["cliente_id"]
     conn = get_db()
+    cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cid,)).fetchone()
     conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cid,))
     conn.commit()
     conn.close()
+    if cliente and cliente["mp_subscription_id"]:
+        cancelar_assinatura_mp(cliente["mp_subscription_id"])
     session.clear()
     return redirect(url_for("index") + "?cancelado=1")
 
