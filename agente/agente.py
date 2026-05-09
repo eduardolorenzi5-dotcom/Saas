@@ -962,7 +962,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     # Tem palavra-chave
                     if USE_PG:
                         rows = conn_r.execute(
-                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=%s AND data LIKE %s AND mensagem ILIKE %s",
+                            "SELECT id, descricao, valor FROM rendas WHERE cliente_id=%s AND data LIKE %s AND descricao ILIKE %s",
                             (cliente["id"], f"{mes_atual}%", f"%{descricao_del}%")
                         ).fetchall()
                         if not rows:
