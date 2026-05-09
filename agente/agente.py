@@ -330,7 +330,8 @@ Ao receber uma mensagem, identifique se é:
 1. Um REGISTRO de gasto — extraia: descricao, valor (número), categoria, data
 2. Uma EXCLUSÃO do último gasto — ex: "apaga o último", "cancela o último gasto"
 3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
-4. Uma EXCLUSÃO de todos os gastos — ex: "apaga tudo", "zera meus gastos", "limpa o histórico", "apaga todos os gastos do mês"
+4. Uma EXCLUSÃO de todos os gastos — ex: "apaga todos os gastos", "zera meus gastos", "limpa o histórico", "apaga todos os gastos do mês"
+4b. Uma LIMPEZA TOTAL (gastos + rendas + saldo) — ex: "apaga tudo", "zera tudo", "limpa tudo", "quero começar do zero", "apaga todas as informações", "reinicia minha conta"
 4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês", "quanto ganhei?", "qual meu saldo?", "como estou esse mês?", "quanto tenho de saldo?", "quanto entrou esse mês?", "qual minha renda esse mês?"
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
@@ -359,6 +360,9 @@ Se for exclusão do último gasto:
 Se for exclusão de todos os gastos (mês atual ou histórico completo):
 {{"acao": "deletar_tudo", "mes": "YYYY-MM"}}
 (use "mes" com o mês atual se disser "deste mês", omita "mes" se quiser apagar tudo)
+
+Se for limpeza total (apagar tudo: gastos + rendas + saldo zerado):
+{{"acao": "zerar_tudo"}}
 
 Se for exclusão por descrição (extraia a descrição e opcionalmente o valor):
 {{"acao": "deletar", "descricao": "...", "valor": 0.00}}
@@ -735,6 +739,25 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 resposta = f"🗑️ Todos os gastos de {mes_ano_pt(date.fromisoformat(mes + '-01'))} foram apagados."
             else:
                 resposta = "🗑️ Todo o histórico de gastos foi apagado."
+
+        elif acao == "zerar_tudo":
+            USE_PG = bool(os.environ.get("DATABASE_URL"))
+            conn_z = get_db()
+            try:
+                # Apaga todos os gastos
+                conn_z.execute("DELETE FROM gastos WHERE cliente_id=%s", (cliente["id"],))
+                # Apaga todas as rendas
+                conn_z.execute("DELETE FROM rendas WHERE cliente_id=%s", (cliente["id"],))
+                # Zera renda_mensal estática
+                conn_z.execute("UPDATE clientes SET renda_mensal=NULL WHERE id=%s", (cliente["id"],))
+                conn_z.commit()
+                resposta = "✅ Tudo zerado! Gastos, rendas e saldo foram apagados.\n\nVocê está começando do zero. 🚀"
+            except Exception as e_z:
+                import logging; logging.error(f"Erro zerar_tudo: {e_z}")
+                resposta = "Não consegui apagar tudo. Tente novamente."
+            finally:
+                try: conn_z.close()
+                except: pass
 
         elif acao == "deletar_ultimo":
             gasto = deletar_ultimo_gasto(cliente["id"])
