@@ -823,12 +823,6 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 saldo = renda_ref - total
                 pct = (total / renda_ref * 100) if renda_ref else 0
                 linhas.append(f"💵 *Receitas do mês: R$ {renda_ref:.2f}*")
-                if rendas_rows:
-                    for r in rendas_rows:
-                        emoji = "💼" if r["tipo"] == "fixo" else "⚡"
-                        linhas.append(f"  {emoji} {r['descricao']}: R$ {float(r['valor']):.2f}")
-                elif renda_estatica:
-                    linhas.append(f"  💼 Renda fixa: R$ {renda_estatica:.2f}")
                 linhas.append(f"💸 Gasto: R$ {total:.2f} ({pct:.1f}%)")
                 linhas.append(f"{'✅' if saldo >= 0 else '⚠️'} Saldo: R$ {saldo:.2f}")
             else:
