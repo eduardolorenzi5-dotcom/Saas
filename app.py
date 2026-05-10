@@ -1068,6 +1068,48 @@ def webhook_mercadopago():
         logging.error(f"Erro webhook MP: {e}")
     return jsonify({"ok": True}), 200
 
+def _meta_purchase_event(email, fone, nome, valor):
+    """Envia evento Purchase para a Meta Conversions API (server-side)."""
+    import hashlib, time, requests as _req
+    pixel_id     = os.environ.get("META_PIXEL_ID", "")
+    access_token = os.environ.get("META_ACCESS_TOKEN", "")
+    if not pixel_id or not access_token:
+        logging.warning("[META CAPI] META_PIXEL_ID ou META_ACCESS_TOKEN não configurado — evento ignorado")
+        return
+
+    def _hash(v):
+        return hashlib.sha256(v.strip().lower().encode()).hexdigest() if v else None
+
+    user_data = {}
+    if email: user_data["em"] = [_hash(email)]
+    if fone:
+        digits = "".join(c for c in fone if c.isdigit())
+        user_data["ph"] = [_hash(digits)]
+    if nome:
+        partes = nome.strip().split()
+        user_data["fn"] = [_hash(partes[0])]
+        if len(partes) > 1:
+            user_data["ln"] = [_hash(" ".join(partes[1:]))]
+
+    payload = {
+        "data": [{
+            "event_name": "Purchase",
+            "event_time": int(time.time()),
+            "action_source": "website",
+            "user_data": user_data,
+            "custom_data": {
+                "value": valor,
+                "currency": "BRL",
+                "content_name": "Controla Fácil",
+                "content_type": "product"
+            }
+        }]
+    }
+    url = f"https://graph.facebook.com/v19.0/{pixel_id}/events"
+    resp = _req.post(url, params={"access_token": access_token}, json=payload, timeout=10)
+    logging.warning(f"[META CAPI] status={resp.status_code} body={resp.text[:300]}")
+    resp.raise_for_status()
+
 @app.route("/webhook/kiwify", methods=["POST"])
 def webhook_kiwify():
     import hmac, hashlib
@@ -1101,6 +1143,8 @@ def webhook_kiwify():
 
         if evento in ("order_approved", "order.approved"):
             # Pagamento aprovado — ativa conta
+            valor_pago = float(data.get("Product", {}).get("price") or
+                               data.get("order", {}).get("amount") or 9.90)
             if cliente:
                 ja_ativo = cliente["status"] == "ativo"
                 conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente["id"],))
@@ -1113,6 +1157,11 @@ def webhook_kiwify():
                 logging.warning(f"[KIWIFY] Cliente {email} ATIVADO")
             else:
                 logging.warning(f"[KIWIFY] Cliente não encontrado para email={email}")
+            # Dispara evento Purchase na Meta Conversions API (server-side)
+            try:
+                _meta_purchase_event(email, fone, nome, valor_pago)
+            except Exception as e:
+                logging.error(f"[META CAPI] Erro ao enviar Purchase: {e}")
 
         elif evento in ("subscription_canceled", "subscription.canceled"):
             # Assinatura cancelada — desativa conta
