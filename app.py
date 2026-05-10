@@ -229,7 +229,11 @@ def init_db():
     # Remove planos antigos que não têm clientes vinculados e garante só o Controla Fácil
     descricao_plano = "Controle de gastos via WhatsApp com IA + dashboard + relatórios"
     if USE_PG:
-        conn.execute("DELETE FROM planos WHERE nome != 'Controla Fácil' AND id NOT IN (SELECT DISTINCT plano_id FROM clientes WHERE plano_id IS NOT NULL)")
+        # Migra clientes de planos antigos para o Controla Fácil e remove planos antigos
+        plano_cf = conn.execute("SELECT id FROM planos WHERE nome = %s", ("Controla Fácil",)).fetchone()
+        if plano_cf:
+            conn.execute("UPDATE clientes SET plano_id=%s WHERE plano_id != %s", (plano_cf["id"], plano_cf["id"]))
+        conn.execute("DELETE FROM planos WHERE nome != 'Controla Fácil'")
         row = conn.execute("SELECT id FROM planos WHERE nome = %s", ("Controla Fácil",)).fetchone()
         if row:
             conn.execute("UPDATE planos SET preco=%s, descricao=%s WHERE nome=%s",
@@ -238,7 +242,7 @@ def init_db():
             conn.execute("INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)",
                          ("Controla Fácil", 9.90, descricao_plano))
     else:
-        conn.execute("DELETE FROM planos WHERE nome != 'Controla Fácil' AND id NOT IN (SELECT DISTINCT plano_id FROM clientes WHERE plano_id IS NOT NULL)")
+        conn.execute("DELETE FROM planos WHERE nome != 'Controla Fácil'")
         row = conn.execute("SELECT id FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchone()
         if row:
             conn.execute("UPDATE planos SET preco=?, descricao=? WHERE nome=?",
