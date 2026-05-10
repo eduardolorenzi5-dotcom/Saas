@@ -42,11 +42,12 @@
     {% if erro %}
     <div class="erro" style="margin-bottom:16px;">{{ erro }}</div>
     {% endif %}
-    <form method="POST" action="/pagamento/checkout/{{ cliente.id }}" onsubmit="trackCheckout()">
-      <button type="submit" class="btn-primary btn-block" style="background:#009EE3;font-size:16px;padding:14px;">
-        💳 Pagar com Mercado Pago
-      </button>
-    </form>
+    <a href="{{ kiwify_url }}?email={{ cliente.email }}&name={{ cliente.nome }}"
+       onclick="trackCheckout()"
+       class="btn-primary btn-block"
+       style="background:#7c3aed;font-size:16px;padding:14px;display:block;text-align:center;text-decoration:none;border-radius:10px;color:#fff;font-weight:700;">
+      💳 Pagar com cartão
+    </a>
     {% if META_PIXEL_ID %}
     <script>
     function trackCheckout() {

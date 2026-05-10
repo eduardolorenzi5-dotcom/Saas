@@ -832,7 +832,8 @@ def pagamento(cliente_id):
         (cliente_id,)
     ).fetchone()
     conn.close()
-    return render_template("pagamento.html", cliente=cliente)
+    kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://kiwify.app/QpmORrt")
+    return render_template("pagamento.html", cliente=cliente, kiwify_url=kiwify_url)
 
 def cancelar_assinatura_mp(subscription_id):
     """Cancela a assinatura recorrente no Mercado Pago."""
@@ -1035,6 +1036,66 @@ def webhook_mercadopago():
 
     except Exception as e:
         logging.error(f"Erro webhook MP: {e}")
+    return jsonify({"ok": True}), 200
+
+@app.route("/webhook/kiwify", methods=["POST"])
+def webhook_kiwify():
+    import hmac, hashlib
+    try:
+        # Valida token
+        token_esperado = os.environ.get("KIWIFY_WEBHOOK_TOKEN", "2dv1ph7yejc")
+        token_recebido = request.args.get("token", "")
+        if token_recebido != token_esperado:
+            logging.warning(f"[KIWIFY] Token inválido: {token_recebido!r}")
+            return jsonify({"ok": False}), 401
+
+        data = request.get_json(force=True, silent=True) or {}
+        evento = data.get("webhook_event_type", "")
+        logging.warning(f"[KIWIFY] evento={evento} data={str(data)[:300]}")
+
+        customer = data.get("Customer", {})
+        email = (customer.get("email") or "").strip().lower()
+        nome = customer.get("full_name") or customer.get("name") or ""
+        fone = customer.get("mobile") or customer.get("phone") or ""
+
+        if not email:
+            return jsonify({"ok": True}), 200
+
+        conn = get_db()
+        cliente = conn.execute("SELECT * FROM clientes WHERE LOWER(email)=%s", (email,)).fetchone()
+
+        if evento in ("order_approved", "order.approved"):
+            # Pagamento aprovado — ativa conta
+            if cliente:
+                ja_ativo = cliente["status"] == "ativo"
+                conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente["id"],))
+                conn.commit()
+                if not ja_ativo:
+                    try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+                    except Exception as e: logging.error(f"[KIWIFY] email boas-vindas: {e}")
+                    try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+                    except Exception as e: logging.error(f"[KIWIFY] wpp boas-vindas: {e}")
+                logging.warning(f"[KIWIFY] Cliente {email} ATIVADO")
+            else:
+                logging.warning(f"[KIWIFY] Cliente não encontrado para email={email}")
+
+        elif evento in ("subscription_canceled", "subscription.canceled"):
+            # Assinatura cancelada — desativa conta
+            if cliente:
+                conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cliente["id"],))
+                conn.commit()
+                logging.warning(f"[KIWIFY] Cliente {email} CANCELADO")
+
+        elif evento in ("subscription_renewed", "subscription.renewed"):
+            # Renovação — mantém ativo
+            if cliente:
+                conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente["id"],))
+                conn.commit()
+                logging.warning(f"[KIWIFY] Cliente {email} RENOVADO")
+
+        conn.close()
+    except Exception as e:
+        logging.error(f"[KIWIFY] Erro webhook: {e}")
     return jsonify({"ok": True}), 200
 
 @app.route("/pagamento/confirmar/<int:cliente_id>", methods=["POST"])
