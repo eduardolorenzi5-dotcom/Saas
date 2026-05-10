@@ -781,10 +781,10 @@ def cadastro():
                 if wpp_existente:
                     break
             if wpp_existente:
-                if wpp_existente["status"] == "pendente":
-                    # Conta pendente: atualiza dados e manda para pagamento
+                if wpp_existente["status"] != "ativo":
+                    # Conta não ativa (pendente/cancelado): atualiza dados e manda para pagamento
                     conn.execute(
-                        "UPDATE clientes SET nome=%s, email=%s, senha_hash=%s, plano_id=%s, token_acesso=%s WHERE id=%s",
+                        "UPDATE clientes SET nome=%s, email=%s, senha_hash=%s, plano_id=%s, token_acesso=%s, status='pendente' WHERE id=%s",
                         (nome, email, hash_senha(senha), plano_id, token, wpp_existente["id"])
                     )
                     conn.commit()
@@ -793,12 +793,12 @@ def cadastro():
                 conn.close()
                 return render_template("cadastro.html", erro="Esse WhatsApp já está cadastrado. Se é seu, use a recuperação de senha para acessar sua conta.")
 
-            # Verifica e-mail existente pendente
+            # Verifica e-mail existente
             email_existente = conn.execute("SELECT id, status FROM clientes WHERE email=%s", (email,)).fetchone()
             if email_existente:
-                if email_existente["status"] == "pendente":
+                if email_existente["status"] != "ativo":
                     conn.execute(
-                        "UPDATE clientes SET nome=%s, senha_hash=%s, whatsapp=%s, plano_id=%s, token_acesso=%s WHERE id=%s",
+                        "UPDATE clientes SET nome=%s, senha_hash=%s, whatsapp=%s, plano_id=%s, token_acesso=%s, status='pendente' WHERE id=%s",
                         (nome, hash_senha(senha), whatsapp, plano_id, token, email_existente["id"])
                     )
                     conn.commit()
