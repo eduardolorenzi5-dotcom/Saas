@@ -232,18 +232,18 @@ def init_db():
         row = conn.execute("SELECT id FROM planos WHERE nome = %s", ("Controla Fácil",)).fetchone()
         if row:
             conn.execute("UPDATE planos SET preco=%s, descricao=%s WHERE nome=%s",
-                         (14.90, descricao_plano, "Controla Fácil"))
+                         (9.90, descricao_plano, "Controla Fácil"))
         else:
             conn.execute("INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)",
-                         ("Controla Fácil", 14.90, descricao_plano))
+                         ("Controla Fácil", 9.90, descricao_plano))
     else:
         row = conn.execute("SELECT id FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchone()
         if row:
             conn.execute("UPDATE planos SET preco=?, descricao=? WHERE nome=?",
-                         (14.90, descricao_plano, "Controla Fácil"))
+                         (9.90, descricao_plano, "Controla Fácil"))
         else:
             conn.execute("INSERT INTO planos (nome, preco, descricao) VALUES (?, ?, ?)",
-                         ("Controla Fácil", 14.90, descricao_plano))
+                         ("Controla Fácil", 9.90, descricao_plano))
     conn.commit()
     conn.close()
 
