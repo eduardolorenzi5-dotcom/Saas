@@ -777,12 +777,36 @@ def cadastro():
                 wpp_variantes.append(whatsapp[:4] + whatsapp[5:])
             wpp_existente = None
             for v in wpp_variantes:
-                wpp_existente = conn.execute("SELECT id FROM clientes WHERE whatsapp=%s", (v,)).fetchone()
+                wpp_existente = conn.execute("SELECT id, status FROM clientes WHERE whatsapp=%s", (v,)).fetchone()
                 if wpp_existente:
                     break
             if wpp_existente:
+                if wpp_existente["status"] == "pendente":
+                    # Conta pendente: atualiza dados e manda para pagamento
+                    conn.execute(
+                        "UPDATE clientes SET nome=%s, email=%s, senha_hash=%s, plano_id=%s, token_acesso=%s WHERE id=%s",
+                        (nome, email, hash_senha(senha), plano_id, token, wpp_existente["id"])
+                    )
+                    conn.commit()
+                    conn.close()
+                    return redirect(url_for("pagamento", cliente_id=wpp_existente["id"]))
                 conn.close()
                 return render_template("cadastro.html", erro="Esse WhatsApp já está cadastrado. Se é seu, use a recuperação de senha para acessar sua conta.")
+
+            # Verifica e-mail existente pendente
+            email_existente = conn.execute("SELECT id, status FROM clientes WHERE email=%s", (email,)).fetchone()
+            if email_existente:
+                if email_existente["status"] == "pendente":
+                    conn.execute(
+                        "UPDATE clientes SET nome=%s, senha_hash=%s, whatsapp=%s, plano_id=%s, token_acesso=%s WHERE id=%s",
+                        (nome, hash_senha(senha), whatsapp, plano_id, token, email_existente["id"])
+                    )
+                    conn.commit()
+                    conn.close()
+                    return redirect(url_for("pagamento", cliente_id=email_existente["id"]))
+                conn.close()
+                return render_template("cadastro.html", erro="E-mail já cadastrado.")
+
             conn.execute(
                 "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso) VALUES (%s, %s, %s, %s, %s, %s)",
                 (nome, email, hash_senha(senha), whatsapp, plano_id, token)
@@ -793,7 +817,7 @@ def cadastro():
             return redirect(url_for("pagamento", cliente_id=cliente_id))
         except Exception as e:
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                return render_template("cadastro.html", erro="E-mail ja cadastrado.")
+                return render_template("cadastro.html", erro="E-mail já cadastrado.")
             raise
     conn = get_db()
     planos = conn.execute("SELECT * FROM planos WHERE nome = %s" if USE_PG else "SELECT * FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchall()
