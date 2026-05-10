@@ -42,7 +42,7 @@
     {% if erro %}
     <div class="erro" style="margin-bottom:16px;">{{ erro }}</div>
     {% endif %}
-    <a href="{{ kiwify_url }}"
+    <a href="{{ kiwify_url or 'https://pay.kiwify.com.br/yMEjH4Y' }}"
        onclick="trackCheckout()"
        class="btn-primary btn-block"
        style="background:#7c3aed;font-size:16px;padding:14px;display:block;text-align:center;text-decoration:none;border-radius:10px;color:#fff;font-weight:700;">

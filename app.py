@@ -820,7 +820,7 @@ def cadastro():
                 return render_template("cadastro.html", erro="E-mail já cadastrado.")
             raise
     conn = get_db()
-    planos = conn.execute("SELECT * FROM planos WHERE nome = %s" if USE_PG else "SELECT * FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchall()
+    planos = conn.execute("SELECT * FROM planos ORDER BY id").fetchall()
     conn.close()
     return render_template("cadastro.html", planos=planos)
 
@@ -832,7 +832,7 @@ def pagamento(cliente_id):
         (cliente_id,)
     ).fetchone()
     conn.close()
-    kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://kiwify.app/QpmORrt")
+    kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y")
     return render_template("pagamento.html", cliente=cliente, kiwify_url=kiwify_url)
 
 def cancelar_assinatura_mp(subscription_id):
