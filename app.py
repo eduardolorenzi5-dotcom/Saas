@@ -856,7 +856,6 @@ def checkout_mercadopago(cliente_id):
                 "payment_types": [{"id": "credit_card"}]
             },
         },
-        "payer_email": cliente["email"],
         "back_url": f"{base_url}/pagamento/sucesso/{cliente_id}",
         "external_reference": str(cliente_id),
         "notification_url": f"{base_url}/webhook/mercadopago",
