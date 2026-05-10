@@ -880,7 +880,6 @@ def checkout_mercadopago(cliente_id):
                 "payment_types": [{"id": "credit_card"}]
             },
         },
-        "payer_email": cliente["email"],
         "back_url": f"{base_url}/pagamento/sucesso/{cliente_id}",
         "external_reference": str(cliente_id),
         "notification_url": f"{base_url}/webhook/mercadopago",
@@ -892,9 +891,9 @@ def checkout_mercadopago(cliente_id):
         json=payload, timeout=15
     )
     if resp.status_code not in (200, 201):
-        logging.error(f"MP preapproval erro: {resp.text}")
+        logging.error(f"MP preapproval erro status={resp.status_code} body={resp.text}")
         return render_template("pagamento.html", cliente=cliente,
-            erro="Erro ao criar assinatura. Tente novamente.")
+            erro=f"Erro ao criar assinatura. Tente novamente. (cod: {resp.status_code})")
     data = resp.json()
     init_point = data.get("init_point")
     subscription_id = data.get("id")
