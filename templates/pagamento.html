@@ -42,15 +42,15 @@
     {% if erro %}
     <div class="erro" style="margin-bottom:16px;">{{ erro }}</div>
     {% endif %}
-    <a href="{{ kiwify_url }}?email={{ cliente.email }}&name={{ cliente.nome }}"
+    <a href="{{ kiwify_url }}"
        onclick="trackCheckout()"
        class="btn-primary btn-block"
        style="background:#7c3aed;font-size:16px;padding:14px;display:block;text-align:center;text-decoration:none;border-radius:10px;color:#fff;font-weight:700;">
       💳 Pagar com cartão
     </a>
-    {% if META_PIXEL_ID %}
     <script>
     function trackCheckout() {
+      {% if META_PIXEL_ID %}
       if (typeof fbq !== 'undefined') {
         fbq('track', 'InitiateCheckout', {
           value: {{ cliente.preco }},
@@ -58,9 +58,9 @@
           content_name: '{{ cliente.plano_nome }}'
         });
       }
+      {% endif %}
     }
     </script>
-    {% endif %}
     <p style="font-size:12px;color:#aaa;margin-top:16px;text-align:center;">💳 Apenas cartão de crédito aceito</p>
   </div>
 </div>
