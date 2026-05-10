@@ -320,6 +320,71 @@ def criar_evento_agenda(cliente_id, titulo, data_hora_iso, duracao_min=60, cor=N
         resp.raise_for_status()
         return resp.json().get("htmlLink")
 
+def buscar_historico_conversa(cliente_id, limite=10):
+    """Retorna as últimas N mensagens da conversa do cliente (janela de 2 horas)."""
+    conn = get_db()
+    try:
+        USE_PG = bool(os.environ.get("DATABASE_URL"))
+        if USE_PG:
+            rows = conn.execute(
+                """SELECT role, conteudo FROM conversa_historico
+                   WHERE cliente_id=%s
+                     AND criado_em >= NOW() - INTERVAL '2 hours'
+                   ORDER BY criado_em DESC LIMIT %s""",
+                (cliente_id, limite)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT role, conteudo FROM conversa_historico
+                   WHERE cliente_id=?
+                     AND criado_em >= datetime('now', '-2 hours')
+                   ORDER BY criado_em DESC LIMIT ?""",
+                (cliente_id, limite)
+            ).fetchall()
+        conn.close()
+        # Reverter para ordem cronológica (mais antigo primeiro)
+        return [{"role": r["role"], "content": r["conteudo"]} for r in reversed(rows)]
+    except Exception as e:
+        import logging; logging.warning(f"[HISTORICO] Erro ao buscar: {e}")
+        try: conn.close()
+        except: pass
+        return []
+
+def salvar_historico_conversa(cliente_id, role, conteudo):
+    """Salva uma mensagem no histórico de conversa e limpa mensagens antigas."""
+    conn = get_db()
+    USE_PG = bool(os.environ.get("DATABASE_URL"))
+    try:
+        if USE_PG:
+            conn.execute(
+                "INSERT INTO conversa_historico (cliente_id, role, conteudo) VALUES (%s, %s, %s)",
+                (cliente_id, role, conteudo)
+            )
+            # Mantém apenas as últimas 30 mensagens por cliente
+            conn.execute(
+                """DELETE FROM conversa_historico WHERE cliente_id=%s AND id NOT IN (
+                   SELECT id FROM conversa_historico WHERE cliente_id=%s ORDER BY id DESC LIMIT 30
+                )""",
+                (cliente_id, cliente_id)
+            )
+        else:
+            conn.execute(
+                "INSERT INTO conversa_historico (cliente_id, role, conteudo) VALUES (?, ?, ?)",
+                (cliente_id, role, conteudo)
+            )
+            conn.execute(
+                """DELETE FROM conversa_historico WHERE cliente_id=? AND id NOT IN (
+                   SELECT id FROM conversa_historico WHERE cliente_id=? ORDER BY id DESC LIMIT 30
+                )""",
+                (cliente_id, cliente_id)
+            )
+        conn.commit()
+    except Exception as e:
+        import logging; logging.error(f"[HISTORICO] Erro ao salvar: {e}")
+    finally:
+        try: conn.close()
+        except: pass
+
 def chamar_claude(mensagem, historico=[], categorias=None):
     """Chama a API do Claude para interpretar a mensagem."""
     cats_list = categorias if categorias else CATEGORIAS
@@ -427,11 +492,13 @@ Responda sempre em português. Seja breve e amigável."""
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"
     }
+    # Monta o array de mensagens com histórico + mensagem atual
+    messages = list(historico) + [{"role": "user", "content": mensagem}]
     body = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 500,
         "system": system,
-        "messages": [{"role": "user", "content": mensagem}]
+        "messages": messages
     }
     res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body, timeout=15)
     res.raise_for_status()
@@ -678,6 +745,10 @@ def processar_imagem(fone, imagem_b64, caption=""):
         import logging, traceback
         logging.error(f"Erro ao analisar comprovante: {e}\n{traceback.format_exc()}")
         resposta = "Não consegui ler o comprovante. Tente uma foto mais nítida ou descreva o gasto em texto."
+    # Salva comprovante no histórico como contexto
+    salvar_historico_conversa(cliente["id"], "user", f"[Comprovante enviado] {caption}" if caption else "[Comprovante enviado]")
+    if resposta:
+        salvar_historico_conversa(cliente["id"], "assistant", resposta)
     enviar_whatsapp(fone, resposta)
     return resposta
 
@@ -694,7 +765,11 @@ def processar_mensagem(fone, mensagem, _cliente=None):
 
     try:
         cats = get_categorias_cliente(cliente["id"])
-        resultado = chamar_claude(mensagem, categorias=cats)
+        # Carrega histórico da conversa (últimas mensagens das últimas 2 horas)
+        historico = buscar_historico_conversa(cliente["id"])
+        # Salva a mensagem do usuário no histórico antes de processar
+        salvar_historico_conversa(cliente["id"], "user", mensagem)
+        resultado = chamar_claude(mensagem, historico=historico, categorias=cats)
         acao = resultado.get("acao")
 
         if acao == "registrar":
@@ -1140,6 +1215,10 @@ def processar_mensagem(fone, mensagem, _cliente=None):
         import logging, traceback
         logging.error(f"Erro agente: {e}\n{traceback.format_exc()}")
         resposta = "Desculpe, não consegui processar sua mensagem. Tente novamente."
+
+    # Salva a resposta do assistente no histórico
+    if resposta:
+        salvar_historico_conversa(cliente["id"], "assistant", resposta)
 
     enviar_whatsapp(fone, resposta)
     return resposta

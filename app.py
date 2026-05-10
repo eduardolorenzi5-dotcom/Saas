@@ -103,6 +103,16 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversa_historico (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                conteudo TEXT NOT NULL,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -171,6 +181,14 @@ def init_db():
                 tipo TEXT DEFAULT 'extra',
                 data TEXT NOT NULL,
                 fonte TEXT DEFAULT 'whatsapp',
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
+            CREATE TABLE IF NOT EXISTS conversa_historico (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                conteudo TEXT NOT NULL,
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
