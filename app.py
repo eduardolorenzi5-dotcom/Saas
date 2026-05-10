@@ -201,6 +201,8 @@ def init_db():
             conn.execute(f"ALTER TABLE clientes ADD COLUMN IF NOT EXISTS {col}")
         # Migration: dia_mes para lembretes mensais recorrentes
         conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS dia_mes INTEGER")
+        # Migration: controle de duplicidade de envio
+        conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS ultimo_envio TEXT")
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
@@ -211,6 +213,10 @@ def init_db():
                 pass
         try:
             conn.execute("ALTER TABLE lembretes ADD COLUMN dia_mes INTEGER")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE lembretes ADD COLUMN ultimo_envio TEXT")
         except Exception:
             pass
     conn.commit()
@@ -1818,13 +1824,15 @@ def _verificar_lembretes():
             agora = _dt.now(_tz(_td(hours=-3)))
             hora_atual = agora.strftime("%H:%M")
             data_atual = agora.strftime("%Y-%m-%d")
+            # Chave única para este disparo: data + hora (ex: "2026-05-10 14:30")
+            chave_envio = f"{data_atual} {hora_atual}"
             with app.app_context():
                 conn = get_db()
                 ph = "%s" if USE_PG else "?"
                 dia_mes_atual = int(agora.strftime("%d"))
                 lembretes = conn.execute(f"""
                     SELECT l.id, l.mensagem, l.hora, l.recorrente, l.dia_mes,
-                           c.whatsapp, c.nome
+                           l.ultimo_envio, c.whatsapp, c.nome
                     FROM lembretes l
                     JOIN clientes c ON l.cliente_id = c.id
                     WHERE l.ativo = {'true' if USE_PG else '1'}
@@ -1837,6 +1845,11 @@ def _verificar_lembretes():
                       AND c.status = 'ativo'
                 """, (hora_atual, data_atual, dia_mes_atual)).fetchall()
                 for lem in lembretes:
+                    # ── Proteção contra duplicata ────────────────────────────
+                    # Não envia se já foi disparado neste mesmo minuto
+                    if lem["ultimo_envio"] == chave_envio:
+                        logging.info(f"[LEMBRETE] Duplicata ignorada (já enviado às {chave_envio}): {lem['mensagem']}")
+                        continue
                     try:
                         from agente.agente import enviar_whatsapp
                         if lem["dia_mes"]:
@@ -1845,10 +1858,18 @@ def _verificar_lembretes():
                             msg_extra = "\n\nPara excluir este lembrete, responda: *excluir lembrete*"
                         enviar_whatsapp(lem["whatsapp"],
                             f"⏰ *Lembrete:* {lem['mensagem']}{msg_extra}")
+                        # Registra quando foi enviado (evita reenvio em reinicializações)
+                        conn.execute(
+                            f"UPDATE lembretes SET ultimo_envio = {ph} WHERE id = {ph}",
+                            (chave_envio, lem["id"])
+                        )
                         # Desativa apenas lembretes pontuais (sem recorrência)
                         if not lem["recorrente"] and not lem["dia_mes"]:
-                            conn.execute(f"UPDATE lembretes SET ativo = {'false' if USE_PG else '0'} WHERE id = {ph}", (lem["id"],))
-                            conn.commit()
+                            conn.execute(
+                                f"UPDATE lembretes SET ativo = {'false' if USE_PG else '0'} WHERE id = {ph}",
+                                (lem["id"],)
+                            )
+                        conn.commit()
                         logging.info(f"[LEMBRETE] Enviado para {lem['whatsapp']}: {lem['mensagem']}")
                     except Exception as e:
                         logging.error(f"[LEMBRETE] Erro ao enviar: {e}")
