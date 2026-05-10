@@ -743,6 +743,30 @@ def enviar_backup_email():
     logging.info(f"[BACKUP] Enviado para {destino} — {len(dados)} bytes")
 
 
+@app.route("/admin/lembretes")
+@admin_required
+def admin_lembretes():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT l.id, l.mensagem, l.hora, l.data, l.recorrente, l.dia_mes,
+               l.ativo, l.criado_em, l.ultimo_envio,
+               c.nome AS cliente_nome, c.whatsapp
+        FROM lembretes l
+        JOIN clientes c ON l.cliente_id = c.id
+        ORDER BY l.ativo DESC, l.criado_em DESC
+    """).fetchall()
+    conn.close()
+    return render_template("admin_lembretes.html", lembretes=[dict(r) for r in rows])
+
+@app.route("/admin/lembretes/deletar/<int:lembrete_id>", methods=["POST"])
+@admin_required
+def admin_deletar_lembrete(lembrete_id):
+    conn = get_db()
+    conn.execute("DELETE FROM lembretes WHERE id=%s", (lembrete_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_lembretes"))
+
 @app.route("/admin/backup", methods=["POST"])
 @admin_required
 def admin_backup():
