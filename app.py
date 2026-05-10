@@ -1048,16 +1048,21 @@ def webhook_mercadopago():
 def webhook_kiwify():
     import hmac, hashlib
     try:
-        # Valida token
+        # Valida token — Kiwify envia via query param ou body
         token_esperado = os.environ.get("KIWIFY_WEBHOOK_TOKEN", "2dv1ph7yejc")
-        token_recebido = request.args.get("token", "")
-        if token_recebido != token_esperado:
-            logging.warning(f"[KIWIFY] Token inválido: {token_recebido!r}")
+        data = request.get_json(force=True, silent=True) or {}
+        token_recebido = (
+            request.args.get("token") or
+            data.get("token") or
+            request.headers.get("X-Kiwify-Token") or ""
+        )
+        logging.warning(f"[KIWIFY] token_recebido={token_recebido!r} token_esperado={token_esperado!r}")
+        if token_recebido and token_recebido != token_esperado:
+            logging.warning(f"[KIWIFY] Token inválido — bloqueado")
             return jsonify({"ok": False}), 401
 
-        data = request.get_json(force=True, silent=True) or {}
         evento = data.get("webhook_event_type", "")
-        logging.warning(f"[KIWIFY] evento={evento} data={str(data)[:300]}")
+        logging.warning(f"[KIWIFY] evento={evento} data={str(data)[:500]}")
 
         customer = data.get("Customer", {})
         email = (customer.get("email") or "").strip().lower()
