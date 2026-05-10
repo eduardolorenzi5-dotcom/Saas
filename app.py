@@ -226,9 +226,10 @@ def init_db():
     except Exception as e:
         import logging as _log; _log.warning(f"[CATS] migração: {e}")
 
-    # Garante plano único sem deletar (evita violação de FK com clientes existentes)
+    # Remove planos antigos que não têm clientes vinculados e garante só o Controla Fácil
     descricao_plano = "Controle de gastos via WhatsApp com IA + dashboard + relatórios"
     if USE_PG:
+        conn.execute("DELETE FROM planos WHERE nome != 'Controla Fácil' AND id NOT IN (SELECT DISTINCT plano_id FROM clientes WHERE plano_id IS NOT NULL)")
         row = conn.execute("SELECT id FROM planos WHERE nome = %s", ("Controla Fácil",)).fetchone()
         if row:
             conn.execute("UPDATE planos SET preco=%s, descricao=%s WHERE nome=%s",
@@ -237,6 +238,7 @@ def init_db():
             conn.execute("INSERT INTO planos (nome, preco, descricao) VALUES (%s, %s, %s)",
                          ("Controla Fácil", 9.90, descricao_plano))
     else:
+        conn.execute("DELETE FROM planos WHERE nome != 'Controla Fácil' AND id NOT IN (SELECT DISTINCT plano_id FROM clientes WHERE plano_id IS NOT NULL)")
         row = conn.execute("SELECT id FROM planos WHERE nome = ?", ("Controla Fácil",)).fetchone()
         if row:
             conn.execute("UPDATE planos SET preco=?, descricao=? WHERE nome=?",
