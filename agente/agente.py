@@ -1016,6 +1016,17 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     data_lem = hoje_brasil().isoformat()
                 conn_lem = get_db()
                 ph = "%s" if USE_PG else "?"
+                # Remove lembretes ativos idênticos (mesma mensagem + hora) antes de criar
+                if USE_PG:
+                    conn_lem.execute(
+                        "UPDATE lembretes SET ativo=FALSE WHERE cliente_id=%s AND mensagem ILIKE %s AND hora=%s AND ativo=TRUE",
+                        (cliente["id"], mensagem_lem, hora_lem)
+                    )
+                else:
+                    conn_lem.execute(
+                        "UPDATE lembretes SET ativo=0 WHERE cliente_id=? AND LOWER(mensagem)=LOWER(?) AND hora=? AND ativo=1",
+                        (cliente["id"], mensagem_lem, hora_lem)
+                    )
                 conn_lem.execute(
                     f"INSERT INTO lembretes (cliente_id, mensagem, hora, data, recorrente, dia_mes) VALUES ({ph},{ph},{ph},{ph},{ph},{ph})",
                     (cliente["id"], mensagem_lem, hora_lem,

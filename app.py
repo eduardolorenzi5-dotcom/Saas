@@ -1894,31 +1894,45 @@ def _verificar_lembretes():
                       AND c.status = 'ativo'
                 """, (hora_atual, data_atual, dia_mes_atual)).fetchall()
                 for lem in lembretes:
-                    # ── Proteção contra duplicata ────────────────────────────
-                    # Não envia se já foi disparado neste mesmo minuto
-                    if lem["ultimo_envio"] == chave_envio:
-                        logging.info(f"[LEMBRETE] Duplicata ignorada (já enviado às {chave_envio}): {lem['mensagem']}")
-                        continue
                     try:
                         from agente.agente import enviar_whatsapp
+                        # ── Proteção atômica contra duplicata ───────────────
+                        # Tenta "reservar" o envio atualizando ultimo_envio ANTES
+                        # de enviar. Se outro processo já atualizou, rowcount=0.
+                        if USE_PG:
+                            cur = conn.execute(
+                                "UPDATE lembretes SET ultimo_envio=%s "
+                                "WHERE id=%s AND (ultimo_envio IS NULL OR ultimo_envio != %s)",
+                                (chave_envio, lem["id"], chave_envio)
+                            )
+                            reservado = cur.rowcount > 0
+                        else:
+                            cur = conn.execute(
+                                "UPDATE lembretes SET ultimo_envio=? "
+                                "WHERE id=? AND (ultimo_envio IS NULL OR ultimo_envio != ?)",
+                                (chave_envio, lem["id"], chave_envio)
+                            )
+                            reservado = cur.rowcount > 0
+                        conn.commit()
+
+                        if not reservado:
+                            logging.info(f"[LEMBRETE] Duplicata bloqueada ({chave_envio}): {lem['mensagem']}")
+                            continue
+
                         if lem["dia_mes"]:
                             msg_extra = f"\n\n_Lembrete mensal — todo dia {lem['dia_mes']}_\nPara excluir: *excluir lembrete*"
                         else:
                             msg_extra = "\n\nPara excluir este lembrete, responda: *excluir lembrete*"
                         enviar_whatsapp(lem["whatsapp"],
                             f"⏰ *Lembrete:* {lem['mensagem']}{msg_extra}")
-                        # Registra quando foi enviado (evita reenvio em reinicializações)
-                        conn.execute(
-                            f"UPDATE lembretes SET ultimo_envio = {ph} WHERE id = {ph}",
-                            (chave_envio, lem["id"])
-                        )
+
                         # Desativa apenas lembretes pontuais (sem recorrência)
                         if not lem["recorrente"] and not lem["dia_mes"]:
                             conn.execute(
                                 f"UPDATE lembretes SET ativo = {'false' if USE_PG else '0'} WHERE id = {ph}",
                                 (lem["id"],)
                             )
-                        conn.commit()
+                            conn.commit()
                         logging.info(f"[LEMBRETE] Enviado para {lem['whatsapp']}: {lem['mensagem']}")
                     except Exception as e:
                         logging.error(f"[LEMBRETE] Erro ao enviar: {e}")
