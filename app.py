@@ -743,6 +743,21 @@ def enviar_backup_email():
     logging.info(f"[BACKUP] Enviado para {destino} — {len(dados)} bytes")
 
 
+@app.route("/admin/testar-capi", methods=["POST"])
+@admin_required
+def admin_testar_capi():
+    """Dispara um evento Purchase de teste na Meta CAPI."""
+    try:
+        _meta_purchase_event(
+            email="teste@controlafacilai.com.br",
+            fone="5561998007328",
+            nome="Teste Controla Fácil",
+            valor=9.90
+        )
+        return jsonify({"ok": True, "msg": "Evento Purchase enviado! Verifique os logs do Railway e o Gerenciador de Eventos da Meta."})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
 @app.route("/admin/backup", methods=["POST"])
 @admin_required
 def admin_backup():
