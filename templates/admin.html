@@ -115,7 +115,7 @@
           <th>E-mail</th>
           <th>WhatsApp</th>
           <th>Status</th>
-          <th>Assinatura MP</th>
+          <th>Trial</th>
           <th>Agenda</th>
           <th>Gastos este mês</th>
           <th>Renda</th>
@@ -144,14 +144,8 @@
             </span>
           </td>
           <td>
-            {% if c.mp_subscription_id %}
-              <a href="https://www.mercadopago.com.br/subscriptions/detail/{{ c.mp_subscription_id }}"
-                 target="_blank" rel="noopener"
-                 style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#009EE3;font-weight:600;text-decoration:none;"
-                 title="Ver assinatura no Mercado Pago">
-                ✓ ativa
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-              </a>
+            {% if c.trial_expiry %}
+              <span style="font-size:12px;color:#f59e0b;font-weight:600;">⏳ {{ c.trial_expiry[:10] }}</span>
             {% else %}
               <span style="color:#ccc;font-size:11px;">—</span>
             {% endif %}

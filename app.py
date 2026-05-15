@@ -533,7 +533,7 @@ def admin_painel():
     conn = get_db()
     clientes = conn.execute("""
         SELECT c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
-               c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
+               c.renda_mensal, c.google_refresh_token, c.mp_subscription_id, c.trial_expiry,
                p.nome as plano_nome, p.preco,
                COUNT(g.id) as total_gastos,
                COALESCE(SUM(g.valor), 0) as total_gasto_mes
