@@ -614,7 +614,7 @@ def admin_deletar(cliente_id):
     conn = get_db()
     cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     # Remove todas as tabelas filhas antes de deletar o cliente
-    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas"):
+    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico"):
         try:
             conn.execute(f"DELETE FROM {tabela} WHERE cliente_id=%s", (cliente_id,))
         except Exception as e:
