@@ -146,6 +146,23 @@
 
 <div class="dash-wrap">
 
+  <!-- BANNER TRIAL -->
+  {% if trial_dias_restantes is not none %}
+  <div style="background:{% if trial_dias_restantes <= 2 %}#fef2f2;border-color:#fca5a5;{% else %}#eff6ff;border-color:#93c5fd;{% endif %};border:1.5px solid;border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <div>
+      {% if trial_dias_restantes == 0 %}
+        <strong>⚠️ Seu teste gratuito expira hoje!</strong>
+      {% elif trial_dias_restantes == 1 %}
+        <strong>⏳ Falta 1 dia para seu teste gratuito expirar.</strong>
+      {% else %}
+        <strong>🎉 Você está no período de teste gratuito — {{ trial_dias_restantes }} dias restantes.</strong>
+      {% endif %}
+      <span style="font-size:13px;color:#555;margin-left:8px;">Assine para continuar após o teste.</span>
+    </div>
+    <a href="{{ kiwify_url }}" target="_blank" style="background:#7c3aed;color:#fff;padding:8px 18px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;white-space:nowrap;">💳 Assinar agora — R$ 9,90/mês</a>
+  </div>
+  {% endif %}
+
   <!-- PERIOD HEADER -->
   <div class="dash-period">
     <h1>Visão Geral</h1>

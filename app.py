@@ -203,6 +203,8 @@ def init_db():
         conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS dia_mes INTEGER")
         # Migration: controle de duplicidade de envio
         conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS ultimo_envio TEXT")
+        # Migration: trial gratuito de 7 dias
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS trial_expiry TIMESTAMP")
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
@@ -217,6 +219,10 @@ def init_db():
             pass
         try:
             conn.execute("ALTER TABLE lembretes ADD COLUMN ultimo_envio TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE clientes ADD COLUMN trial_expiry TEXT")
         except Exception:
             pass
     conn.commit()
@@ -852,14 +858,20 @@ def cadastro():
                 conn.close()
                 return render_template("cadastro.html", erro="E-mail já cadastrado.")
 
+            trial_expiry = (datetime.now(timezone(timedelta(hours=-3))) + timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
             conn.execute(
-                "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso) VALUES (%s, %s, %s, %s, %s, %s)",
-                (nome, email, hash_senha(senha), whatsapp, plano_id, token)
+                "INSERT INTO clientes (nome, email, senha_hash, whatsapp, plano_id, token_acesso, status, trial_expiry) VALUES (%s, %s, %s, %s, %s, %s, 'ativo', %s)",
+                (nome, email, hash_senha(senha), whatsapp, plano_id, token, trial_expiry)
             )
             conn.commit()
             cliente_id = conn.execute("SELECT id FROM clientes WHERE email=%s", (email,)).fetchone()["id"]
             conn.close()
-            return redirect(url_for("pagamento", cliente_id=cliente_id))
+            # Envia boas-vindas imediatamente (trial já ativo)
+            try: enviar_email_boas_vindas(email, nome)
+            except Exception as e: logging.error(f"[TRIAL] email boas-vindas: {e}")
+            try: enviar_wpp_boas_vindas(whatsapp, nome)
+            except Exception as e: logging.error(f"[TRIAL] wpp boas-vindas: {e}")
+            return redirect(url_for("dashboard", token=token))
         except Exception as e:
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
                 return render_template("cadastro.html", erro="E-mail já cadastrado.")
@@ -1161,8 +1173,8 @@ def webhook_kiwify():
             valor_pago = float(data.get("Product", {}).get("price") or
                                data.get("order", {}).get("amount") or 9.90)
             if cliente:
-                ja_ativo = cliente["status"] == "ativo"
-                conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente["id"],))
+                ja_ativo = cliente["status"] == "ativo" and not cliente["trial_expiry"]
+                conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s", (cliente["id"],))
                 conn.commit()
                 if not ja_ativo:
                     try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
@@ -1328,6 +1340,17 @@ def dashboard():
     renda_efetiva = total_renda_mes if total_renda_mes > 0 else renda
     saldo = round(renda_efetiva - float(total), 2) if renda_efetiva else None
 
+    # Calcula dias restantes de trial
+    trial_dias_restantes = None
+    if cliente.get("trial_expiry"):
+        try:
+            from datetime import datetime as _dt2, timezone as _tz2, timedelta as _td2
+            expiry = _dt2.strptime(str(cliente["trial_expiry"])[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=_tz2(_td2(hours=-3)))
+            agora_brt = _dt2.now(_tz2(_td2(hours=-3)))
+            trial_dias_restantes = max(0, (expiry - agora_brt).days)
+        except Exception:
+            pass
+
     return render_template("dashboard.html",
         gastos=gastos, total=float(total), por_cat=por_cat,
         cliente=cliente, mes=mes, mes_nome=mes_nome,
@@ -1343,6 +1366,8 @@ def dashboard():
         total_renda_mes=total_renda_mes,
         renda_fixa_mes=renda_fixa_mes,
         renda_extra_mes=renda_extra_mes,
+        trial_dias_restantes=trial_dias_restantes,
+        kiwify_url=os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y"),
     )
 
 @app.route("/debug/session")
@@ -1960,6 +1985,55 @@ def _verificar_lembretes():
 import threading as _threading
 _t = _threading.Thread(target=_verificar_lembretes, daemon=True)
 _t.start()
+
+def _verificar_trials():
+    """Verifica diariamente trials expirados e envia avisos."""
+    import time as _time
+    _time.sleep(30)
+    while True:
+        try:
+            from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+            from agente.agente import enviar_whatsapp as _enviar
+            agora = _dt.now(_tz(_td(hours=-3)))
+            with app.app_context():
+                conn = get_db()
+                clientes_trial = conn.execute(
+                    "SELECT id, nome, whatsapp, email, trial_expiry FROM clientes WHERE status='ativo' AND trial_expiry IS NOT NULL"
+                ).fetchall()
+                kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y")
+                for c in clientes_trial:
+                    try:
+                        expiry = _dt.strptime(str(c["trial_expiry"])[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=_tz(_td(hours=-3)))
+                        dias_restantes = (expiry - agora).days
+                        # Aviso 2 dias antes (dia 5)
+                        if dias_restantes == 2:
+                            _enviar(c["whatsapp"],
+                                f"⏳ *{c['nome']}, seu teste gratuito expira em 2 dias!*\n\n"
+                                f"Para continuar usando o Controla Fácil sem interrupção, assine agora por apenas R$ 9,90/mês:\n\n"
+                                f"👉 {kiwify_url}"
+                            )
+                            logging.info(f"[TRIAL] Aviso 2 dias enviado para {c['email']}")
+                        # Trial expirado
+                        elif dias_restantes < 0:
+                            conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (c["id"],))
+                            conn.commit()
+                            _enviar(c["whatsapp"],
+                                f"😕 *{c['nome']}, seu período de teste gratuito encerrou.*\n\n"
+                                f"Para voltar a usar o Controla Fácil, assine por apenas R$ 9,90/mês:\n\n"
+                                f"👉 {kiwify_url}\n\n"
+                                f"_Seus dados estão salvos e serão restaurados assim que você assinar!_ 🔒"
+                            )
+                            logging.info(f"[TRIAL] Expirado e desativado: {c['email']}")
+                    except Exception as e:
+                        logging.error(f"[TRIAL] Erro cliente {c['id']}: {e}")
+                conn.close()
+        except Exception as e:
+            logging.error(f"[TRIAL] Erro no loop: {e}")
+        import time as _time
+        _time.sleep(3600)  # Verifica a cada hora
+
+_t2 = _threading.Thread(target=_verificar_trials, daemon=True)
+_t2.start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
