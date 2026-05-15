@@ -271,8 +271,9 @@
       <div class="hero-tag">Você sabe para onde vai seu dinheiro todo mês?</div>
       <h1>Seu assistente financeiro no <em>WhatsApp</em>, 24h por dia.</h1>
       <p class="hero-sub">Mande uma mensagem como "gastei R$50 no mercado" e a IA registra, categoriza e organiza tudo automaticamente. Simples assim.</p>
-      <a href="/cadastro" class="hero-cta">Começar agora →</a>
-      <div class="hero-badges">
+      <a href="/cadastro" class="hero-cta">Começar grátis por 7 dias →</a>
+      <p style="font-size:13px;color:#888;margin-top:10px;">✅ 7 dias grátis · Sem cartão de crédito · Cancele quando quiser</p>
+      <div class="hero-badges" style="margin-top:20px;">
         <div class="badge"><div class="badge-dot"></div> IA que entende português</div>
         <div class="badge"><div class="badge-dot"></div> Registro em segundos</div>
         <div class="badge"><div class="badge-dot"></div> Relatório PDF profissional</div>
@@ -511,8 +512,10 @@
         {% if loop.index == 1 %}<div class="badge-popular">Mais popular</div>{% endif %}
         <h3>{{ plano.nome }}</h3>
         <div class="preco">R$ {{ "%.2f"|format(plano.preco) }}<span>/mês</span></div>
+        <p style="font-size:13px;color:#1D9E75;font-weight:700;margin-bottom:6px;">🎉 7 dias grátis para testar</p>
         <p class="plano-desc">{{ plano.descricao }}</p>
-        <a href="/cadastro?plano={{ plano.id }}" class="plano-btn">Assinar agora</a>
+        <a href="/cadastro?plano={{ plano.id }}" class="plano-btn">Começar grátis →</a>
+        <p style="font-size:11px;color:#6b7280;text-align:center;margin-top:10px;">Sem cartão · Cancele quando quiser</p>
       </div>
       {% endfor %}
     </div>
