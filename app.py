@@ -531,9 +531,16 @@ def admin_logout():
 @admin_required
 def admin_painel():
     conn = get_db()
+    # Garante que a coluna trial_expiry existe antes de consultar
+    try:
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS trial_expiry TIMESTAMP")
+        conn.commit()
+    except Exception:
+        pass
     clientes = conn.execute("""
         SELECT c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
-               c.renda_mensal, c.google_refresh_token, c.mp_subscription_id, c.trial_expiry,
+               c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
+               c.trial_expiry,
                p.nome as plano_nome, p.preco,
                COUNT(g.id) as total_gastos,
                COALESCE(SUM(g.valor), 0) as total_gasto_mes
@@ -541,7 +548,8 @@ def admin_painel():
         LEFT JOIN planos p ON c.plano_id = p.id
         LEFT JOIN gastos g ON g.cliente_id = c.id AND g.data LIKE %s
         GROUP BY c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
-                 c.renda_mensal, c.google_refresh_token, c.mp_subscription_id, c.trial_expiry, p.nome, p.preco
+                 c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
+                 c.trial_expiry, p.nome, p.preco
         ORDER BY c.criado_em DESC
     """, (hoje_brasil().strftime("%Y-%m") + "%",)).fetchall()
     total_clientes = len(clientes)
