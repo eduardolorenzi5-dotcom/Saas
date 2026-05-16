@@ -879,7 +879,10 @@ def cadastro():
             except Exception as e: logging.error(f"[TRIAL] email boas-vindas: {e}")
             try: enviar_wpp_boas_vindas(whatsapp, nome)
             except Exception as e: logging.error(f"[TRIAL] wpp boas-vindas: {e}")
-            return redirect(url_for("dashboard", token=token))
+            # Loga o cliente automaticamente após o cadastro
+            session["cliente_id"] = cliente_id
+            session["cliente_nome"] = nome
+            return redirect(url_for("dashboard"))
         except Exception as e:
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
                 return render_template("cadastro.html", erro="E-mail já cadastrado.")
