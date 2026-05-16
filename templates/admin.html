@@ -115,7 +115,7 @@
           <th>E-mail</th>
           <th>WhatsApp</th>
           <th>Status</th>
-          <th>Trial</th>
+          <th>Cadastro</th>
           <th>Agenda</th>
           <th>Gastos este mês</th>
           <th>Renda</th>
@@ -143,13 +143,7 @@
               {{ c.status }}
             </span>
           </td>
-          <td>
-            {% if c.trial_expiry %}
-              <span style="font-size:12px;color:#f59e0b;font-weight:600;">⏳ {{ c.trial_expiry[:10] }}</span>
-            {% else %}
-              <span style="color:#ccc;font-size:11px;">—</span>
-            {% endif %}
-          </td>
+          <td style="font-size:12px;color:#888;">{{ c.criado_em[:10] if c.criado_em else '—' }}</td>
           <td>
             {% if c.google_refresh_token %}
               <span class="badge badge-agenda">✓ conectada</span>
