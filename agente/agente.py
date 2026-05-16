@@ -959,8 +959,6 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             resposta = (
                 f"📅 Para conectar seu Google Agenda, clique no link abaixo:\n\n"
                 f"{link}\n\n"
-                f"⚠️ *Atenção:* o Google pode exibir um aviso dizendo que o app não foi verificado. "
-                f"É normal! Basta clicar em *'Avançado'* e depois em *'Ir para Controla Fácil'* para continuar.\n\n"
                 f"Após autorizar, você poderá agendar compromissos direto aqui pelo WhatsApp! 😊"
             )
 
@@ -970,9 +968,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 resposta = (
                     f"📅 Sua agenda ainda não está conectada. Clique no link abaixo para autorizar:\n\n"
                     f"{link}\n\n"
-                    f"⚠️ *Atenção:* o Google pode exibir um aviso dizendo que o app não foi verificado. "
-                    f"É normal! Clique em *'Avançado'* e depois em *'Ir para Controla Fácil'* para continuar.\n\n"
-                    f"Após conectar, envie o agendamento novamente."
+                    f"Após conectar, envie o agendamento novamente. 😊"
                 )
             else:
                 titulo = resultado.get("titulo", "Compromisso")
