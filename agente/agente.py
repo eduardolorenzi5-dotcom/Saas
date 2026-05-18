@@ -64,6 +64,20 @@ def formatar_data(data_iso):
 
 def buscar_cliente_por_fone(fone):
     import logging
+
+    # ── Plano Casal: mensagem de grupo (JID termina em @g.us) ────────────────
+    if fone.endswith("@g.us"):
+        conn = get_db()
+        cliente = conn.execute(
+            "SELECT * FROM clientes WHERE grupo_wpp_id = %s AND status = 'ativo'", (fone,)
+        ).fetchone()
+        conn.close()
+        if cliente:
+            logging.warning(f"[BUSCA_CLIENTE] grupo encontrado: id={cliente['id']} grupo={fone!r}")
+        else:
+            logging.warning(f"[BUSCA_CLIENTE] grupo NAO mapeado: {fone!r}")
+        return cliente
+
     digits = "".join(c for c in fone if c.isdigit())
     if not digits.startswith("55"):
         digits = "55" + digits
@@ -79,6 +93,8 @@ def buscar_cliente_por_fone(fone):
 
     conn = get_db()
     cliente = None
+
+    # 1. Busca por whatsapp principal
     for v in variantes:
         cliente = conn.execute(
             "SELECT * FROM clientes WHERE whatsapp = %s", (v,)
@@ -86,7 +102,17 @@ def buscar_cliente_por_fone(fone):
         if cliente:
             break
 
-    # Fallback: busca parcial pelo sufixo do número (últimos 8 dígitos)
+    # 2. Busca por whatsapp2 (Plano Casal — número do cônjuge)
+    if not cliente:
+        for v in variantes:
+            cliente = conn.execute(
+                "SELECT * FROM clientes WHERE whatsapp2 = %s", (v,)
+            ).fetchone()
+            if cliente:
+                logging.warning(f"[BUSCA_CLIENTE] encontrado via whatsapp2 {v!r}: id={cliente['id']}")
+                break
+
+    # 3. Fallback: busca parcial pelo sufixo do número (últimos 8 dígitos)
     if not cliente and len(digits) >= 8:
         sufixo = digits[-8:]
         cliente = conn.execute(

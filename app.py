@@ -205,6 +205,9 @@ def init_db():
         conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS ultimo_envio TEXT")
         # Migration: trial gratuito de 7 dias
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS trial_expiry TIMESTAMP")
+        # Migration: Plano Casal — segundo número e grupo WhatsApp
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp2 TEXT")
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS grupo_wpp_id TEXT")
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
@@ -223,6 +226,14 @@ def init_db():
             pass
         try:
             conn.execute("ALTER TABLE clientes ADD COLUMN trial_expiry TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE clientes ADD COLUMN whatsapp2 TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE clientes ADD COLUMN grupo_wpp_id TEXT")
         except Exception:
             pass
     conn.commit()
@@ -532,16 +543,16 @@ def admin_logout():
 def admin_painel():
     conn = get_db()
     clientes = conn.execute("""
-        SELECT c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
-               c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
+        SELECT c.id, c.nome, c.email, c.whatsapp, c.whatsapp2, c.grupo_wpp_id,
+               c.status, c.criado_em, c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
                p.nome as plano_nome, p.preco,
                COUNT(g.id) as total_gastos,
                COALESCE(SUM(g.valor), 0) as total_gasto_mes
         FROM clientes c
         LEFT JOIN planos p ON c.plano_id = p.id
         LEFT JOIN gastos g ON g.cliente_id = c.id AND g.data LIKE %s
-        GROUP BY c.id, c.nome, c.email, c.whatsapp, c.status, c.criado_em,
-                 c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
+        GROUP BY c.id, c.nome, c.email, c.whatsapp, c.whatsapp2, c.grupo_wpp_id,
+                 c.status, c.criado_em, c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
                  p.nome, p.preco
         ORDER BY c.criado_em DESC
     """, (hoje_brasil().strftime("%Y-%m") + "%",)).fetchall()
@@ -672,6 +683,29 @@ def admin_atualizar_whatsapp(cliente_id):
     novo = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
     conn = get_db()
     conn.execute("UPDATE clientes SET whatsapp=%s WHERE id=%s", (novo, cliente_id))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_painel"))
+
+@app.route("/admin/atualizar_whatsapp2/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_atualizar_whatsapp2(cliente_id):
+    """Atualiza o segundo número WhatsApp (cônjuge/parceiro) do Plano Casal."""
+    raw = request.form.get("whatsapp2", "").strip()
+    novo = normalizar_whatsapp(raw) if raw else None
+    conn = get_db()
+    conn.execute("UPDATE clientes SET whatsapp2=%s WHERE id=%s", (novo, cliente_id))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_painel"))
+
+@app.route("/admin/atualizar_grupo/<int:cliente_id>", methods=["POST"])
+@admin_required
+def admin_atualizar_grupo(cliente_id):
+    """Vincula um grupo do WhatsApp à conta (Plano Casal via grupo)."""
+    grupo_id = request.form.get("grupo_wpp_id", "").strip() or None
+    conn = get_db()
+    conn.execute("UPDATE clientes SET grupo_wpp_id=%s WHERE id=%s", (grupo_id, cliente_id))
     conn.commit()
     conn.close()
     return redirect(url_for("admin_painel"))
@@ -1855,7 +1889,22 @@ def webhook_whatsapp():
             imagem_b64 = _extrair_imagem_b64(payload, {})
         elif payload.get("data"):
             data = payload["data"]
-            fone = data.get("key", {}).get("remoteJid", "").replace("@s.whatsapp.net", "")
+            key = data.get("key", {})
+            remote_jid = key.get("remoteJid", "")
+            participant = key.get("participant", "")  # sender dentro de um grupo
+
+            # Ignora mensagens enviadas pelo próprio bot
+            if key.get("fromMe"):
+                return jsonify({"output": "", "status": "ignorado"}), 200
+
+            # ── Detecção de mensagem de grupo (Plano Casal) ─────────────────
+            is_group = remote_jid.endswith("@g.us")
+            if is_group:
+                # Para grupos, fone = JID completo do grupo (usado para responder ao grupo)
+                fone = remote_jid
+            else:
+                fone = remote_jid.replace("@s.whatsapp.net", "")
+
             # Detecta áudio
             audio_b64, audio_mime = _extrair_audio_b64(payload)
             if audio_b64:

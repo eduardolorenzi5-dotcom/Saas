@@ -19,7 +19,7 @@
     .admin-table-wrap { background:#fff; border-radius:12px; border:1px solid #e5e5e3; overflow:hidden; }
     .admin-table-wrap h2 { font-size:15px; font-weight:700; padding:16px 20px; border-bottom:1px solid #e5e5e3; }
     .table-scroll { overflow-x:auto; width:100%; }
-    table { width:100%; border-collapse:collapse; font-size:12px; min-width:1200px; }
+    table { width:100%; border-collapse:collapse; font-size:12px; min-width:1400px; }
     th { text-align:left; padding:8px 10px; background:#f9f9f7; color:#888; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #e5e5e3; white-space:nowrap; }
     td { padding:8px 10px; border-bottom:1px solid #f0f0ee; vertical-align:middle; }
     tr:last-child td { border-bottom:none; }
@@ -120,6 +120,8 @@
           <th>Gastos este mês</th>
           <th>Renda</th>
           <th>Cadastro</th>
+          <th title="Plano Casal: 2º número WhatsApp">WPP2 (Casal)</th>
+          <th title="ID do grupo WhatsApp vinculado à conta">Grupo WPP</th>
           <th>Ações</th>
         </tr>
       </thead>
@@ -164,6 +166,24 @@
           </td>
           <td style="color:#888;font-size:12px;">{{ c.criado_em.strftime('%d/%m/%Y') if c.criado_em else '—' }}</td>
           <td>
+            <form method="POST" action="/admin/atualizar_whatsapp2/{{ c.id }}" class="wpp-inline">
+              <input type="text" name="whatsapp2" value="{{ c.whatsapp2 or '' }}" placeholder="55619..."
+                     style="border:1px solid #ddd;border-radius:5px;padding:3px 6px;font-size:11px;width:115px;color:#555;"
+                     title="2º WhatsApp (cônjuge) — pressione Enter para salvar"
+                     onblur="if(this.value !== '{{ c.whatsapp2 or '' }}') this.form.submit();"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}"/>
+            </form>
+          </td>
+          <td>
+            <form method="POST" action="/admin/atualizar_grupo/{{ c.id }}" class="wpp-inline">
+              <input type="text" name="grupo_wpp_id" value="{{ c.grupo_wpp_id or '' }}" placeholder="120363...@g.us"
+                     style="border:1px solid #ddd;border-radius:5px;padding:3px 6px;font-size:10px;width:130px;color:#555;"
+                     title="ID do grupo WhatsApp (ex: 120363xxx@g.us) — pressione Enter para salvar"
+                     onblur="if(this.value !== '{{ c.grupo_wpp_id or '' }}') this.form.submit();"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}"/>
+            </form>
+          </td>
+          <td>
             <div class="acoes-wrap">
               {% if c.status != 'ativo' %}
               <form method="POST" action="/admin/ativar/{{ c.id }}">
@@ -187,7 +207,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="11" style="text-align:center;color:#aaa;padding:32px;">Nenhum cliente cadastrado.</td></tr>
+        <tr><td colspan="13" style="text-align:center;color:#aaa;padding:32px;">Nenhum cliente cadastrado.</td></tr>
         {% endfor %}
       </tbody>
     </table>
