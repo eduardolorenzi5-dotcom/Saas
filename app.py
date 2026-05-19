@@ -320,7 +320,7 @@ def _popular_categorias_padrao(conn, cliente_id):
         except Exception:
             pass
 
-def enviar_wpp_boas_vindas(whatsapp, nome):
+def enviar_wpp_boas_vindas(whatsapp, nome, cliente_id=None):
     """Envia mensagem de boas-vindas pelo WhatsApp via Evolution API."""
     import urllib.request, json as _json
     url = os.environ.get("EVOLUTION_URL", "").rstrip("/")
@@ -333,6 +333,8 @@ def enviar_wpp_boas_vindas(whatsapp, nome):
     if not numero:
         logging.warning("[WPP] Número inválido para boas-vindas")
         return
+    app_url = os.environ.get("APP_URL", "https://controlafacilai.com.br")
+    link_agenda = f"{app_url}/agenda/conectar/{cliente_id}" if cliente_id else f"{app_url}/login"
     mensagem = (
         f"🎉 *Bem-vindo ao Controla Fácil, {nome}!*\n\n"
         f"Sua conta está ativa! Sou seu assistente financeiro pelo WhatsApp. Veja o que você pode fazer:\n\n"
@@ -351,7 +353,8 @@ def enviar_wpp_boas_vindas(whatsapp, nome):
         f"📅 *Agendar no Google Agenda:*\n"
         f"_\"Dentista sexta às 14h\"_\n"
         f"_\"Reunião amanhã às 10h\"_\n"
-        f"_(conecte sua agenda em: controlafacilai.com.br)_\n\n"
+        f"_(clique para conectar sua agenda👇)_\n"
+        f"{link_agenda}\n\n"
         f"🗑️ *Apagar gastos:*\n"
         f"_\"Apaga o último\"_ ou _\"Zera tudo\"_\n\n"
         f"📈 *Análise financeira:*\n"
@@ -579,7 +582,7 @@ def admin_ativar(cliente_id):
         except Exception as e:
             logging.error(f"[EMAIL] Falha boas-vindas para {cliente['email']}: {e}")
         try:
-            enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+            enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
         except Exception as e:
             logging.error(f"[WPP] Falha boas-vindas para {cliente['whatsapp']}: {e}")
     return redirect(url_for("admin_painel"))
@@ -672,7 +675,8 @@ def admin_criar_conta():
         logging.error(f"[EMAIL] Falha boas-vindas para {email}: {e}")
     if whatsapp:
         try:
-            enviar_wpp_boas_vindas(whatsapp, nome)
+            novo_id = novo["id"] if novo else None
+            enviar_wpp_boas_vindas(whatsapp, nome, novo_id)
         except Exception as e:
             logging.error(f"[WPP] Falha boas-vindas para {whatsapp}: {e}")
     return redirect(url_for("admin_painel") + "?ok=conta_criada")
@@ -904,7 +908,7 @@ def cadastro():
             # Envia boas-vindas imediatamente (trial já ativo)
             try: enviar_email_boas_vindas(email, nome)
             except Exception as e: logging.error(f"[TRIAL] email boas-vindas: {e}")
-            try: enviar_wpp_boas_vindas(whatsapp, nome)
+            try: enviar_wpp_boas_vindas(whatsapp, nome, cliente_id)
             except Exception as e: logging.error(f"[TRIAL] wpp boas-vindas: {e}")
             # Loga o cliente automaticamente após o cadastro
             session["cliente_id"] = cliente_id
@@ -1067,7 +1071,7 @@ def webhook_mercadopago():
                                 conn.commit()
                                 try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
                                 except Exception as e: logging.error(f"[EMAIL] boas-vindas: {e}")
-                                try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+                                try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
                                 except Exception as e: logging.error(f"[WPP] boas-vindas: {e}")
                             else:
                                 conn.commit()
@@ -1128,7 +1132,7 @@ def webhook_mercadopago():
                             conn.commit()
                             try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
                             except Exception as e: logging.error(f"[EMAIL] boas-vindas: {e}")
-                            try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+                            try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
                             except Exception as e: logging.error(f"[WPP] boas-vindas: {e}")
                         conn.close()
 
@@ -1220,7 +1224,7 @@ def webhook_kiwify():
                 if not ja_ativo:
                     try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
                     except Exception as e: logging.error(f"[KIWIFY] email boas-vindas: {e}")
-                    try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"])
+                    try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
                     except Exception as e: logging.error(f"[KIWIFY] wpp boas-vindas: {e}")
                 logging.warning(f"[KIWIFY] Cliente {email} ATIVADO")
             else:
