@@ -14,7 +14,7 @@
     .topbar { background: #1a1a2e; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 58px; position: sticky; top: 0; z-index: 100; }
     .topbar-logo { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
     .topbar-nav { display: flex; gap: 4px; }
-    .topbar-nav a { color: rgba(255,255,255,.65); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 8px; transition: all .15s; }
+    .topbar-nav a { color: rgba(255,255,255,.65); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 8px; transition: all .15s; cursor: pointer; }
     .topbar-nav a:hover, .topbar-nav a.ativo { color: #fff; background: rgba(255,255,255,.12); }
     .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255,255,255,.7); }
     .topbar-right a { color: rgba(255,255,255,.5); text-decoration: none; font-size: 12px; }
@@ -133,10 +133,11 @@
 <nav class="topbar">
   <div class="topbar-logo">Controla Fácil</div>
   <div class="topbar-nav">
-    <a href="/dashboard" class="ativo">Visão Geral</a>
-    <a href="#transacoes">Transações</a>
-    <a href="#gerenciar-categorias">Categorias</a>
+    <a onclick="showTab('visao-geral')" id="tab-btn-visao-geral" class="ativo">Visão Geral</a>
+    <a onclick="showTab('visao-geral', 'transacoes')" id="tab-btn-transacoes">Transações</a>
+    <a onclick="showTab('visao-geral', 'gerenciar-categorias')" id="tab-btn-categorias">Categorias</a>
     <a href="/assinatura">Assinatura</a>
+    <a onclick="showTab('minha-conta')" id="tab-btn-minha-conta">Minha Conta</a>
   </div>
   <div class="topbar-right">
     <span>{{ session.cliente_nome }}</span>
@@ -145,6 +146,9 @@
 </nav>
 
 <div class="dash-wrap">
+
+<!-- ===== ABA: VISÃO GERAL ===== -->
+<div id="tab-visao-geral">
 
   <!-- BANNER TRIAL -->
   {% if trial_dias_restantes is not none %}
@@ -177,7 +181,7 @@
   <div class="wpp-bar">
     📱 Seu assistente está ativo no WhatsApp <strong style="margin:0 4px;">{{ cliente.whatsapp or 'não vinculado' }}</strong>. Envie mensagens como <em style="margin-left:4px;">"gastei 50 no mercado"</em> para registrar.
     {% if cliente.whatsapp %}
-    <a href="#minha-conta" onclick="document.getElementById('minha-conta').scrollIntoView({behavior:'smooth'});document.getElementById('wpp-edit-form').style.display='flex';return false;" style="color:#6366f1;font-size:12px;margin-left:10px;text-decoration:none;white-space:nowrap;">✏️ Número errado?</a>
+    <a onclick="showTab('minha-conta');document.getElementById('wpp-edit-form').style.display='flex';" style="color:#6366f1;font-size:12px;margin-left:10px;text-decoration:none;white-space:nowrap;cursor:pointer;">✏️ Número errado?</a>
     {% endif %}
   </div>
 
@@ -397,61 +401,6 @@
     </div>
   </div>
 
-  <!-- MINHA CONTA -->
-  <div class="form-card" style="margin-top:24px;" id="minha-conta">
-    <div class="form-card-title">👤 Minha conta</div>
-
-    {% set wpp_ok = request.args.get('wpp_ok') %}
-    {% set wpp_erro = request.args.get('wpp_erro') %}
-    {% if wpp_ok %}
-    <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#065f46;">
-      ✅ WhatsApp atualizado com sucesso!
-    </div>
-    {% elif wpp_erro == 'ja_cadastrado' %}
-    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#991b1b;">
-      Esse número já está cadastrado em outra conta.
-    </div>
-    {% elif wpp_erro == 'numero_invalido' %}
-    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#991b1b;">
-      Número inválido. Digite o DDD + número completo.
-    </div>
-    {% endif %}
-
-    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6;">
-        <span style="color:#6b7280;">Nome</span>
-        <strong>{{ cliente.nome }}</strong>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6;">
-        <span style="color:#6b7280;">E-mail</span>
-        <strong>{{ cliente.email }}</strong>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">
-        <span style="color:#6b7280;">WhatsApp</span>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <strong id="wpp-display">{{ cliente.whatsapp or 'não vinculado' }}</strong>
-          <button onclick="document.getElementById('wpp-edit-form').style.display=document.getElementById('wpp-edit-form').style.display==='none'?'flex':'none';"
-                  style="background:#f3f4f6;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#6366f1;font-weight:600;">
-            ✏️ Editar
-          </button>
-        </div>
-      </div>
-      <form id="wpp-edit-form" method="POST" action="/perfil/whatsapp"
-            style="display:none;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
-        <input type="text" name="whatsapp" placeholder="Ex: 61 9 9800-7328"
-               value="{{ cliente.whatsapp or '' }}"
-               style="border:1px solid #d1d5db;border-radius:6px;padding:7px 12px;font-size:13px;flex:1;min-width:180px;"/>
-        <button type="submit"
-                style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap;">
-          Salvar número
-        </button>
-        <p style="font-size:11px;color:#9ca3af;width:100%;margin:0;">
-          Digite com DDD. Ex: 61 9 9800-7328 ou 5561998007328
-        </p>
-      </form>
-    </div>
-  </div>
-
   <!-- GERENCIAR CATEGORIAS -->
   <div class="form-card" style="margin-top:24px;" id="gerenciar-categorias">
     <div class="form-card-title">🏷️ Minhas categorias</div>
@@ -471,10 +420,108 @@
     <div id="cat-msg" style="font-size:12px;margin-top:8px;color:#ef4444;display:none;"></div>
   </div>
 
+</div><!-- /tab-visao-geral -->
+
+<!-- ===== ABA: MINHA CONTA ===== -->
+<div id="tab-minha-conta" style="display:none;">
+  <div class="dash-period" style="margin-bottom:24px;">
+    <h1>Minha conta</h1>
+  </div>
+
+  <div class="form-card" id="minha-conta" style="max-width:640px;">
+    {% set wpp_ok = request.args.get('wpp_ok') %}
+    {% set wpp_erro = request.args.get('wpp_erro') %}
+    {% if wpp_ok %}
+    <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#065f46;">
+      ✅ WhatsApp atualizado com sucesso!
+    </div>
+    {% elif wpp_erro == 'ja_cadastrado' %}
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+      ❌ Esse número já está cadastrado em outra conta.
+    </div>
+    {% elif wpp_erro == 'numero_invalido' %}
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+      ❌ Número inválido. Digite o DDD + número completo.
+    </div>
+    {% endif %}
+
+    <div style="display:flex;flex-direction:column;gap:0;font-size:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="color:#6b7280;font-weight:500;">Nome</span>
+        <strong>{{ cliente.nome }}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="color:#6b7280;font-weight:500;">E-mail</span>
+        <strong>{{ cliente.email }}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="color:#6b7280;font-weight:500;">Plano</span>
+        <span style="background:#d1fae5;color:#065f46;padding:3px 12px;border-radius:100px;font-size:13px;font-weight:600;">{{ cliente.status|capitalize }}</span>
+      </div>
+      <div style="padding:14px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="color:#6b7280;font-weight:500;">WhatsApp</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <strong id="wpp-display">{{ cliente.whatsapp or 'não vinculado' }}</strong>
+            <button onclick="var f=document.getElementById('wpp-edit-form');f.style.display=f.style.display==='none'?'flex':'none';"
+                    style="background:#f3f4f6;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:#6366f1;font-weight:600;">
+              ✏️ Editar
+            </button>
+          </div>
+        </div>
+        <form id="wpp-edit-form" method="POST" action="/perfil/whatsapp"
+              style="display:none;gap:8px;align-items:center;flex-wrap:wrap;padding:14px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
+          <input type="text" name="whatsapp" placeholder="Ex: 61 9 9800-7328"
+                 value="{{ cliente.whatsapp or '' }}"
+                 style="border:1px solid #d1d5db;border-radius:8px;padding:9px 14px;font-size:14px;flex:1;min-width:200px;outline:none;"/>
+          <button type="submit"
+                  style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer;font-weight:600;white-space:nowrap;">
+            Salvar número
+          </button>
+          <p style="font-size:12px;color:#9ca3af;width:100%;margin:0;">
+            Digite com DDD. Ex: 61 9 9800-7328 ou 5561998007328
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+</div><!-- /tab-minha-conta -->
+
 </div>
 
 <script src="/static/js/dashboard.js"></script>
 <script>
+// ===== TAB SWITCHING =====
+function showTab(tab, anchor) {
+  // Hide all tabs
+  document.getElementById('tab-visao-geral').style.display = 'none';
+  document.getElementById('tab-minha-conta').style.display = 'none';
+  // Remove ativo from all nav buttons
+  document.querySelectorAll('.topbar-nav a').forEach(a => a.classList.remove('ativo'));
+  // Show selected tab
+  document.getElementById('tab-' + tab).style.display = 'block';
+  // Mark active button
+  const btn = document.getElementById('tab-btn-' + (tab === 'visao-geral' && anchor ? (anchor === 'transacoes' ? 'transacoes' : 'categorias') : tab === 'minha-conta' ? 'minha-conta' : 'visao-geral'));
+  if (btn) btn.classList.add('ativo');
+  // Scroll to anchor if provided
+  if (anchor) {
+    setTimeout(() => {
+      const el = document.getElementById(anchor);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+// Auto-open Minha Conta tab if URL has wpp_ok or wpp_erro
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('wpp_ok') || params.get('wpp_erro')) {
+    showTab('minha-conta');
+  }
+})();
+
 const CORES = ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6'];
 
 // LINE CHART
