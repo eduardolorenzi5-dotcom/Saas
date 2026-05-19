@@ -175,7 +175,10 @@
 
   <!-- WPP INFO -->
   <div class="wpp-bar">
-    📱 Seu assistente está ativo no WhatsApp <strong style="margin:0 4px;">{{ cliente.whatsapp }}</strong>. Envie mensagens como <em style="margin-left:4px;">"gastei 50 no mercado"</em> para registrar.
+    📱 Seu assistente está ativo no WhatsApp <strong style="margin:0 4px;">{{ cliente.whatsapp or 'não vinculado' }}</strong>. Envie mensagens como <em style="margin-left:4px;">"gastei 50 no mercado"</em> para registrar.
+    {% if cliente.whatsapp %}
+    <a href="#minha-conta" onclick="document.getElementById('minha-conta').scrollIntoView({behavior:'smooth'});document.getElementById('wpp-edit-form').style.display='flex';return false;" style="color:#6366f1;font-size:12px;margin-left:10px;text-decoration:none;white-space:nowrap;">✏️ Número errado?</a>
+    {% endif %}
   </div>
 
   <!-- STAT CARDS -->
@@ -249,32 +252,8 @@
         </form>
       </div>
       {% endif %}
-      {% set wpp_erro = request.args.get('wpp_erro') %}
-      {% set wpp_ok = request.args.get('wpp_ok') %}
-      {% if wpp_ok %}
-      <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#065f46;">
-        WhatsApp atualizado com sucesso!
-      </div>
-      {% elif wpp_erro == 'ja_cadastrado' %}
-      <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">
-        Esse número já está vinculado a outra conta. Se é seu, use a <a href="/recuperar-senha" style="color:#991b1b;font-weight:600;">recuperação de senha</a> para acessar essa conta.
-      </div>
-      {% elif wpp_erro == 'numero_invalido' %}
-      <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:12px 18px;margin-bottom:16px;font-size:13px;color:#991b1b;">
-        Número inválido. Digite o DDD + número completo.
-      </div>
-      {% endif %}
       <div class="form-card">
-        <div class="form-card-title" style="display:flex;justify-content:space-between;align-items:center;">
-          <span>Adicionar gasto</span>
-          <span style="font-size:11px;color:#aaa;font-weight:400;">WhatsApp: {{ cliente.whatsapp or 'não vinculado' }}
-            <a href="#" onclick="document.getElementById('form-wpp').style.display=document.getElementById('form-wpp').style.display==='none'?'inline':'none';return false;" style="color:#6366f1;margin-left:6px;">editar</a>
-          </span>
-        </div>
-        <form id="form-wpp" method="POST" action="/perfil/whatsapp" style="display:none;margin-bottom:12px;font-size:13px;">
-          <input type="text" name="whatsapp" placeholder="Ex: 61 9 9800-7328" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;width:200px;"/>
-          <button type="submit" style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:13px;cursor:pointer;margin-left:6px;">Salvar</button>
-        </form>
+        <div class="form-card-title">Adicionar gasto</div>
         <div class="form-grid">
           <div class="form-field"><label>Descrição</label><input type="text" id="inp-desc" placeholder="Ex: Mercado"/></div>
           <div class="form-field"><label>Valor (R$)</label><input type="number" id="inp-val" placeholder="0,00" step="0.01"/></div>
@@ -415,6 +394,61 @@
         <div class="form-field"><label>Data</label><input type="date" id="renda-data"/></div>
         <button class="btn-add" onclick="addRenda()" style="width:100%;">+ Adicionar receita</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MINHA CONTA -->
+  <div class="form-card" style="margin-top:24px;" id="minha-conta">
+    <div class="form-card-title">👤 Minha conta</div>
+
+    {% set wpp_ok = request.args.get('wpp_ok') %}
+    {% set wpp_erro = request.args.get('wpp_erro') %}
+    {% if wpp_ok %}
+    <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#065f46;">
+      ✅ WhatsApp atualizado com sucesso!
+    </div>
+    {% elif wpp_erro == 'ja_cadastrado' %}
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#991b1b;">
+      Esse número já está cadastrado em outra conta.
+    </div>
+    {% elif wpp_erro == 'numero_invalido' %}
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#991b1b;">
+      Número inválido. Digite o DDD + número completo.
+    </div>
+    {% endif %}
+
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="color:#6b7280;">Nome</span>
+        <strong>{{ cliente.nome }}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="color:#6b7280;">E-mail</span>
+        <strong>{{ cliente.email }}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">
+        <span style="color:#6b7280;">WhatsApp</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <strong id="wpp-display">{{ cliente.whatsapp or 'não vinculado' }}</strong>
+          <button onclick="document.getElementById('wpp-edit-form').style.display=document.getElementById('wpp-edit-form').style.display==='none'?'flex':'none';"
+                  style="background:#f3f4f6;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:#6366f1;font-weight:600;">
+            ✏️ Editar
+          </button>
+        </div>
+      </div>
+      <form id="wpp-edit-form" method="POST" action="/perfil/whatsapp"
+            style="display:none;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
+        <input type="text" name="whatsapp" placeholder="Ex: 61 9 9800-7328"
+               value="{{ cliente.whatsapp or '' }}"
+               style="border:1px solid #d1d5db;border-radius:6px;padding:7px 12px;font-size:13px;flex:1;min-width:180px;"/>
+        <button type="submit"
+                style="background:#6366f1;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap;">
+          Salvar número
+        </button>
+        <p style="font-size:11px;color:#9ca3af;width:100%;margin:0;">
+          Digite com DDD. Ex: 61 9 9800-7328 ou 5561998007328
+        </p>
+      </form>
     </div>
   </div>
 
