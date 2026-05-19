@@ -401,11 +401,13 @@ def _brevo_post(payload_dict):
             raise Exception(f"Brevo retornou status {resp.status}")
 
 
-def enviar_email_boas_vindas(destinatario, nome):
+def enviar_email_boas_vindas(destinatario, nome, cliente_id=None):
     import json as _json
     sender_email = os.environ.get("BREVO_FROM_EMAIL", "")
     sender_name = os.environ.get("BREVO_FROM_NAME", "Controla Fácil")
     numero_wpp = os.environ.get("WHATSAPP_NUMBER", "")
+    app_url = os.environ.get("APP_URL", "https://controlafacilai.com.br")
+    link_agenda = f"{app_url}/agenda/conectar/{cliente_id}" if cliente_id else f"{app_url}/login"
 
     html = f"""
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a1a;">
@@ -459,7 +461,8 @@ def enviar_email_boas_vindas(destinatario, nome):
 
     <div style="background:#eff6ff;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
       <h2 style="font-size:15px;margin:0 0 8px;color:#1e40af;">📅 Google Agenda</h2>
-      <p style="font-size:14px;color:#444;margin:0;">Para usar o agendamento, conecte sua conta Google no painel web. Depois é só pedir pelo WhatsApp!</p>
+      <p style="font-size:14px;color:#444;margin:0 0 12px;">Conecte sua conta Google para agendar compromissos direto pelo WhatsApp. É rápido!</p>
+      <a href="{link_agenda}" style="display:inline-block;background:#1e40af;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;">📅 Conectar Google Agenda</a>
     </div>
 
     <div style="background:#f0fdf4;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
@@ -578,7 +581,7 @@ def admin_ativar(cliente_id):
     conn.close()
     if cliente and cliente["status"] != "ativo":
         try:
-            enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+            enviar_email_boas_vindas(cliente["email"], cliente["nome"], cliente["id"])
         except Exception as e:
             logging.error(f"[EMAIL] Falha boas-vindas para {cliente['email']}: {e}")
         try:
@@ -669,13 +672,13 @@ def admin_criar_conta():
             return redirect(url_for("admin_painel") + "?erro=email_duplicado")
         raise
     conn.close()
+    novo_id = novo["id"] if novo else None
     try:
-        enviar_email_boas_vindas(email, nome)
+        enviar_email_boas_vindas(email, nome, novo_id)
     except Exception as e:
         logging.error(f"[EMAIL] Falha boas-vindas para {email}: {e}")
     if whatsapp:
         try:
-            novo_id = novo["id"] if novo else None
             enviar_wpp_boas_vindas(whatsapp, nome, novo_id)
         except Exception as e:
             logging.error(f"[WPP] Falha boas-vindas para {whatsapp}: {e}")
@@ -906,7 +909,7 @@ def cadastro():
             cliente_id = conn.execute("SELECT id FROM clientes WHERE email=%s", (email,)).fetchone()["id"]
             conn.close()
             # Envia boas-vindas imediatamente (trial já ativo)
-            try: enviar_email_boas_vindas(email, nome)
+            try: enviar_email_boas_vindas(email, nome, cliente_id)
             except Exception as e: logging.error(f"[TRIAL] email boas-vindas: {e}")
             try: enviar_wpp_boas_vindas(whatsapp, nome, cliente_id)
             except Exception as e: logging.error(f"[TRIAL] wpp boas-vindas: {e}")
@@ -1069,7 +1072,7 @@ def webhook_mercadopago():
                             if cliente["status"] != "ativo":
                                 conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente_id,))
                                 conn.commit()
-                                try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+                                try: enviar_email_boas_vindas(cliente["email"], cliente["nome"], cliente["id"])
                                 except Exception as e: logging.error(f"[EMAIL] boas-vindas: {e}")
                                 try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
                                 except Exception as e: logging.error(f"[WPP] boas-vindas: {e}")
@@ -1130,7 +1133,7 @@ def webhook_mercadopago():
                                 (cliente_id, payment.get("transaction_amount", 0), "aprovado", str(payment_id))
                             )
                             conn.commit()
-                            try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+                            try: enviar_email_boas_vindas(cliente["email"], cliente["nome"], cliente["id"])
                             except Exception as e: logging.error(f"[EMAIL] boas-vindas: {e}")
                             try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
                             except Exception as e: logging.error(f"[WPP] boas-vindas: {e}")
@@ -1222,7 +1225,7 @@ def webhook_kiwify():
                 conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s", (cliente["id"],))
                 conn.commit()
                 if not ja_ativo:
-                    try: enviar_email_boas_vindas(cliente["email"], cliente["nome"])
+                    try: enviar_email_boas_vindas(cliente["email"], cliente["nome"], cliente["id"])
                     except Exception as e: logging.error(f"[KIWIFY] email boas-vindas: {e}")
                     try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
                     except Exception as e: logging.error(f"[KIWIFY] wpp boas-vindas: {e}")
