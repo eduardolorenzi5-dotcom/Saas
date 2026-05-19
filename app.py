@@ -548,9 +548,10 @@ def admin_logout():
 @admin_required
 def admin_painel():
     conn = get_db()
-    clientes = conn.execute("""
+    clientes_raw = conn.execute("""
         SELECT c.id, c.nome, c.email, c.whatsapp, c.whatsapp2, c.grupo_wpp_id,
                c.status, c.criado_em, c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
+               c.trial_expiry,
                p.nome as plano_nome, p.preco,
                COUNT(g.id) as total_gastos,
                COALESCE(SUM(g.valor), 0) as total_gasto_mes
@@ -559,16 +560,47 @@ def admin_painel():
         LEFT JOIN gastos g ON g.cliente_id = c.id AND g.data LIKE %s
         GROUP BY c.id, c.nome, c.email, c.whatsapp, c.whatsapp2, c.grupo_wpp_id,
                  c.status, c.criado_em, c.renda_mensal, c.google_refresh_token, c.mp_subscription_id,
-                 p.nome, p.preco
+                 c.trial_expiry, p.nome, p.preco
         ORDER BY c.criado_em DESC
     """, (hoje_brasil().strftime("%Y-%m") + "%",)).fetchall()
-    total_clientes = len(clientes)
-    ativos = sum(1 for c in clientes if c["status"] == "ativo")
-    receita = sum(float(c["preco"] or 0) for c in clientes if c["status"] == "ativo")
     conn.close()
+
+    # Calcular dias restantes de trial para cada cliente
+    agora_brt = datetime.now(timezone(timedelta(hours=-3)))
+    clientes = []
+    for c in clientes_raw:
+        c = dict(c)
+        trial_dias = None
+        if c.get("trial_expiry"):
+            try:
+                from datetime import datetime as _dt2, timezone as _tz2, timedelta as _td2
+                expiry = _dt2.strptime(str(c["trial_expiry"])[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=_tz2(_td2(hours=-3)))
+                trial_dias = (expiry - agora_brt).days
+                # Inclui a hora do dia (pode ser negativo se já venceu hoje)
+                if (expiry - agora_brt).total_seconds() < 0:
+                    trial_dias = -1  # vencido
+                else:
+                    trial_dias = (expiry - agora_brt).days
+            except Exception:
+                trial_dias = None
+        c["trial_dias"] = trial_dias
+        clientes.append(c)
+
+    total_clientes = len(clientes)
+    ativos = sum(1 for c in clientes if c["status"] == "ativo" and not c.get("trial_expiry"))
+    em_trial = sum(1 for c in clientes if c.get("trial_expiry") and c.get("trial_dias") is not None and c["trial_dias"] >= 0)
+    trial_vencido = sum(1 for c in clientes if c.get("trial_expiry") and c.get("trial_dias") is not None and c["trial_dias"] < 0)
+    receita = sum(float(c["preco"] or 0) for c in clientes if c["status"] == "ativo" and not c.get("trial_expiry"))
+
+    # Lista de urgentes: trial vencendo em ≤ 2 dias (ou já vencido e não convertido)
+    trials_urgentes = [c for c in clientes if c.get("trial_dias") is not None and c["trial_dias"] <= 2]
+    trials_urgentes.sort(key=lambda c: c["trial_dias"] if c["trial_dias"] is not None else 999)
+
     return render_template("admin.html",
         clientes=clientes, total_clientes=total_clientes,
-        ativos=ativos, receita=receita
+        ativos=ativos, receita=receita,
+        em_trial=em_trial, trial_vencido=trial_vencido,
+        trials_urgentes=trials_urgentes
     )
 
 @app.route("/admin/ativar/<int:cliente_id>", methods=["POST"])

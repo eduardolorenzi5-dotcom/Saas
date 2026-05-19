@@ -12,14 +12,14 @@
     .admin-wrap { max-width:1280px; margin:0 auto; padding:32px 24px; }
     .admin-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; flex-wrap:wrap; gap:12px; }
     .admin-header h1 { font-size:22px; font-weight:700; }
-    .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:28px; }
+    .stats-row { display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:28px; }
     .stat-box { background:#fff; border-radius:12px; padding:20px 24px; border:1px solid #e5e5e3; }
     .stat-box .label { font-size:12px; color:#888; margin-bottom:6px; }
     .stat-box .val { font-size:26px; font-weight:700; }
     .admin-table-wrap { background:#fff; border-radius:12px; border:1px solid #e5e5e3; overflow:hidden; }
     .admin-table-wrap h2 { font-size:15px; font-weight:700; padding:16px 20px; border-bottom:1px solid #e5e5e3; }
     .table-scroll { overflow-x:auto; width:100%; }
-    table { width:100%; border-collapse:collapse; font-size:12px; min-width:1300px; }
+    table { width:100%; border-collapse:collapse; font-size:12px; min-width:1400px; }
     th { text-align:left; padding:8px 10px; background:#f9f9f7; color:#888; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #e5e5e3; white-space:nowrap; }
     td { padding:8px 10px; border-bottom:1px solid #f0f0ee; vertical-align:middle; }
     tr:last-child td { border-bottom:none; }
@@ -41,7 +41,21 @@
     .wpp-inline input { border:1px solid #ddd; border-radius:5px; padding:3px 6px; font-size:11px; width:90px; }
     .action-btn { padding:3px 7px; font-size:11px; }
     .admin-footer { text-align:right; padding:12px 20px; font-size:12px; color:#aaa; }
-    @media(max-width:900px){ .stats-row{grid-template-columns:1fr 1fr;} }
+    .trial-badge { display:inline-block; padding:2px 9px; border-radius:100px; font-size:11px; font-weight:700; white-space:nowrap; }
+    .trial-ok    { background:#dbeafe; color:#1e40af; }
+    .trial-warn  { background:#fef3c7; color:#92400e; }
+    .trial-urgent{ background:#fee2e2; color:#991b1b; }
+    .trial-expired{ background:#fecaca; color:#7f1d1d; }
+    .trial-paid  { background:#d1fae5; color:#065f46; }
+    .urgentes-box { background:#fff7ed; border:1.5px solid #fb923c; border-radius:12px; padding:16px 20px; margin-bottom:24px; }
+    .urgentes-box h3 { font-size:14px; font-weight:700; color:#c2410c; margin-bottom:12px; }
+    .urgente-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #fed7aa; flex-wrap:wrap; gap:8px; }
+    .urgente-row:last-child { border-bottom:none; padding-bottom:0; }
+    .urgente-info { font-size:13px; }
+    .urgente-info strong { display:block; }
+    .urgente-info span { font-size:11px; color:#9a3412; }
+    .urgente-wpp { display:flex; gap:6px; align-items:center; flex-shrink:0; }
+    @media(max-width:900px){ .stats-row{grid-template-columns:1fr 1fr 1fr;} }
     @media(max-width:600px){ .stats-row{grid-template-columns:1fr;} .admin-wrap{padding:16px 12px;} }
   </style>
 </head>
@@ -89,14 +103,62 @@
     </form>
   </div>
 
+  <!-- ALERTAS TRIAL URGENTES -->
+  {% if trials_urgentes %}
+  <div class="urgentes-box">
+    <h3>🔔 Trials vencendo em breve ({{ trials_urgentes|length }})</h3>
+    {% for c in trials_urgentes %}
+    <div class="urgente-row">
+      <div class="urgente-info">
+        <strong>{{ c.nome }}</strong>
+        <span>
+          {% if c.trial_dias < 0 %}
+            ⛔ Trial vencido — não converteu
+          {% elif c.trial_dias == 0 %}
+            🔴 Vence <strong>hoje</strong>
+          {% elif c.trial_dias == 1 %}
+            🟠 Vence <strong>amanhã</strong>
+          {% else %}
+            🟡 Vence em <strong>{{ c.trial_dias }} dias</strong>
+          {% endif %}
+          &nbsp;·&nbsp; {{ c.email }}
+        </span>
+      </div>
+      <div class="urgente-wpp">
+        {% if c.whatsapp %}
+        <a href="https://wa.me/{{ c.whatsapp }}?text={{ ('Olá ' ~ c.nome ~ '! Vi que seu período de teste gratuito do Controla Fácil está encerrando. Posso te ajudar a continuar?')|urlencode }}"
+           target="_blank"
+           style="background:#25d366;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">
+          💬 WhatsApp
+        </a>
+        {% else %}
+        <span style="font-size:11px;color:#aaa;">Sem WPP</span>
+        {% endif %}
+        <form method="POST" action="/admin/ativar/{{ c.id }}" style="display:inline;">
+          <button class="action-btn btn-ativar" style="font-size:11px;padding:5px 10px;" title="Ativar manualmente">✓ Ativar</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <div class="stats-row">
     <div class="stat-box">
       <div class="label">Total de clientes</div>
       <div class="val">{{ total_clientes }}</div>
     </div>
     <div class="stat-box">
-      <div class="label">Contas ativas</div>
+      <div class="label">Contas ativas (pagas)</div>
       <div class="val" style="color:#065f46;">{{ ativos }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Em trial (7 dias)</div>
+      <div class="val" style="color:#d97706;">{{ em_trial }}</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Trial vencido</div>
+      <div class="val" style="color:#dc2626;">{{ trial_vencido }}</div>
     </div>
     <div class="stat-box">
       <div class="label">Receita mensal estimada</div>
@@ -116,6 +178,7 @@
           <th>WhatsApp</th>
           <th>Status</th>
           <th>Cadastro</th>
+          <th>Trial</th>
           <th>Agenda</th>
           <th>Gastos este mês</th>
           <th>Renda</th>
@@ -145,6 +208,23 @@
             </span>
           </td>
           <td style="font-size:12px;color:#888;">{{ c.criado_em.strftime('%d/%m/%Y') if c.criado_em else '—' }}</td>
+          <td>
+            {% if c.trial_dias is not none %}
+              {% if c.trial_dias < 0 %}
+                <span class="trial-badge trial-expired">⛔ vencido</span>
+              {% elif c.trial_dias == 0 %}
+                <span class="trial-badge trial-urgent">🔴 hoje</span>
+              {% elif c.trial_dias == 1 %}
+                <span class="trial-badge trial-warn">🟠 amanhã</span>
+              {% elif c.trial_dias <= 3 %}
+                <span class="trial-badge trial-warn">🟡 {{ c.trial_dias }}d</span>
+              {% else %}
+                <span class="trial-badge trial-ok">{{ c.trial_dias }}d</span>
+              {% endif %}
+            {% else %}
+              <span class="trial-badge trial-paid">✓ pago</span>
+            {% endif %}
+          </td>
           <td>
             {% if c.google_refresh_token %}
               <span class="badge badge-agenda">✓ conectada</span>
@@ -197,7 +277,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="12" style="text-align:center;color:#aaa;padding:32px;">Nenhum cliente cadastrado.</td></tr>
+        <tr><td colspan="13" style="text-align:center;color:#aaa;padding:32px;">Nenhum cliente cadastrado.</td></tr>
         {% endfor %}
       </tbody>
     </table>
