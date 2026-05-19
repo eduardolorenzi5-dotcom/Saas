@@ -847,10 +847,10 @@ def cadastro():
     if request.method == "POST":
         nome     = request.form.get("nome", "").strip()
         email    = request.form.get("email", "").strip().lower()
-        senha    = request.form.get("senha", "")
+        senha    = request.form.get("senha", "") or secrets.token_urlsafe(16)  # Google: senha aleatória
         whatsapp = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
         plano_id = request.form.get("plano_id")
-        if not all([nome, email, senha, whatsapp, plano_id]):
+        if not all([nome, email, whatsapp, plano_id]):
             return render_template("cadastro.html", erro="Preencha todos os campos.")
         token = secrets.token_urlsafe(32)
         try:
@@ -917,7 +917,10 @@ def cadastro():
     conn = get_db()
     planos = conn.execute("SELECT * FROM planos ORDER BY id").fetchall()
     conn.close()
-    return render_template("cadastro.html", planos=planos)
+    google_email = session.pop("google_email", None)
+    google_nome  = session.pop("google_nome", None)
+    return render_template("cadastro.html", planos=planos,
+                           google_email=google_email, google_nome=google_nome)
 
 @app.route("/pagamento/<int:cliente_id>")
 def pagamento(cliente_id):
@@ -1656,6 +1659,97 @@ def resetar_senha(token):
         return redirect(url_for("login"))
     conn.close()
     return render_template("resetar_senha.html", erro=None, token=token, valido=True)
+
+@app.route("/auth/google")
+def auth_google():
+    """Inicia o fluxo OAuth do Google para login/cadastro."""
+    import urllib.parse
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    app_url = os.environ.get("APP_URL", "https://controlafacilai.com.br")
+    redirect_uri = f"{app_url}/auth/google/callback"
+    state = request.args.get("state", "login")  # 'login' ou 'cadastro'
+    params = urllib.parse.urlencode({
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "prompt": "select_account",
+        "state": state
+    })
+    return redirect(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+
+@app.route("/auth/google/callback")
+def auth_google_callback():
+    """Callback do OAuth Google — loga ou redireciona para cadastro."""
+    import urllib.request, urllib.parse, json as _json
+    code  = request.args.get("code", "")
+    state = request.args.get("state", "login")
+    error = request.args.get("error", "")
+
+    if error or not code:
+        return redirect(url_for("login") + "?erro=login_google_cancelado")
+
+    client_id     = os.environ.get("GOOGLE_CLIENT_ID", "")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    app_url       = os.environ.get("APP_URL", "https://controlafacilai.com.br")
+    redirect_uri  = f"{app_url}/auth/google/callback"
+
+    # 1. Troca o code por access_token
+    token_data = urllib.parse.urlencode({
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code"
+    }).encode()
+    try:
+        req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_data, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            tokens = _json.loads(resp.read())
+    except Exception as e:
+        logging.error(f"[GOOGLE AUTH] Erro ao trocar token: {e}")
+        return redirect(url_for("login") + "?erro=login_google_falhou")
+
+    access_token = tokens.get("access_token")
+    if not access_token:
+        return redirect(url_for("login") + "?erro=login_google_falhou")
+
+    # 2. Busca dados do usuário no Google
+    try:
+        req2 = urllib.request.Request(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        with urllib.request.urlopen(req2, timeout=15) as resp2:
+            userinfo = _json.loads(resp2.read())
+    except Exception as e:
+        logging.error(f"[GOOGLE AUTH] Erro ao buscar userinfo: {e}")
+        return redirect(url_for("login") + "?erro=login_google_falhou")
+
+    email = (userinfo.get("email") or "").strip().lower()
+    nome  = userinfo.get("name") or userinfo.get("given_name") or ""
+
+    if not email:
+        return redirect(url_for("login") + "?erro=login_google_sem_email")
+
+    # 3. Verifica se já tem conta
+    conn = get_db()
+    cliente = conn.execute("SELECT * FROM clientes WHERE LOWER(email)=%s", (email,)).fetchone()
+    conn.close()
+
+    if cliente:
+        if cliente["status"] != "ativo":
+            return redirect(url_for("pagamento", cliente_id=cliente["id"]))
+        # Conta ativa → loga direto
+        session["cliente_id"]   = cliente["id"]
+        session["cliente_nome"] = cliente["nome"]
+        return redirect(url_for("dashboard"))
+    else:
+        # Conta nova → redireciona para cadastro com dados pré-preenchidos
+        session["google_email"] = email
+        session["google_nome"]  = nome
+        return redirect(url_for("cadastro") + "?google=1")
 
 @app.route("/agenda/conectar/<int:cliente_id>")
 def agenda_conectar(cliente_id):
