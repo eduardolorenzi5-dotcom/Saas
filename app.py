@@ -1981,6 +1981,9 @@ def webhook_whatsapp():
 
         if payload.get("inputs"):
             inputs = payload["inputs"]
+            # Ignora mensagens enviadas pelo próprio bot
+            if inputs.get("fromMe"):
+                return jsonify({"output": "", "status": "ignorado"}), 200
             msg = (inputs.get("query") or inputs.get("message") or inputs.get("text") or
                    payload.get("query") or payload.get("message") or payload.get("text", ""))
             fone = (inputs.get("remoteJid", "").replace("@s.whatsapp.net", "") or
