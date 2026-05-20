@@ -2079,18 +2079,28 @@ def webhook_whatsapp():
                 logging.warning(f"[DEDUP] Evento duplicado ignorado: fone={fone} msg_id={msg_id}")
                 return jsonify({"output": "", "status": "ignorado"}), 200
 
-            # Detecta áudio
+            # Detecta áudio — processa em background para evitar timeout/retry da Evolution API
             audio_b64, audio_mime = _extrair_audio_b64(payload)
             if audio_b64:
                 if fone:
-                    resposta = processar_audio(fone, audio_b64, audio_mime)
-                    return jsonify({"output": resposta, "status": "ok"})
-            # Detecta imagem via Evolution API
+                    def _proc_audio(f, ab, am):
+                        try:
+                            processar_audio(f, ab, am)
+                        except Exception as e:
+                            logging.error(f"[AUDIO-BG] Erro: {e}")
+                    _threading.Thread(target=_proc_audio, args=(fone, audio_b64, audio_mime), daemon=True).start()
+                    return jsonify({"output": "", "status": "processando"}), 200
+            # Detecta imagem — processa em background para evitar timeout/retry da Evolution API
             imagem_b64, caption_img = _extrair_imagem_b64_evolution(payload)
             if imagem_b64:
                 if fone:
-                    resposta = processar_imagem(fone, imagem_b64, caption_img)
-                    return jsonify({"output": resposta, "status": "ok"})
+                    def _proc_img(f, ib, cap):
+                        try:
+                            processar_imagem(f, ib, cap)
+                        except Exception as e:
+                            logging.error(f"[IMG-BG] Erro: {e}")
+                    _threading.Thread(target=_proc_img, args=(fone, imagem_b64, caption_img), daemon=True).start()
+                    return jsonify({"output": "", "status": "processando"}), 200
             # Mensagem de texto normal
             msg = data.get("message", {}).get("conversation") or \
                   data.get("message", {}).get("extendedTextMessage", {}).get("text") or \
