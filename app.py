@@ -838,6 +838,26 @@ def admin_testar_capi():
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
 
+@app.route("/admin/export-gastos-json")
+def export_gastos_json():
+    """Endpoint temporário de exportação — remover após uso."""
+    import json as _json
+    key = request.args.get("key", "")
+    ADMIN_KEY = os.environ.get("ADMIN_KEY", "controla2024")
+    if key != ADMIN_KEY:
+        return "Não autorizado", 403
+    conn = get_db()
+    gastos = conn.execute("SELECT id,cliente_id,descricao,valor,categoria,data,fonte,criado_em FROM gastos ORDER BY id").fetchall()
+    rendas = conn.execute("SELECT id,cliente_id,descricao,valor,tipo,data,fonte,criado_em FROM rendas ORDER BY id").fetchall()
+    categorias = conn.execute("SELECT id,cliente_id,nome,emoji,criado_em FROM categorias ORDER BY id").fetchall()
+    conn.close()
+    return _json.dumps({
+        "gastos": [dict(r) for r in gastos],
+        "rendas": [dict(r) for r in rendas],
+        "categorias": [dict(r) for r in categorias],
+    }, default=str), 200, {"Content-Type": "application/json"}
+
+
 @app.route("/admin/backup", methods=["POST"])
 @admin_required
 def admin_backup():
