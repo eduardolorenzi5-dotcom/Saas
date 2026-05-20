@@ -2063,6 +2063,12 @@ def webhook_whatsapp():
             else:
                 fone = remote_jid.replace("@s.whatsapp.net", "")
 
+            # Dedup por message ID (evita retry duplicado para áudio/imagem)
+            msg_id = key.get("id", "")
+            if msg_id and _is_duplicate_msg(fone, f"__mid__{msg_id}"):
+                logging.warning(f"[DEDUP] Evento duplicado ignorado: fone={fone} msg_id={msg_id}")
+                return jsonify({"output": "", "status": "ignorado"}), 200
+
             # Detecta áudio
             audio_b64, audio_mime = _extrair_audio_b64(payload)
             if audio_b64:
