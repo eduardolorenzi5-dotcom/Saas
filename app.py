@@ -226,6 +226,8 @@ def init_db():
         conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS ultimo_envio TEXT")
         # Migration: trial gratuito de 7 dias
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS trial_expiry TIMESTAMP")
+        # Migration: controle de aviso de trial (evita envio repetido no mesmo dia)
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS ultimo_aviso_trial DATE")
         # Migration: Plano Casal — segundo número e grupo WhatsApp
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp2 TEXT")
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS grupo_wpp_id TEXT")
@@ -2218,13 +2220,20 @@ def _verificar_trials():
             with app.app_context():
                 conn = get_db()
                 clientes_trial = conn.execute(
-                    "SELECT id, nome, whatsapp, email, trial_expiry FROM clientes WHERE status='ativo' AND trial_expiry IS NOT NULL"
+                    "SELECT id, nome, whatsapp, email, trial_expiry, ultimo_aviso_trial FROM clientes WHERE status='ativo' AND trial_expiry IS NOT NULL"
                 ).fetchall()
                 kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y")
+                hoje = agora.date()
                 for c in clientes_trial:
                     try:
                         expiry = _dt.strptime(str(c["trial_expiry"])[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=_tz(_td(hours=-3)))
                         dias_restantes = (expiry - agora).days
+
+                        # Verifica se já enviou aviso hoje (evita envio repetido a cada hora)
+                        ultimo_aviso = c["ultimo_aviso_trial"]
+                        if ultimo_aviso and str(ultimo_aviso)[:10] == str(hoje):
+                            continue  # Já notificou hoje, pula
+
                         # Aviso 2 dias antes (dia 5)
                         if dias_restantes == 2:
                             _enviar(c["whatsapp"],
@@ -2232,10 +2241,22 @@ def _verificar_trials():
                                 f"Para continuar usando o Controla Fácil sem interrupção, assine agora por apenas R$ 9,90/mês:\n\n"
                                 f"👉 {kiwify_url}"
                             )
+                            conn.execute("UPDATE clientes SET ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
+                            conn.commit()
                             logging.info(f"[TRIAL] Aviso 2 dias enviado para {c['email']}")
+                        # Aviso 1 dia antes
+                        elif dias_restantes == 1:
+                            _enviar(c["whatsapp"],
+                                f"⏳ *{c['nome']}, seu teste gratuito expira amanhã!*\n\n"
+                                f"Para continuar usando o Controla Fácil sem interrupção, assine agora por apenas R$ 9,90/mês:\n\n"
+                                f"👉 {kiwify_url}"
+                            )
+                            conn.execute("UPDATE clientes SET ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
+                            conn.commit()
+                            logging.info(f"[TRIAL] Aviso 1 dia enviado para {c['email']}")
                         # Trial expirado
                         elif dias_restantes < 0:
-                            conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (c["id"],))
+                            conn.execute("UPDATE clientes SET status='pendente', ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
                             conn.commit()
                             _enviar(c["whatsapp"],
                                 f"😕 *{c['nome']}, seu período de teste gratuito encerrou.*\n\n"
