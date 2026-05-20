@@ -2,18 +2,44 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 import os, hashlib, secrets, logging, time, threading
 from datetime import datetime, date, timezone, timedelta
 
-# ── Deduplicação de mensagens WhatsApp ──────────────────────────────────────
+# ── Deduplicação de mensagens WhatsApp (PostgreSQL-based — atômico) ──────────
+def _dedup_ok(msg_id: str) -> bool:
+    """Retorna True se msg_id é NOVO (deve processar). False se duplicado.
+    Usa INSERT ON CONFLICT DO NOTHING no PostgreSQL — atômico, sem race condition."""
+    if not msg_id:
+        return True  # sem ID → deixa passar
+    try:
+        conn = get_db()
+        if USE_PG:
+            result = conn.execute(
+                "INSERT INTO webhook_msgs (msg_id) VALUES (%s) ON CONFLICT (msg_id) DO NOTHING",
+                (msg_id,)
+            )
+            inserted = result.rowcount > 0
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO webhook_msgs (msg_id, processado_em) VALUES (?, datetime('now'))",
+                (msg_id,)
+            )
+            inserted = conn.execute("SELECT changes()").fetchone()[0] > 0
+        conn.commit()
+        conn.close()
+        return inserted
+    except Exception as e:
+        logging.error(f"[DEDUP-PG] Erro: {e}")
+        return True  # em caso de erro, processa normalmente
+
+# Mantém compatibilidade com chamadas antigas de _is_duplicate_msg (texto)
 _recent_msgs: dict = {}
 _recent_msgs_lock = threading.Lock()
 
 def _is_duplicate_msg(fone: str, msg: str, window: int = 30) -> bool:
-    """Retorna True se fone+msg já foi processado nos últimos `window` segundos."""
+    """Dedup de texto por conteúdo (em memória, janela de 30s)."""
     if not fone or not msg:
         return False
     key = (fone, msg[:120])
     now = time.time()
     with _recent_msgs_lock:
-        # Limpa entradas antigas
         expirados = [k for k, t in _recent_msgs.items() if now - t > window]
         for k in expirados:
             del _recent_msgs[k]
@@ -134,6 +160,13 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        # Tabela de dedup de mensagens WhatsApp (evita processar a mesma mensagem 2x)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS webhook_msgs (
+                msg_id TEXT PRIMARY KEY,
+                processado_em TIMESTAMP DEFAULT NOW()
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -213,6 +246,10 @@ def init_db():
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
+            CREATE TABLE IF NOT EXISTS webhook_msgs (
+                msg_id TEXT PRIMARY KEY,
+                processado_em TEXT DEFAULT (datetime('now'))
+            );
         """)
     # Adiciona colunas extras se não existirem
     if USE_PG:
@@ -231,6 +268,8 @@ def init_db():
         # Migration: Plano Casal — segundo número e grupo WhatsApp
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp2 TEXT")
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS grupo_wpp_id TEXT")
+        # Limpa dedup de mensagens antigas (> 2 horas) para não acumular
+        conn.execute("DELETE FROM webhook_msgs WHERE processado_em < NOW() - INTERVAL '2 hours'")
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
@@ -2073,10 +2112,10 @@ def webhook_whatsapp():
             else:
                 fone = remote_jid.replace("@s.whatsapp.net", "")
 
-            # Dedup por message ID (evita retry duplicado para áudio/imagem)
+            # Dedup por message ID — atômico no PostgreSQL (INSERT ON CONFLICT DO NOTHING)
             msg_id = key.get("id", "")
-            if msg_id and _is_duplicate_msg(fone, f"__mid__{msg_id}"):
-                logging.warning(f"[DEDUP] Evento duplicado ignorado: fone={fone} msg_id={msg_id}")
+            if msg_id and not _dedup_ok(msg_id):
+                logging.warning(f"[DEDUP-PG] Mensagem duplicada ignorada: fone={fone} msg_id={msg_id}")
                 return jsonify({"output": "", "status": "ignorado"}), 200
 
             # Detecta áudio — processa em background para evitar timeout/retry da Evolution API
