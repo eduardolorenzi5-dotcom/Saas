@@ -187,6 +187,11 @@
     .footer a:hover { color: #9ca3af; }
     .footer-links { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
 
+    /* ── WPP FLOAT ── */
+    .wpp-float { position: fixed; bottom: 24px; right: 24px; z-index: 9999; width: 56px; height: 56px; background: #25D366; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(37,211,102,.5); transition: transform .2s, box-shadow .2s; text-decoration: none; }
+    .wpp-float:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(37,211,102,.6); }
+    .wpp-float svg { width: 30px; height: 30px; fill: #fff; }
+
     /* ── RESPONSIVE ── */
     @media(max-width:900px) {
       .hero-inner, .feat-inner, .feat-inner.rev { grid-template-columns: 1fr; direction: ltr; gap: 48px; }
