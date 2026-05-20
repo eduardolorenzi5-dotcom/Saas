@@ -8,222 +8,204 @@
   <title>Controla Fácil — Controle seus gastos pelo WhatsApp</title>
   <meta name="description" content="Controle seus gastos pelo WhatsApp com IA. Envie uma mensagem e registramos tudo automaticamente. Relatórios, lembretes e saldo na palma da mão."/>
   <meta name="google-site-verification" content="AKyjjVaMWTwfIoW_J1qvtnPIPj7W1Kl9HVet4Y-uCFw" />
-  <!-- Open Graph / Google -->
   <meta property="og:type" content="website"/>
   <meta property="og:url" content="https://controlafacilai.com.br/"/>
   <meta property="og:title" content="Controla Fácil — Controle seus gastos pelo WhatsApp"/>
   <meta property="og:description" content="Controle seus gastos pelo WhatsApp com IA. Registre gastos, veja seu saldo e receba lembretes automáticos."/>
   <meta property="og:image" content="https://controlafacilai.com.br/static/logo.png"/>
-  <meta property="og:image:width" content="512"/>
-  <meta property="og:image:height" content="512"/>
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary"/>
   <meta name="twitter:title" content="Controla Fácil — Controle seus gastos pelo WhatsApp"/>
-  <meta name="twitter:description" content="Controle seus gastos pelo WhatsApp com IA."/>
   <meta name="twitter:image" content="https://controlafacilai.com.br/static/logo.png"/>
   <link rel="stylesheet" href="/static/css/site.css"/>
   <style>
-    /* ── RESET & BASE ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; background: #fff; overflow-x: hidden; }
+    html { scroll-behavior: smooth; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #080808; color: #fff; overflow-x: hidden; }
     a { text-decoration: none; color: inherit; }
 
     /* ── NAV ── */
-    .nav { border-bottom: 1px solid #f0f0ee; position: sticky; top: 0; background: rgba(255,255,255,.95); backdrop-filter: blur(8px); z-index: 100; }
-    .nav-inner { max-width: 1140px; margin: 0 auto; padding: 0 28px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    .nav { position: sticky; top: 0; z-index: 100; background: rgba(8,8,8,.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,.06); }
+    .nav-inner { max-width: 1160px; margin: 0 auto; padding: 0 28px; height: 66px; display: flex; align-items: center; justify-content: space-between; }
     .nav-logo { display: flex; align-items: center; gap: 10px; }
-    .nav-logo img { height: 36px; width: 36px; object-fit: contain; }
-    .nav-logo span { font-size: 18px; font-weight: 700; color: #1a1a1a; }
-    .nav-links { display: flex; align-items: center; gap: 32px; font-size: 14px; color: #555; }
-    .nav-links a:hover { color: #1a1a1a; }
-    .btn-nav { background: #1D9E75; color: #fff !important; padding: 9px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: background .15s; }
+    .nav-logo img { height: 34px; width: 34px; object-fit: contain; border-radius: 8px; }
+    .nav-logo span { font-size: 17px; font-weight: 700; color: #fff; }
+    .nav-links { display: flex; align-items: center; gap: 32px; font-size: 14px; color: #9ca3af; }
+    .nav-links a:hover { color: #fff; }
+    .btn-nav { background: #1D9E75; color: #fff !important; padding: 9px 22px; border-radius: 8px; font-weight: 600; transition: background .15s; }
     .btn-nav:hover { background: #179162 !important; }
 
     /* ── HERO ── */
-    .hero { background: #f8faf9; padding: 90px 28px 80px; overflow: hidden; }
-    .hero-inner { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
-    .hero-tag { display: inline-block; color: #1D9E75; font-size: 14px; font-weight: 600; margin-bottom: 18px; }
-    .hero h1 { font-size: 52px; font-weight: 800; line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 20px; color: #0f1117; }
+    .hero { padding: 110px 28px 90px; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -200px; right: -200px; width: 700px; height: 700px; background: radial-gradient(circle, rgba(29,158,117,.15) 0%, transparent 70%); pointer-events: none; }
+    .hero-inner { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .hero-pill { display: inline-flex; align-items: center; gap: 8px; background: rgba(29,158,117,.12); border: 1px solid rgba(29,158,117,.3); color: #1D9E75; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 100px; margin-bottom: 28px; }
+    .hero-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+    .hero h1 { font-size: 58px; font-weight: 800; line-height: 1.08; letter-spacing: -2px; color: #fff; margin-bottom: 22px; }
     .hero h1 em { font-style: normal; color: #1D9E75; }
-    .hero-sub { font-size: 17px; color: #555; line-height: 1.75; margin-bottom: 36px; max-width: 480px; }
-    .hero-cta { display: inline-flex; align-items: center; gap: 8px; background: #1a1a1a; color: #fff; padding: 16px 32px; border-radius: 12px; font-size: 15px; font-weight: 700; transition: transform .15s, background .15s; }
-    .hero-cta:hover { background: #2d2d2d; transform: translateY(-1px); }
+    .hero-sub { font-size: 17px; color: #9ca3af; line-height: 1.75; margin-bottom: 38px; max-width: 460px; }
+    .hero-cta { display: inline-flex; align-items: center; gap: 8px; background: #1D9E75; color: #fff; padding: 16px 32px; border-radius: 12px; font-size: 15px; font-weight: 700; transition: background .15s, transform .15s; }
+    .hero-cta:hover { background: #179162; transform: translateY(-2px); }
+    .hero-hint { font-size: 13px; color: #6b7280; margin-top: 12px; }
     .hero-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
-    .badge { display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #e5e5e3; border-radius: 100px; padding: 6px 14px; font-size: 12px; font-weight: 500; color: #444; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-    .badge-dot { width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; }
+    .hbadge { display: flex; align-items: center; gap: 7px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 100px; padding: 6px 14px; font-size: 12px; color: #9ca3af; }
 
-    /* ── PHONE MOCKUPS ── */
-    .hero-visual { position: relative; display: flex; justify-content: center; align-items: flex-end; gap: -20px; }
-    .phone { width: 210px; background: #0f1117; border-radius: 36px; padding: 12px 10px; box-shadow: 0 24px 60px rgba(0,0,0,.25); flex-shrink: 0; }
-    .phone-screen { background: #fff; border-radius: 26px; overflow: hidden; min-height: 360px; }
-    .phone-bar { background: #f5f5f5; padding: 10px 12px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
-    .phone-avatar { width: 28px; height: 28px; border-radius: 50%; background: #1D9E75; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 700; flex-shrink: 0; }
-    .phone-contact { font-size: 11px; font-weight: 600; }
-    .phone-online { font-size: 9px; color: #1D9E75; }
-    .phone-msgs { padding: 10px 8px; display: flex; flex-direction: column; gap: 6px; }
-    .msg { max-width: 80%; padding: 7px 10px; border-radius: 12px; font-size: 10px; line-height: 1.45; }
-    .msg-in { background: #f0f0f0; color: #333; align-self: flex-start; border-bottom-left-radius: 3px; }
-    .msg-out { background: #dcf8c6; color: #1a1a1a; align-self: flex-end; border-bottom-right-radius: 3px; }
-    .msg-time { font-size: 8px; color: #999; margin-top: 2px; }
-    .phone-mid { transform: translateY(-24px) scale(1.05); z-index: 2; }
-    .phone-side { transform: scale(.92); opacity: .85; }
+    /* ── WPP MOCKUP (hero) ── */
+    .wpp-card { background: #fff; border-radius: 24px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,.6); max-width: 360px; margin: 0 auto; }
+    .wpp-head { background: #075E54; padding: 14px 18px; display: flex; align-items: center; gap: 12px; }
+    .wpp-av { width: 40px; height: 40px; border-radius: 50%; background: #1D9E75; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .wpp-head-name { font-size: 15px; font-weight: 600; color: #fff; }
+    .wpp-head-status { font-size: 11px; color: rgba(255,255,255,.7); }
+    .wpp-body { background: #ECE5DD url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='20' r='1' fill='rgba(0,0,0,.04)'/%3E%3C/svg%3E"); padding: 16px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 300px; }
+    .wm { max-width: 82%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
+    .wm-out { background: #DCF8C6; color: #1a1a1a; align-self: flex-end; border-bottom-right-radius: 3px; }
+    .wm-in { background: #fff; color: #1a1a1a; align-self: flex-start; border-bottom-left-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+    .wm-time { font-size: 10px; color: #9ca3af; margin-top: 3px; text-align: right; }
+    .wm-in .wm-time { text-align: left; }
 
-    /* ── FAIXA SOCIAL PROOF ── */
-    .proof-bar { background: #1a1a1a; color: #fff; padding: 20px 28px; text-align: center; }
-    .proof-bar-inner { max-width: 1140px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 48px; flex-wrap: wrap; }
-    .proof-item { display: flex; align-items: center; gap: 10px; }
-    .proof-num { font-size: 24px; font-weight: 800; color: #1D9E75; }
-    .proof-label { font-size: 13px; color: #aaa; }
-
-    /* ── SEÇÕES GENÉRICAS ── */
-    .section { padding: 96px 28px; }
-    .section-inner { max-width: 1140px; margin: 0 auto; }
-    .section-tag { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #1D9E75; margin-bottom: 12px; }
-    .section-title { font-size: 40px; font-weight: 800; letter-spacing: -1px; line-height: 1.15; color: #0f1117; margin-bottom: 16px; }
-    .section-sub { font-size: 16px; color: #666; line-height: 1.75; }
-
-    /* ── COMO FUNCIONA ── */
-    .steps-section { background: #fff; }
-    .steps-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 32px; margin-top: 56px; }
-    .step-card { position: relative; }
-    .step-num-wrap { width: 48px; height: 48px; background: #0f1117; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
-    .step-num-wrap span { font-size: 18px; font-weight: 800; color: #1D9E75; }
-    .step-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: #0f1117; }
-    .step-card p { font-size: 14px; color: #777; line-height: 1.65; }
-    .step-arrow { position: absolute; top: 24px; right: -20px; color: #ddd; font-size: 20px; }
+    /* ── PROOF BAR ── */
+    .proof-bar { background: #111; border-top: 1px solid rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.06); padding: 24px 28px; }
+    .proof-inner { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 56px; flex-wrap: wrap; }
+    .proof-item { display: flex; align-items: center; gap: 12px; }
+    .proof-num { font-size: 26px; font-weight: 800; color: #1D9E75; }
+    .proof-label { font-size: 13px; color: #6b7280; line-height: 1.4; }
 
     /* ── FEATURE SECTIONS ── */
-    .feature-section { padding: 80px 28px; }
-    .feature-section.alt { background: #f8faf9; }
-    .feature-grid { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; }
-    .feature-grid.reverse { direction: rtl; }
-    .feature-grid.reverse > * { direction: ltr; }
-    .feature-text h2 { font-size: 36px; font-weight: 800; letter-spacing: -.8px; line-height: 1.2; margin-bottom: 16px; color: #0f1117; }
-    .feature-text p { font-size: 15px; color: #666; line-height: 1.8; margin-bottom: 20px; }
-    .feature-bullets { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
-    .feature-bullets li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #444; }
-    .feature-bullets li::before { content: ''; width: 20px; height: 20px; border-radius: 50%; background: #e6f7f1; border: 2px solid #1D9E75; flex-shrink: 0; background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%231D9E75' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: center; }
-    .feature-cta { display: inline-flex; align-items: center; gap: 8px; background: #1D9E75; color: #fff; padding: 13px 26px; border-radius: 10px; font-size: 14px; font-weight: 700; transition: background .15s; }
-    .feature-cta:hover { background: #179162; }
+    .feat { padding: 100px 28px; }
+    .feat.dark { background: #0d0d0d; }
+    .feat-inner { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .feat-inner.rev { direction: rtl; }
+    .feat-inner.rev > * { direction: ltr; }
+    .feat-pill { display: inline-flex; align-items: center; gap: 8px; background: rgba(29,158,117,.1); border: 1px solid rgba(29,158,117,.2); color: #1D9E75; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 100px; margin-bottom: 20px; }
+    .feat-pill svg { width: 14px; height: 14px; }
+    .feat h2 { font-size: 40px; font-weight: 800; letter-spacing: -1.2px; line-height: 1.12; color: #fff; margin-bottom: 16px; }
+    .feat p { font-size: 16px; color: #9ca3af; line-height: 1.8; margin-bottom: 28px; }
+    .feat-checks { display: flex; flex-direction: column; gap: 12px; }
+    .feat-check { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #d1d5db; }
+    .feat-check svg { width: 18px; height: 18px; color: #1D9E75; flex-shrink: 0; }
 
-    /* ── CHAT MOCKUP ── */
-    .chat-mockup { background: #0f1117; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.2); max-width: 400px; }
-    .chat-header { background: #1c2030; padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.07); }
-    .chat-av { width: 36px; height: 36px; border-radius: 50%; background: #1D9E75; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; font-weight: 700; }
-    .chat-name { font-size: 14px; font-weight: 600; color: #fff; }
-    .chat-status { font-size: 11px; color: #1D9E75; }
-    .chat-body { padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; background: #161925; min-height: 300px; }
-    .cmsg { max-width: 82%; padding: 10px 13px; border-radius: 14px; font-size: 12.5px; line-height: 1.5; }
-    .cmsg-in { background: #1e2435; color: #d0d5e8; align-self: flex-start; border-bottom-left-radius: 3px; }
-    .cmsg-out { background: #1D9E75; color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
-    .cmsg-time { font-size: 9px; color: rgba(255,255,255,.4); margin-top: 3px; text-align: right; }
-    .cmsg-in .cmsg-time { color: rgba(208,213,232,.4); }
+    /* ── CHAT DARK MOCKUP ── */
+    .chat-dark { background: #111; border: 1px solid rgba(255,255,255,.08); border-radius: 20px; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.5); }
+    .cd-head { background: #0d0d0d; padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
+    .cd-av { width: 36px; height: 36px; border-radius: 50%; background: #1D9E75; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .cd-name { font-size: 14px; font-weight: 600; color: #fff; }
+    .cd-status { font-size: 11px; color: #1D9E75; }
+    .cd-body { padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; min-height: 280px; }
+    .cm { max-width: 84%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.55; }
+    .cm-out { background: #1D9E75; color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
+    .cm-in { background: rgba(255,255,255,.07); color: #e5e7eb; align-self: flex-start; border-bottom-left-radius: 3px; }
+    .cm-time { font-size: 10px; opacity: .5; margin-top: 3px; text-align: right; }
+    .cm-in .cm-time { text-align: left; }
 
     /* ── DASHBOARD MOCKUP ── */
-    .dash-mockup { background: #fff; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.12); overflow: hidden; border: 1px solid #e5e7eb; }
-    .dash-mock-nav { background: #0f1117; padding: 12px 20px; display: flex; align-items: center; gap: 20px; }
-    .dash-mock-logo { font-size: 13px; font-weight: 700; color: #1D9E75; }
-    .dash-mock-link { font-size: 11px; color: rgba(255,255,255,.4); }
-    .dash-mock-body { padding: 20px; }
-    .dash-mock-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-    .dash-mock-card { background: #f8faf9; border-radius: 10px; padding: 14px; border: 1px solid #e5e7eb; }
-    .dash-mock-card .dmc-label { font-size: 10px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
-    .dash-mock-card .dmc-val { font-size: 20px; font-weight: 800; color: #0f1117; }
-    .dash-mock-card .dmc-val.green { color: #1D9E75; }
-    .dash-mock-card .dmc-val.red { color: #dc2626; }
-    .dash-bar-chart { background: #f8faf9; border-radius: 10px; padding: 14px; border: 1px solid #e5e7eb; }
-    .dash-bar-label { font-size: 11px; font-weight: 600; color: #555; margin-bottom: 10px; }
-    .dash-bars { display: flex; align-items: flex-end; gap: 6px; height: 70px; }
-    .dash-bar { flex: 1; border-radius: 4px 4px 0 0; background: #e5e7eb; }
-    .dash-bar.active { background: #1D9E75; }
+    .dash-mock { background: #111; border: 1px solid rgba(255,255,255,.08); border-radius: 20px; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.5); }
+    .dm-nav { background: #0d0d0d; padding: 14px 20px; display: flex; align-items: center; gap: 20px; border-bottom: 1px solid rgba(255,255,255,.06); }
+    .dm-logo { font-size: 13px; font-weight: 700; color: #1D9E75; }
+    .dm-link { font-size: 11px; color: rgba(255,255,255,.3); }
+    .dm-body { padding: 20px; }
+    .dm-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .dm-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 14px; }
+    .dm-card .lbl { font-size: 10px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .dm-card .val { font-size: 20px; font-weight: 800; color: #fff; }
+    .dm-card .val.g { color: #1D9E75; }
+    .dm-card .val.r { color: #f87171; }
+    .dm-chart { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 14px; }
+    .dm-chart-label { font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 10px; }
+    .bars { display: flex; align-items: flex-end; gap: 6px; height: 68px; }
+    .bar { flex: 1; border-radius: 4px 4px 0 0; background: rgba(255,255,255,.08); }
+    .bar.a { background: #1D9E75; }
 
-    /* ── AGENDA SECTION ── */
-    .agenda-section { padding: 80px 28px; text-align: center; }
-    .agenda-logos { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 36px; }
-    .agenda-logo-box { width: 72px; height: 72px; background: #f8faf9; border: 1px solid #e5e7eb; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
-    .agenda-arrow { font-size: 22px; color: #ccc; }
-    .agenda-section h2 { font-size: 40px; font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
-    .agenda-section h2 em { font-style: normal; color: #1D9E75; }
-    .agenda-section p { font-size: 16px; color: #666; max-width: 600px; margin: 0 auto 36px; line-height: 1.75; }
-    .agenda-features { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 36px; }
-    .agenda-feat { font-size: 15px; color: #444; padding-bottom: 10px; border-bottom: 2px solid #1D9E75; display: inline-block; }
+    /* ── HUB SECTION ── */
+    .hub-section { padding: 100px 28px; text-align: center; }
+    .hub-section h2 { font-size: 44px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 14px; }
+    .hub-section h2 em { font-style: normal; color: #1D9E75; }
+    .hub-section p { font-size: 16px; color: #9ca3af; max-width: 560px; margin: 0 auto 60px; line-height: 1.75; }
+    .hub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 900px; margin: 0 auto; }
+    .hub-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 24px; text-align: left; transition: border-color .2s, background .2s; }
+    .hub-card:hover { border-color: rgba(29,158,117,.4); background: rgba(29,158,117,.05); }
+    .hub-icon { font-size: 28px; margin-bottom: 14px; }
+    .hub-card h3 { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .hub-card p { font-size: 13px; color: #6b7280; line-height: 1.6; }
 
     /* ── PLANOS ── */
-    .planos-section { background: #0f1117; padding: 96px 28px; }
-    .planos-section .section-tag { color: #1D9E75; }
-    .planos-section .section-title { color: #fff; }
-    .planos-section .section-sub { color: #6b7280; }
-    .planos-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; margin-top: 56px; }
-    .plano-card { background: #1c2030; border: 1px solid rgba(255,255,255,.08); border-radius: 20px; padding: 36px; position: relative; width: 320px; max-width: 100%; transition: transform .2s; }
+    .planos-section { background: #0d0d0d; padding: 100px 28px; }
+    .planos-section .sec-tag { color: #1D9E75; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; text-align: center; margin-bottom: 12px; }
+    .planos-section h2 { font-size: 44px; font-weight: 800; letter-spacing: -1.5px; text-align: center; color: #fff; margin-bottom: 10px; }
+    .planos-section .sub { font-size: 16px; color: #6b7280; text-align: center; margin-bottom: 56px; }
+    .planos-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; }
+    .plano-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 20px; padding: 36px; position: relative; width: 320px; max-width: 100%; transition: transform .2s; }
     .plano-card:hover { transform: translateY(-4px); }
-    .plano-card.destaque { border-color: #1D9E75; border-width: 2px; background: #152820; }
-    .badge-popular { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: #1D9E75; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 16px; border-radius: 100px; white-space: nowrap; letter-spacing: .05em; }
+    .plano-card.dest { border-color: #1D9E75; border-width: 2px; background: rgba(29,158,117,.06); }
+    .badge-pop { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: #1D9E75; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 16px; border-radius: 100px; white-space: nowrap; }
     .plano-card h3 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px; }
-    .preco { font-size: 42px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+    .preco { font-size: 44px; font-weight: 800; color: #fff; margin-bottom: 4px; }
     .preco span { font-size: 15px; font-weight: 400; color: #6b7280; }
     .plano-desc { font-size: 14px; color: #6b7280; line-height: 1.65; margin-bottom: 28px; }
     .plano-btn { display: block; text-align: center; background: #1D9E75; color: #fff; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 700; transition: background .15s; }
     .plano-btn:hover { background: #179162; }
-    .plano-card:not(.destaque) .plano-btn { background: rgba(255,255,255,.08); color: #fff; }
-    .plano-card:not(.destaque) .plano-btn:hover { background: rgba(255,255,255,.14); }
+    .plano-card:not(.dest) .plano-btn { background: rgba(255,255,255,.08); }
+    .plano-card:not(.dest) .plano-btn:hover { background: rgba(255,255,255,.13); }
 
     /* ── DEPOIMENTOS ── */
-    .dep-section { background: #f8faf9; padding: 96px 28px; }
-    .dep-section .section-inner { text-align: center; }
-    .dep-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-top: 52px; text-align: left; }
-    .dep-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 16px; }
-    .dep-stars { color: #f59e0b; font-size: 16px; letter-spacing: 2px; }
-    .dep-texto { font-size: 14px; color: #444; line-height: 1.75; flex: 1; }
+    .dep-section { padding: 100px 28px; }
+    .dep-section .sec-tag { color: #1D9E75; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; text-align: center; margin-bottom: 12px; }
+    .dep-section h2 { font-size: 40px; font-weight: 800; letter-spacing: -1.2px; text-align: center; color: #fff; margin-bottom: 52px; }
+    .dep-grid { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+    .dep-card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+    .dep-stars { color: #f59e0b; font-size: 15px; letter-spacing: 3px; }
+    .dep-texto { font-size: 14px; color: #9ca3af; line-height: 1.8; flex: 1; }
     .dep-autor { display: flex; align-items: center; gap: 12px; }
-    .dep-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; flex-shrink: 0; }
-    .dep-nome { font-size: 14px; font-weight: 700; color: #0f1117; }
-    .dep-cargo { font-size: 12px; color: #9ca3af; }
+    .dep-av { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .dep-nome { font-size: 14px; font-weight: 700; color: #fff; }
+    .dep-cargo { font-size: 12px; color: #6b7280; }
 
     /* ── FAQ ── */
-    .faq-section { background: #fff; padding: 96px 28px; }
-    .faq-inner { max-width: 780px; margin: 0 auto; }
-    .faq-inner h2 { font-size: 36px; font-weight: 800; letter-spacing: -.8px; text-align: center; margin-bottom: 12px; color: #0f1117; }
-    .faq-sub { text-align: center; color: #666; font-size: 15px; margin-bottom: 52px; }
-    .faq-item { border-bottom: 1px solid #f0f0ee; }
-    .faq-q { width: 100%; background: none; border: none; text-align: left; padding: 22px 0; font-size: 16px; font-weight: 600; color: #0f1117; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .faq-section { background: #0d0d0d; padding: 100px 28px; }
+    .faq-inner { max-width: 760px; margin: 0 auto; }
+    .faq-inner h2 { font-size: 40px; font-weight: 800; letter-spacing: -1px; text-align: center; margin-bottom: 10px; }
+    .faq-sub { text-align: center; color: #6b7280; font-size: 15px; margin-bottom: 52px; }
+    .faq-item { border-bottom: 1px solid rgba(255,255,255,.07); }
+    .faq-q { width: 100%; background: none; border: none; text-align: left; padding: 22px 0; font-size: 16px; font-weight: 600; color: #fff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
     .faq-q:hover { color: #1D9E75; }
     .faq-icon { font-size: 20px; color: #1D9E75; flex-shrink: 0; transition: transform .2s; }
-    .faq-a { font-size: 15px; color: #555; line-height: 1.8; padding-bottom: 20px; display: none; }
+    .faq-a { font-size: 15px; color: #9ca3af; line-height: 1.8; padding-bottom: 22px; display: none; }
     .faq-item.open .faq-a { display: block; }
     .faq-item.open .faq-icon { transform: rotate(45deg); }
     .faq-cta { text-align: center; margin-top: 52px; }
-    .faq-cta p { font-size: 15px; color: #666; margin-bottom: 20px; }
+    .faq-cta p { font-size: 15px; color: #6b7280; margin-bottom: 20px; }
+
+    /* ── CTA FINAL ── */
+    .cta-final { padding: 100px 28px; text-align: center; position: relative; overflow: hidden; }
+    .cta-final::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; height: 400px; background: radial-gradient(ellipse, rgba(29,158,117,.12) 0%, transparent 70%); pointer-events: none; }
+    .cta-final h2 { font-size: 48px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 16px; }
+    .cta-final h2 em { font-style: normal; color: #1D9E75; }
+    .cta-final p { font-size: 17px; color: #9ca3af; margin-bottom: 36px; max-width: 500px; margin-left: auto; margin-right: auto; }
 
     /* ── FOOTER ── */
-    .footer { background: #090c14; color: #4b5563; padding: 40px 28px; text-align: center; font-size: 13px; border-top: 1px solid rgba(255,255,255,.05); }
+    .footer { background: #050505; border-top: 1px solid rgba(255,255,255,.05); color: #4b5563; padding: 36px 28px; text-align: center; font-size: 13px; }
     .footer a { color: #6b7280; }
     .footer a:hover { color: #9ca3af; }
-    .footer-inner { max-width: 1140px; margin: 0 auto; }
     .footer-links { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
 
     /* ── RESPONSIVE ── */
     @media(max-width:900px) {
-      .hero-inner { grid-template-columns: 1fr; gap: 48px; }
-      .hero h1 { font-size: 38px; }
-      .hero-visual { display: none; }
-      .steps-grid { grid-template-columns: 1fr 1fr; }
-      .step-arrow { display: none; }
-      .feature-grid, .feature-grid.reverse { grid-template-columns: 1fr; direction: ltr; gap: 40px; }
-      .proof-bar-inner { gap: 28px; }
+      .hero-inner, .feat-inner, .feat-inner.rev { grid-template-columns: 1fr; direction: ltr; gap: 48px; }
+      .hero h1 { font-size: 40px; }
+      .feat h2 { font-size: 30px; }
+      .hub-grid { grid-template-columns: 1fr 1fr; }
       .dep-grid { grid-template-columns: 1fr; }
     }
     @media(max-width:600px) {
-      .hero { padding: 60px 20px 52px; }
-      .hero h1 { font-size: 30px; }
-      .section-title { font-size: 28px; }
-      .steps-grid { grid-template-columns: 1fr; }
+      .hero { padding: 70px 20px 60px; }
+      .hero h1 { font-size: 32px; letter-spacing: -1px; }
+      .cta-final h2 { font-size: 32px; }
+      .planos-section h2, .dep-section h2 { font-size: 30px; }
+      .hub-grid { grid-template-columns: 1fr; }
+      .proof-inner { gap: 28px; }
       .nav-links a:not(.btn-nav):not(:last-child) { display: none; }
-      .agenda-section h2 { font-size: 28px; }
-      .faq-inner h2 { font-size: 28px; }
     }
   </style>
   {% if META_PIXEL_ID %}
-  <!-- Meta Pixel -->
   <script>
   !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
   n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
@@ -232,12 +214,10 @@
   document,'script','https://connect.facebook.net/en_US/fbevents.js');
   fbq('init', '{{ META_PIXEL_ID }}');
   fbq('track', 'PageView');
-  fbq('track', 'ViewContent', {content_name: 'Landing Page', content_category: 'SaaS'});
   </script>
   <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id={{ META_PIXEL_ID }}&ev=PageView&noscript=1"/></noscript>
   {% endif %}
   {% if GA_MEASUREMENT_ID %}
-  <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id={{ GA_MEASUREMENT_ID }}"></script>
   <script>
   window.dataLayer = window.dataLayer || [];
@@ -259,7 +239,7 @@
     <div class="nav-links">
       <a href="#como-funciona">Como funciona</a>
       <a href="#planos">Planos</a>
-      <a href="/login" class="btn-nav">Login →</a>
+      <a href="/login" class="btn-nav">Entrar →</a>
     </div>
   </div>
 </nav>
@@ -268,53 +248,35 @@
 <section class="hero">
   <div class="hero-inner">
     <div>
-      <div class="hero-tag">Você sabe para onde vai seu dinheiro todo mês?</div>
-      <h1>Seu assistente financeiro no <em>WhatsApp</em>, 24h por dia.</h1>
-      <p class="hero-sub">Mande uma mensagem como "gastei R$50 no mercado" e a IA registra, categoriza e organiza tudo automaticamente. Simples assim.</p>
+      <div class="hero-pill">
+        <div class="hero-pill-dot"></div>
+        IA financeira no WhatsApp
+      </div>
+      <h1>Um assistente financeiro.<br/>Direto no seu <em>WhatsApp.</em></h1>
+      <p class="hero-sub">Mande uma mensagem, áudio ou foto do comprovante. A IA registra, categoriza e organiza tudo automaticamente. Sem planilha, sem app novo.</p>
       <a href="/cadastro" class="hero-cta">Começar grátis por 7 dias →</a>
-      <p style="font-size:13px;color:#888;margin-top:10px;">✅ 7 dias grátis · Sem cartão de crédito · Cancele quando quiser</p>
-      <div class="hero-badges" style="margin-top:20px;">
-        <div class="badge"><div class="badge-dot"></div> IA que entende português</div>
-        <div class="badge"><div class="badge-dot"></div> Registro em segundos</div>
-        <div class="badge"><div class="badge-dot"></div> Relatório PDF profissional</div>
-        <div class="badge"><div class="badge-dot"></div> Google Agenda integrado</div>
+      <p class="hero-hint">✅ 7 dias grátis · Sem cartão de crédito · Cancele quando quiser</p>
+      <div class="hero-badges">
+        <div class="hbadge">🎙️ Registre por áudio</div>
+        <div class="hbadge">📊 Relatório PDF</div>
+        <div class="hbadge">📅 Google Agenda</div>
+        <div class="hbadge">🤖 IA em português</div>
       </div>
     </div>
-    <div class="hero-visual">
-      <div class="phone phone-side">
-        <div class="phone-screen">
-          <div class="phone-bar">
-            <div class="phone-avatar">CF</div>
-            <div><div class="phone-contact">Controla Fácil</div><div class="phone-online">online</div></div>
-          </div>
-          <div class="phone-msgs">
-            <div class="msg msg-out">Gastei R$120 no mercado<div class="msg-time">09:14</div></div>
-            <div class="msg msg-in">✅ Registrado!<br/>📝 Mercado<br/>💰 R$ 120,00<br/>📂 Alimentação<div class="msg-time">09:14</div></div>
+    <div>
+      <div class="wpp-card">
+        <div class="wpp-head">
+          <div class="wpp-av">CF</div>
+          <div>
+            <div class="wpp-head-name">Controla Fácil</div>
+            <div class="wpp-head-status">online agora</div>
           </div>
         </div>
-      </div>
-      <div class="phone phone-mid">
-        <div class="phone-screen">
-          <div class="phone-bar">
-            <div class="phone-avatar">CF</div>
-            <div><div class="phone-contact">Controla Fácil</div><div class="phone-online">online</div></div>
-          </div>
-          <div class="phone-msgs">
-            <div class="msg msg-out">Quanto gastei esse mês?<div class="msg-time">18:30</div></div>
-            <div class="msg msg-in">📊 <b>Maio 2026</b><br/><br/>💸 Total: R$ 1.240,00<br/>✅ Saldo: R$ 760,00<br/><br/>• Alimentação: R$ 480<br/>• Transporte: R$ 320<br/>• Lazer: R$ 240<br/>• Outros: R$ 200<div class="msg-time">18:30</div></div>
-          </div>
-        </div>
-      </div>
-      <div class="phone phone-side">
-        <div class="phone-screen">
-          <div class="phone-bar">
-            <div class="phone-avatar">CF</div>
-            <div><div class="phone-contact">Controla Fácil</div><div class="phone-online">online</div></div>
-          </div>
-          <div class="phone-msgs">
-            <div class="msg msg-out">Dentista sexta às 15h<div class="msg-time">10:05</div></div>
-            <div class="msg msg-in">✅ Agendado!<br/>📌 Dentista<br/>📅 09/05 às 15:00<br/>⏱ 60 min<div class="msg-time">10:05</div></div>
-          </div>
+        <div class="wpp-body">
+          <div class="wm wm-out">Gastei 45 no almoço e 12 no café<div class="wm-time">12:31 ✓✓</div></div>
+          <div class="wm wm-in">✅ 2 gastos registrados!<br/><br/>🍽️ Almoço — R$ 45,00<br/>☕ Café — R$ 12,00<br/>📂 Alimentação<div class="wm-time">12:31</div></div>
+          <div class="wm wm-out">Quanto gastei esse mês?<div class="wm-time">18:30 ✓✓</div></div>
+          <div class="wm wm-in">📊 <b>Maio 2026</b><br/><br/>💸 Total: R$ 1.240,00<br/>✅ Saldo: R$ 760,00<br/><br/>• Alimentação: R$ 480<br/>• Transporte: R$ 320<br/>• Lazer: R$ 240<div class="wm-time">18:30</div></div>
         </div>
       </div>
     </div>
@@ -323,7 +285,7 @@
 
 <!-- PROOF BAR -->
 <div class="proof-bar">
-  <div class="proof-bar-inner">
+  <div class="proof-inner">
     <div class="proof-item">
       <div class="proof-num">100%</div>
       <div class="proof-label">pelo WhatsApp<br/>sem app novo</div>
@@ -343,135 +305,115 @@
   </div>
 </div>
 
-<!-- COMO FUNCIONA -->
-<section class="section steps-section" id="como-funciona">
-  <div class="section-inner">
-    <div style="text-align:center;">
-      <div class="section-tag">Simples do início ao fim</div>
-      <h2 class="section-title">Como funciona</h2>
-      <p class="section-sub" style="max-width:520px;margin:0 auto;">Em menos de 2 minutos você já está registrando seus gastos.</p>
-    </div>
-    <div class="steps-grid">
-      <div class="step-card">
-        <div class="step-num-wrap"><span>1</span></div>
-        <h3>Escolha seu plano</h3>
-        <p>Selecione o plano ideal e finalize o pagamento em segundos pelo Mercado Pago.</p>
-        <div class="step-arrow">→</div>
+<!-- FEATURE 1 — Registro pelo WhatsApp -->
+<section class="feat" id="como-funciona">
+  <div class="feat-inner">
+    <div class="feat-text">
+      <div class="feat-pill">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+        Controle Financeiro
       </div>
-      <div class="step-card">
-        <div class="step-num-wrap"><span>2</span></div>
-        <h3>Receba o acesso</h3>
-        <p>Seu assistente de IA é ativado imediatamente e entra em contato no WhatsApp.</p>
-        <div class="step-arrow">→</div>
+      <h2>Registre despesas<br/>por áudio ou texto.</h2>
+      <p>Registre cada despesa ou receita em segundos. O assistente ouve seus áudios, entende sua fala natural e categoriza tudo automaticamente.</p>
+      <div class="feat-checks">
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Texto, áudio ou foto de comprovante
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Categorização automática com IA
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Registre vários gastos de uma vez
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Corrija ou apague o último com um comando
+        </div>
       </div>
-      <div class="step-card">
-        <div class="step-num-wrap"><span>3</span></div>
-        <h3>Registre naturalmente</h3>
-        <p>Mande texto, áudio ou foto de comprovante. A IA entende e organiza tudo.</p>
-        <div class="step-arrow">→</div>
-      </div>
-      <div class="step-card">
-        <div class="step-num-wrap"><span>4</span></div>
-        <h3>Acompanhe tudo</h3>
-        <p>Dashboard completo, relatório PDF e resumos pelo WhatsApp sempre que quiser.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FEATURE 1 — WhatsApp -->
-<section class="feature-section alt">
-  <div class="feature-grid">
-    <div class="feature-text">
-      <div class="section-tag">Registro inteligente</div>
-      <h2>Registre tudo<br/>pelo WhatsApp</h2>
-      <p>Chega de planilha complicada. Mande uma mensagem como se estivesse falando com um amigo — a IA entende e organiza automaticamente.</p>
-      <ul class="feature-bullets">
-        <li>Texto, áudio ou foto de comprovante</li>
-        <li>Categorização automática com IA</li>
-        <li>Registre vários gastos de uma vez</li>
-        <li>Corrija ou apague o último gasto com um comando</li>
-      </ul>
-      <a href="/cadastro" class="feature-cta">Quero registrar assim →</a>
     </div>
     <div>
-      <div class="chat-mockup">
-        <div class="chat-header">
-          <div class="chat-av">CF</div>
+      <div class="chat-dark">
+        <div class="cd-head">
+          <div class="cd-av">CF</div>
           <div>
-            <div class="chat-name">Controla Fácil</div>
-            <div class="chat-status">● online agora</div>
+            <div class="cd-name">Controla Fácil</div>
+            <div class="cd-status">● online agora</div>
           </div>
         </div>
-        <div class="chat-body">
-          <div class="cmsg cmsg-out">Gastei 45 no almoço e 12 no café<div class="cmsg-time">12:31 ✓✓</div></div>
-          <div class="cmsg cmsg-in">✅ 2 gastos registrados!<br/><br/>🍽️ Almoço — R$ 45,00 (Alimentação)<br/>☕ Café — R$ 12,00 (Alimentação)<br/><br/>💰 Total: R$ 57,00<div class="cmsg-time">12:31</div></div>
-          <div class="cmsg cmsg-out">Paguei o Uber por 23 reais<div class="cmsg-time">14:02 ✓✓</div></div>
-          <div class="cmsg cmsg-in">✅ Registrado!<br/>🚗 Uber — R$ 23,00<br/>📂 Transporte — 14/05/2026<div class="cmsg-time">14:02</div></div>
-          <div class="cmsg cmsg-out">Apaga o último<div class="cmsg-time">14:03 ✓✓</div></div>
-          <div class="cmsg cmsg-in">🗑️ Removido!<br/>Uber — R$ 23,00<div class="cmsg-time">14:03</div></div>
+        <div class="cd-body">
+          <div class="cm cm-out">Gastei 45 no almoço e 12 no café<div class="cm-time">12:31 ✓✓</div></div>
+          <div class="cm cm-in">✅ 2 gastos registrados!<br/><br/>🍽️ Almoço — R$ 45,00 (Alimentação)<br/>☕ Café — R$ 12,00 (Alimentação)<div class="cm-time">12:31</div></div>
+          <div class="cm cm-out">Paguei o Uber por 23 reais<div class="cm-time">14:02 ✓✓</div></div>
+          <div class="cm cm-in">✅ Registrado!<br/>🚗 Uber — R$ 23,00<br/>📂 Transporte<div class="cm-time">14:02</div></div>
+          <div class="cm cm-out">Apaga o último<div class="cm-time">14:03 ✓✓</div></div>
+          <div class="cm cm-in">🗑️ Removido! Uber — R$ 23,00<div class="cm-time">14:03</div></div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- FEATURE 2 — Dashboard + PDF -->
-<section class="feature-section">
-  <div class="feature-grid reverse">
-    <div class="feature-text">
-      <div class="section-tag">Painel profissional</div>
-      <h2>Dashboard completo<br/>+ Relatório PDF</h2>
-      <p>Veja seus gastos organizados em gráficos, compare com sua renda e receba um relatório PDF profissional pelo WhatsApp quando quiser.</p>
-      <ul class="feature-bullets">
-        <li>Gráficos de evolução diária dos gastos</li>
-        <li>Categorias com percentual do orçamento</li>
-        <li>Relatório PDF com 3 tipos de gráficos</li>
-        <li>Solicite o relatório pelo WhatsApp</li>
-      </ul>
-      <a href="/cadastro" class="feature-cta">Ver meu painel →</a>
+<!-- FEATURE 2 — Dashboard -->
+<section class="feat dark">
+  <div class="feat-inner rev">
+    <div class="feat-text">
+      <div class="feat-pill">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+        Análise de Dados
+      </div>
+      <h2>Dashboard analítico<br/>para controle total.</h2>
+      <p>Veja seus gastos organizados em gráficos, compare com sua renda e gere um relatório PDF profissional pelo WhatsApp quando quiser.</p>
+      <div class="feat-checks">
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Gráficos de evolução diária dos gastos
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Categorias com percentual do orçamento
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Relatório PDF com 3 tipos de gráficos
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Solicite o relatório pelo WhatsApp
+        </div>
+      </div>
     </div>
     <div>
-      <div class="dash-mockup">
-        <div class="dash-mock-nav">
-          <div class="dash-mock-logo">Controla Fácil</div>
-          <div class="dash-mock-link">Dashboard</div>
-          <div class="dash-mock-link">Assinatura</div>
+      <div class="dash-mock">
+        <div class="dm-nav">
+          <div class="dm-logo">Controla Fácil</div>
+          <div class="dm-link">Dashboard</div>
+          <div class="dm-link">Assinatura</div>
         </div>
-        <div class="dash-mock-body">
-          <div class="dash-mock-cards">
-            <div class="dash-mock-card">
-              <div class="dmc-label">Total gasto</div>
-              <div class="dmc-val red">R$ 1.240</div>
-            </div>
-            <div class="dash-mock-card">
-              <div class="dmc-label">Saldo</div>
-              <div class="dmc-val green">R$ 760</div>
-            </div>
-            <div class="dash-mock-card">
-              <div class="dmc-label">Renda mensal</div>
-              <div class="dmc-val">R$ 2.000</div>
-            </div>
-            <div class="dash-mock-card">
-              <div class="dmc-label">Maior categoria</div>
-              <div class="dmc-val" style="font-size:14px;color:#6366f1;">Alimentação</div>
-            </div>
+        <div class="dm-body">
+          <div class="dm-cards">
+            <div class="dm-card"><div class="lbl">Total gasto</div><div class="val r">R$ 1.240</div></div>
+            <div class="dm-card"><div class="lbl">Saldo</div><div class="val g">R$ 760</div></div>
+            <div class="dm-card"><div class="lbl">Renda mensal</div><div class="val">R$ 2.000</div></div>
+            <div class="dm-card"><div class="lbl">Maior categoria</div><div class="val" style="font-size:14px;color:#818cf8;">Alimentação</div></div>
           </div>
-          <div class="dash-bar-chart">
-            <div class="dash-bar-label">Evolução dos gastos — Maio</div>
-            <div class="dash-bars">
-              <div class="dash-bar active" style="height:30%"></div>
-              <div class="dash-bar active" style="height:45%"></div>
-              <div class="dash-bar" style="height:10%"></div>
-              <div class="dash-bar active" style="height:60%"></div>
-              <div class="dash-bar active" style="height:40%"></div>
-              <div class="dash-bar" style="height:8%"></div>
-              <div class="dash-bar active" style="height:75%"></div>
-              <div class="dash-bar active" style="height:55%"></div>
-              <div class="dash-bar" style="height:12%"></div>
-              <div class="dash-bar active" style="height:90%"></div>
-              <div class="dash-bar active" style="height:65%"></div>
-              <div class="dash-bar" style="height:5%"></div>
+          <div class="dm-chart">
+            <div class="dm-chart-label">Evolução dos gastos — Maio</div>
+            <div class="bars">
+              <div class="bar a" style="height:30%"></div>
+              <div class="bar a" style="height:48%"></div>
+              <div class="bar" style="height:10%"></div>
+              <div class="bar a" style="height:65%"></div>
+              <div class="bar a" style="height:42%"></div>
+              <div class="bar" style="height:8%"></div>
+              <div class="bar a" style="height:78%"></div>
+              <div class="bar a" style="height:55%"></div>
+              <div class="bar" style="height:12%"></div>
+              <div class="bar a" style="height:92%"></div>
+              <div class="bar a" style="height:68%"></div>
+              <div class="bar" style="height:5%"></div>
             </div>
           </div>
         </div>
@@ -481,91 +423,144 @@
 </section>
 
 <!-- FEATURE 3 — Google Agenda -->
-<section class="agenda-section">
-  <div class="agenda-logos">
-    <div class="agenda-logo-box">
-      <img src="/static/logo.png" alt="Controla Fácil" style="width:40px;height:40px;object-fit:contain;"/>
+<section class="feat">
+  <div class="feat-inner">
+    <div class="feat-text">
+      <div class="feat-pill">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+        Agenda Inteligente
+      </div>
+      <h2>Gerencie seu tempo<br/>e agenda em um só lugar.</h2>
+      <p>Conecte o Google Agenda e agende compromissos direto pelo WhatsApp. O assistente cria os eventos automaticamente e sincroniza em tempo real.</p>
+      <div class="feat-checks">
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Crie eventos com uma mensagem no WhatsApp
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Consulte compromissos de qualquer dia
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Sincronização em tempo real com o Google
+        </div>
+        <div class="feat-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Lembretes automáticos mensais
+        </div>
+      </div>
     </div>
-    <div class="agenda-arrow">⇄</div>
-    <div class="agenda-logo-box" style="font-size:36px;">📅</div>
+    <div>
+      <div class="chat-dark">
+        <div class="cd-head">
+          <div class="cd-av">CF</div>
+          <div>
+            <div class="cd-name">Controla Fácil</div>
+            <div class="cd-status">● online agora</div>
+          </div>
+        </div>
+        <div class="cd-body">
+          <div class="cm cm-out">Dentista sexta às 15h<div class="cm-time">10:05 ✓✓</div></div>
+          <div class="cm cm-in">✅ Agendado!<br/>📌 Dentista<br/>📅 Sexta-feira às 15:00<br/>📅 Salvo no Google Agenda<div class="cm-time">10:05</div></div>
+          <div class="cm cm-out">Quais são meus compromissos de amanhã?<div class="cm-time">09:12 ✓✓</div></div>
+          <div class="cm cm-in">📅 <b>Seus compromissos de amanhã:</b><br/><br/>• Reunião às 09:00<br/>• Dentista às 15:00<br/>• Academia às 18:30<div class="cm-time">09:12</div></div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="section-tag">Integração nativa</div>
-  <h2>Integração com <em>Google Agenda</em></h2>
-  <p>Conecte sua conta Google e agende compromissos direto pelo WhatsApp. O assistente cria os eventos automaticamente na sua agenda.</p>
-  <div class="agenda-features">
-    <div class="agenda-feat">Crie eventos com uma mensagem no WhatsApp</div>
-    <div class="agenda-feat">Escolha horário, duração e cor do evento</div>
-    <div class="agenda-feat">Sincronização em tempo real com o Google</div>
+</section>
+
+<!-- HUB — Tudo que você pode fazer -->
+<section class="hub-section">
+  <div class="feat-pill" style="display:inline-flex;margin-bottom:20px;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+    Tudo pelo WhatsApp
   </div>
-  <a href="/cadastro" class="hero-cta" style="background:#1D9E75;">Ativar integração →</a>
+  <h2>Automatize suas finanças<br/>e agenda direto no <em>WhatsApp.</em></h2>
+  <p>Fale com o assistente como se fosse uma conversa normal. Ele entende, organiza e executa.</p>
+  <div class="hub-grid">
+    <div class="hub-card">
+      <div class="hub-icon">💸</div>
+      <h3>Registrar Gastos</h3>
+      <p>Texto, áudio ou foto de comprovante. Categorização automática com IA.</p>
+    </div>
+    <div class="hub-card">
+      <div class="hub-icon">📊</div>
+      <h3>Consultar Saldo</h3>
+      <p>Pergunte quanto gastou hoje, essa semana ou no mês inteiro.</p>
+    </div>
+    <div class="hub-card">
+      <div class="hub-icon">📄</div>
+      <h3>Relatório PDF</h3>
+      <p>Gráficos completos enviados direto pelo WhatsApp quando quiser.</p>
+    </div>
+    <div class="hub-card">
+      <div class="hub-icon">📅</div>
+      <h3>Agendar Compromissos</h3>
+      <p>Crie eventos no Google Agenda com uma mensagem simples.</p>
+    </div>
+    <div class="hub-card">
+      <div class="hub-icon">⏰</div>
+      <h3>Lembretes Mensais</h3>
+      <p>Configure lembretes recorrentes e receba notificações no WhatsApp.</p>
+    </div>
+    <div class="hub-card">
+      <div class="hub-icon">👥</div>
+      <h3>Plano Casal</h3>
+      <p>Dois números na mesma conta. Controle financeiro em família.</p>
+    </div>
+  </div>
 </section>
 
 <!-- PLANOS -->
 <section class="planos-section" id="planos">
-  <div class="section-inner" style="text-align:center;">
-    <div class="section-tag">Sem surpresas</div>
-    <h2 class="section-title">Planos e preços</h2>
-    <p class="section-sub">Cancele quando quiser. Sem fidelidade, sem letra miúda.</p>
-    <div class="planos-grid">
-      {% for plano in planos %}
-      <div class="plano-card {% if loop.index == 1 %}destaque{% endif %}">
-        {% if loop.index == 1 %}<div class="badge-popular">Mais popular</div>{% endif %}
-        <h3>{{ plano.nome }}</h3>
-        <div class="preco">R$ {{ "%.2f"|format(plano.preco) }}<span>/mês</span></div>
-        <p style="font-size:13px;color:#1D9E75;font-weight:700;margin-bottom:6px;">🎉 7 dias grátis para testar</p>
-        <p class="plano-desc">{{ plano.descricao }}</p>
-        <a href="/cadastro?plano={{ plano.id }}" class="plano-btn">Começar grátis →</a>
-        <p style="font-size:11px;color:#6b7280;text-align:center;margin-top:10px;">Sem cartão · Cancele quando quiser</p>
-      </div>
-      {% endfor %}
+  <div class="sec-tag">Sem surpresas</div>
+  <h2>Planos e preços</h2>
+  <p class="sub">7 dias grátis para testar. Sem cartão, sem fidelidade, sem letra miúda.</p>
+  <div class="planos-grid">
+    {% for plano in planos %}
+    <div class="plano-card {% if loop.index == 1 %}dest{% endif %}">
+      {% if loop.index == 1 %}<div class="badge-pop">Mais popular</div>{% endif %}
+      <h3>{{ plano.nome }}</h3>
+      <div class="preco">R$ {{ "%.2f"|format(plano.preco) }}<span>/mês</span></div>
+      <p style="font-size:13px;color:#1D9E75;font-weight:700;margin-bottom:6px;">🎉 7 dias grátis para testar</p>
+      <p class="plano-desc">{{ plano.descricao }}</p>
+      <a href="/cadastro?plano={{ plano.id }}" class="plano-btn">Começar grátis →</a>
+      <p style="font-size:11px;color:#6b7280;text-align:center;margin-top:10px;">Sem cartão · Cancele quando quiser</p>
     </div>
+    {% endfor %}
   </div>
 </section>
 
 <!-- DEPOIMENTOS -->
 <section class="dep-section">
-  <div class="section-inner">
-    <div class="section-tag">Quem já usa</div>
-    <h2 class="section-title">O que nossos usuários dizem</h2>
-    <p class="section-sub">Pessoas reais que transformaram sua relação com o dinheiro.</p>
-    <div class="dep-grid">
-
-      <div class="dep-card">
-        <div class="dep-stars">★★★★★</div>
-        <p class="dep-texto">"Eu nunca consegui manter uma planilha por mais de uma semana. Com o Controla Fácil é diferente — mando mensagem no WhatsApp e pronto. Em 3 meses já percebi onde eu estava gastando dinheiro à toa."</p>
-        <div class="dep-autor">
-          <div class="dep-avatar" style="background:#6366f1;">AM</div>
-          <div>
-            <div class="dep-nome">Ana Mota</div>
-            <div class="dep-cargo">Professora, Brasília</div>
-          </div>
-        </div>
+  <div class="sec-tag">Quem já usa</div>
+  <h2>O que nossos usuários dizem</h2>
+  <div class="dep-grid">
+    <div class="dep-card">
+      <div class="dep-stars">★★★★★</div>
+      <p class="dep-texto">"Eu nunca consegui manter uma planilha por mais de uma semana. Com o Controla Fácil é diferente — mando mensagem no WhatsApp e pronto. Em 3 meses já percebi onde eu estava gastando dinheiro à toa."</p>
+      <div class="dep-autor">
+        <div class="dep-av" style="background:#6366f1;">AM</div>
+        <div><div class="dep-nome">Ana Mota</div><div class="dep-cargo">Professora, Brasília</div></div>
       </div>
-
-      <div class="dep-card">
-        <div class="dep-stars">★★★★★</div>
-        <p class="dep-texto">"Como autônomo, meu maior problema era saber o que sobrava no mês. Agora registro tudo pelo WhatsApp — até mando foto do comprovante — e o sistema organiza tudo. O relatório PDF impressiona meus clientes também."</p>
-        <div class="dep-autor">
-          <div class="dep-avatar" style="background:#1D9E75;">RS</div>
-          <div>
-            <div class="dep-nome">Ricardo Santos</div>
-            <div class="dep-cargo">Designer freelancer, SP</div>
-          </div>
-        </div>
+    </div>
+    <div class="dep-card">
+      <div class="dep-stars">★★★★★</div>
+      <p class="dep-texto">"Como autônomo, meu maior problema era saber o que sobrava no mês. Agora registro tudo pelo WhatsApp — até mando foto do comprovante — e o sistema organiza tudo. O relatório PDF impressiona meus clientes."</p>
+      <div class="dep-autor">
+        <div class="dep-av" style="background:#1D9E75;">RS</div>
+        <div><div class="dep-nome">Ricardo Santos</div><div class="dep-cargo">Designer freelancer, SP</div></div>
       </div>
-
-      <div class="dep-card">
-        <div class="dep-stars">★★★★★</div>
-        <p class="dep-texto">"Meu marido e eu usamos juntos. A gente manda os gastos ao longo do dia e no final do mês vemos o resumo. Paramos de brigar por dinheiro porque agora temos tudo registrado. Melhor R$9,90 que já gastei."</p>
-        <div class="dep-autor">
-          <div class="dep-avatar" style="background:#f59e0b;">CL</div>
-          <div>
-            <div class="dep-nome">Camila Lima</div>
-            <div class="dep-cargo">Enfermeira, Goiânia</div>
-          </div>
-        </div>
+    </div>
+    <div class="dep-card">
+      <div class="dep-stars">★★★★★</div>
+      <p class="dep-texto">"Meu marido e eu usamos juntos. A gente manda os gastos ao longo do dia e no final do mês vemos o resumo. Paramos de brigar por dinheiro porque agora temos tudo registrado."</p>
+      <div class="dep-autor">
+        <div class="dep-av" style="background:#f59e0b;">CL</div>
+        <div><div class="dep-nome">Camila Lima</div><div class="dep-cargo">Enfermeira, Goiânia</div></div>
       </div>
-
     </div>
   </div>
 </section>
@@ -573,55 +568,32 @@
 <!-- FAQ -->
 <section class="faq-section">
   <div class="faq-inner">
-    <div class="section-tag" style="text-align:center;">Tire suas dúvidas</div>
+    <div class="feat-pill" style="display:inline-flex;margin:0 auto 16px;display:block;text-align:center;">Tire suas dúvidas</div>
     <h2>Perguntas frequentes</h2>
     <p class="faq-sub">Tudo que você precisa saber antes de começar.</p>
 
     <div class="faq-item">
-      <button class="faq-q" onclick="toggleFaq(this)">
-        Precisa instalar algum aplicativo?
-        <span class="faq-icon">+</span>
-      </button>
+      <button class="faq-q" onclick="toggleFaq(this)">Precisa instalar algum aplicativo?<span class="faq-icon">+</span></button>
       <div class="faq-a">Não. Tudo funciona pelo WhatsApp que você já usa. Não tem app para baixar, não tem cadastro complicado. Só precisa do número de celular com WhatsApp.</div>
     </div>
-
     <div class="faq-item">
-      <button class="faq-q" onclick="toggleFaq(this)">
-        Como funciona o pagamento?
-        <span class="faq-icon">+</span>
-      </button>
-      <div class="faq-a">O pagamento é mensal via Mercado Pago — aceita Pix, cartão de crédito e débito. A cobrança é automática todo mês e você pode cancelar quando quiser sem multa.</div>
+      <button class="faq-q" onclick="toggleFaq(this)">Como funciona o pagamento?<span class="faq-icon">+</span></button>
+      <div class="faq-a">O pagamento é mensal — aceita Pix, cartão de crédito e débito. A cobrança é automática todo mês e você pode cancelar quando quiser sem multa.</div>
     </div>
-
     <div class="faq-item">
-      <button class="faq-q" onclick="toggleFaq(this)">
-        Posso cancelar a qualquer momento?
-        <span class="faq-icon">+</span>
-      </button>
+      <button class="faq-q" onclick="toggleFaq(this)">Posso cancelar a qualquer momento?<span class="faq-icon">+</span></button>
       <div class="faq-a">Sim, sem fidelidade e sem burocracia. Basta cancelar pela plataforma ou entrar em contato pelo WhatsApp. Não há multa nem taxa de cancelamento.</div>
     </div>
-
     <div class="faq-item">
-      <button class="faq-q" onclick="toggleFaq(this)">
-        A IA realmente entende o que eu escrevo?
-        <span class="faq-icon">+</span>
-      </button>
+      <button class="faq-q" onclick="toggleFaq(this)">A IA realmente entende o que eu escrevo?<span class="faq-icon">+</span></button>
       <div class="faq-a">Sim! A IA é treinada para entender português natural. Você pode escrever "gastei 50 no mercado", mandar um áudio falando o gasto, ou até tirar foto do comprovante — ela interpreta tudo automaticamente.</div>
     </div>
-
     <div class="faq-item">
-      <button class="faq-q" onclick="toggleFaq(this)">
-        Meus dados financeiros são seguros?
-        <span class="faq-icon">+</span>
-      </button>
+      <button class="faq-q" onclick="toggleFaq(this)">Meus dados financeiros são seguros?<span class="faq-icon">+</span></button>
       <div class="faq-a">Sim. Seus dados ficam armazenados com segurança em servidor dedicado, com acesso exclusivo por senha. Não compartilhamos nenhuma informação com terceiros.</div>
     </div>
-
     <div class="faq-item">
-      <button class="faq-q" onclick="toggleFaq(this)">
-        Funciona para empresas ou só para pessoa física?
-        <span class="faq-icon">+</span>
-      </button>
+      <button class="faq-q" onclick="toggleFaq(this)">Funciona para empresas ou só para pessoa física?<span class="faq-icon">+</span></button>
       <div class="faq-a">Funciona para os dois! Muitos autônomos e pequenos empresários usam para controlar as despesas do negócio separadas das pessoais. As categorias são personalizáveis.</div>
     </div>
 
@@ -632,9 +604,17 @@
   </div>
 </section>
 
+<!-- CTA FINAL -->
+<section class="cta-final">
+  <h2>Comece hoje.<br/>É <em>grátis</em> por 7 dias.</h2>
+  <p>Sem cartão de crédito. Sem configuração complicada. Só manda uma mensagem no WhatsApp.</p>
+  <a href="/cadastro" class="hero-cta" style="font-size:16px;padding:18px 40px;">Criar conta grátis →</a>
+  <p style="font-size:13px;color:#6b7280;margin-top:14px;">✅ Sem cartão · Cancele quando quiser · 7 dias grátis</p>
+</section>
+
 <!-- FOOTER -->
 <footer class="footer">
-  <div class="footer-inner">
+  <div style="max-width:1160px;margin:0 auto;">
     <div>Controla Fácil &copy; 2026 — Controle financeiro inteligente pelo WhatsApp</div>
     <div class="footer-links">
       <a href="/privacidade">Política de Privacidade</a>
@@ -644,9 +624,11 @@
   </div>
 </footer>
 
+<!-- WPP FLOAT -->
 <a href="https://wa.me/5561998007328" target="_blank" rel="noopener" class="wpp-float" title="Falar no WhatsApp">
   <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
 </a>
+
 <script>
 function toggleFaq(btn) {
   const item = btn.closest('.faq-item');
