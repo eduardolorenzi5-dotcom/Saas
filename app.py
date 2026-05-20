@@ -1976,6 +1976,14 @@ def webhook_whatsapp():
     from agente.agente import processar_mensagem, processar_imagem, processar_audio
     payload = request.json
     logging.warning(f"WEBHOOK PAYLOAD: {payload}")
+
+    # ── Filtra eventos irrelevantes da Evolution API ──────────────────────────
+    # Só processa messages.upsert (nova mensagem). Ignora update, read, chats, etc.
+    event = payload.get("event", "")
+    if event and event != "messages.upsert":
+        logging.info(f"[WEBHOOK] Evento ignorado: {event}")
+        return jsonify({"status": "ignorado"}), 200
+
     try:
         msg = None
         fone = None
