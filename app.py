@@ -1,6 +1,27 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
-import os, hashlib, secrets, logging
+import os, hashlib, secrets, logging, time, threading
 from datetime import datetime, date, timezone, timedelta
+
+# ── Deduplicação de mensagens WhatsApp ──────────────────────────────────────
+_recent_msgs: dict = {}
+_recent_msgs_lock = threading.Lock()
+
+def _is_duplicate_msg(fone: str, msg: str, window: int = 30) -> bool:
+    """Retorna True se fone+msg já foi processado nos últimos `window` segundos."""
+    if not fone or not msg:
+        return False
+    key = (fone, msg[:120])
+    now = time.time()
+    with _recent_msgs_lock:
+        # Limpa entradas antigas
+        expirados = [k for k, t in _recent_msgs.items() if now - t > window]
+        for k in expirados:
+            del _recent_msgs[k]
+        if key in _recent_msgs:
+            return True
+        _recent_msgs[key] = now
+        return False
+# ────────────────────────────────────────────────────────────────────────────
 
 def hoje_brasil():
     return datetime.now(timezone(timedelta(hours=-3))).date()
@@ -2067,6 +2088,9 @@ def webhook_whatsapp():
         if imagem_b64:
             resposta = processar_imagem(fone, imagem_b64, msg or "")
         elif msg:
+            if _is_duplicate_msg(fone, msg):
+                logging.warning(f"[DEDUP] Mensagem duplicada ignorada: fone={fone} msg={msg[:50]}")
+                return jsonify({"output": "", "status": "ignorado"}), 200
             resposta = processar_mensagem(fone, msg)
         else:
             logging.warning(f"Sem mensagem nem imagem: {payload}")
