@@ -35,9 +35,9 @@
     .btn-nav:hover { background: #179162 !important; }
 
     /* ── HERO ── */
-    .hero { background: #080808; padding: 110px 28px 90px; position: relative; overflow: hidden; }
+    .hero { background: #080808; padding: 72px 28px 60px; position: relative; overflow: hidden; }
     .hero::before { content: ''; position: absolute; top: -200px; right: -200px; width: 700px; height: 700px; background: radial-gradient(circle, rgba(29,158,117,.15) 0%, transparent 70%); pointer-events: none; }
-    .hero-inner { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .hero-inner { max-width: 1160px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
     .hero-pill { display: inline-flex; align-items: center; gap: 8px; background: rgba(29,158,117,.12); border: 1px solid rgba(29,158,117,.3); color: #1D9E75; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 100px; margin-bottom: 28px; }
     .hero-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
@@ -201,7 +201,7 @@
       .dep-grid { grid-template-columns: 1fr; }
     }
     @media(max-width:600px) {
-      .hero { padding: 70px 20px 60px; }
+      .hero { padding: 60px 20px 50px; }
       .hero h1 { font-size: 32px; letter-spacing: -1px; }
       .cta-final h2 { font-size: 32px; }
       .planos-section h2, .dep-section h2 { font-size: 30px; }
