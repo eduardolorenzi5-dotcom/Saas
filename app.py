@@ -1536,7 +1536,7 @@ def debug_session():
 def atualizar_whatsapp():
     novo = normalizar_whatsapp(request.form.get("whatsapp", "").strip())
     if len(novo) < 10:
-        return redirect(url_for("dashboard") + "?wpp_erro=numero_invalido")
+        return redirect(url_for("dashboard") + "?wpp_erro=numero_invalido#minha-conta")
     cid = session["cliente_id"]
     conn = get_db()
     existente = conn.execute(
@@ -1544,11 +1544,40 @@ def atualizar_whatsapp():
     ).fetchone()
     if existente:
         conn.close()
-        return redirect(url_for("dashboard") + "?wpp_erro=ja_cadastrado")
+        return redirect(url_for("dashboard") + "?wpp_erro=ja_cadastrado#minha-conta")
     conn.execute("UPDATE clientes SET whatsapp=%s WHERE id=%s", (novo, cid))
     conn.commit()
     conn.close()
-    return redirect(url_for("dashboard") + "?wpp_ok=1")
+    return redirect(url_for("dashboard") + "?wpp_ok=1#minha-conta")
+
+@app.route("/perfil/whatsapp2", methods=["POST"])
+@login_required
+def atualizar_whatsapp2():
+    """Permite ao cliente adicionar ou remover um segundo número WhatsApp."""
+    acao = request.form.get("acao", "salvar")  # "salvar" ou "remover"
+    cid = session["cliente_id"]
+    conn = get_db()
+    if acao == "remover":
+        conn.execute("UPDATE clientes SET whatsapp2=NULL WHERE id=%s", (cid,))
+        conn.commit()
+        conn.close()
+        return redirect(url_for("dashboard") + "?wpp2_ok=removido#minha-conta")
+    novo = normalizar_whatsapp(request.form.get("whatsapp2", "").strip())
+    if len(novo) < 10:
+        conn.close()
+        return redirect(url_for("dashboard") + "?wpp2_erro=numero_invalido#minha-conta")
+    # Verifica se já está em uso em outro lugar (whatsapp principal ou whatsapp2)
+    dup = conn.execute(
+        "SELECT id FROM clientes WHERE (whatsapp=%s OR whatsapp2=%s) AND id != %s",
+        (novo, novo, cid)
+    ).fetchone()
+    if dup:
+        conn.close()
+        return redirect(url_for("dashboard") + "?wpp2_erro=ja_cadastrado#minha-conta")
+    conn.execute("UPDATE clientes SET whatsapp2=%s WHERE id=%s", (novo, cid))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("dashboard") + "?wpp2_ok=1#minha-conta")
 
 @app.route("/assinatura")
 @login_required

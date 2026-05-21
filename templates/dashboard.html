@@ -431,6 +431,8 @@
   <div class="form-card" id="minha-conta" style="max-width:640px;">
     {% set wpp_ok = request.args.get('wpp_ok') %}
     {% set wpp_erro = request.args.get('wpp_erro') %}
+    {% set wpp2_ok = request.args.get('wpp2_ok') %}
+    {% set wpp2_erro = request.args.get('wpp2_erro') %}
     {% if wpp_ok %}
     <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#065f46;">
       ✅ WhatsApp atualizado com sucesso!
@@ -440,6 +442,23 @@
       ❌ Esse número já está cadastrado em outra conta.
     </div>
     {% elif wpp_erro == 'numero_invalido' %}
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+      ❌ Número inválido. Digite o DDD + número completo.
+    </div>
+    {% endif %}
+    {% if wpp2_ok == '1' %}
+    <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#065f46;">
+      ✅ Segundo número adicionado com sucesso!
+    </div>
+    {% elif wpp2_ok == 'removido' %}
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;">
+      Segundo número removido.
+    </div>
+    {% elif wpp2_erro == 'ja_cadastrado' %}
+    <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+      ❌ Esse número já está vinculado a outra conta.
+    </div>
+    {% elif wpp2_erro == 'numero_invalido' %}
     <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#991b1b;">
       ❌ Número inválido. Digite o DDD + número completo.
     </div>
@@ -458,9 +477,9 @@
         <span style="color:#6b7280;font-weight:500;">Plano</span>
         <span style="background:#d1fae5;color:#065f46;padding:3px 12px;border-radius:100px;font-size:13px;font-weight:600;">{{ cliente.status|capitalize }}</span>
       </div>
-      <div style="padding:14px 0;">
+      <div style="padding:14px 0;border-bottom:1px solid #f3f4f6;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <span style="color:#6b7280;font-weight:500;">WhatsApp</span>
+          <span style="color:#6b7280;font-weight:500;">WhatsApp principal</span>
           <div style="display:flex;align-items:center;gap:8px;">
             <strong id="wpp-display">{{ cliente.whatsapp or 'não vinculado' }}</strong>
             <button onclick="var f=document.getElementById('wpp-edit-form');f.style.display=f.style.display==='none'?'flex':'none';"
@@ -483,6 +502,57 @@
           </p>
         </form>
       </div>
+
+      <!-- ── Segundo número WhatsApp ── -->
+      <div style="padding:14px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:{% if cliente.whatsapp2 %}12{% else %}0{% endif %}px;">
+          <div>
+            <span style="color:#6b7280;font-weight:500;">Segundo número</span>
+            <span style="display:inline-block;margin-left:8px;background:#ede9fe;color:#6d28d9;font-size:11px;font-weight:700;padding:2px 8px;border-radius:100px;">GRÁTIS</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            {% if cliente.whatsapp2 %}
+            <strong>{{ cliente.whatsapp2 }}</strong>
+            {% else %}
+            <span style="color:#9ca3af;font-size:13px;">não vinculado</span>
+            {% endif %}
+            <button onclick="var f=document.getElementById('wpp2-edit-form');f.style.display=f.style.display==='none'?'flex':'none';"
+                    style="background:#f3f4f6;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:#6366f1;font-weight:600;">
+              {% if cliente.whatsapp2 %}✏️ Editar{% else %}➕ Adicionar{% endif %}
+            </button>
+          </div>
+        </div>
+        <form id="wpp2-edit-form" method="POST" action="/perfil/whatsapp2"
+              style="display:none;gap:8px;align-items:flex-start;flex-wrap:wrap;padding:14px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
+          <div style="flex:1;min-width:200px;">
+            <input type="text" name="whatsapp2" placeholder="Ex: 61 9 9800-1234"
+                   value="{{ cliente.whatsapp2 or '' }}"
+                   style="border:1px solid #d1d5db;border-radius:8px;padding:9px 14px;font-size:14px;width:100%;box-sizing:border-box;outline:none;"/>
+            <p style="font-size:12px;color:#9ca3af;margin:6px 0 0;">
+              Digite com DDD. Esse número também poderá registrar gastos na sua conta.
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="submit" name="acao" value="salvar"
+                    style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer;font-weight:600;white-space:nowrap;">
+              Salvar
+            </button>
+            {% if cliente.whatsapp2 %}
+            <button type="submit" name="acao" value="remover"
+                    onclick="return confirm('Remover o segundo número?')"
+                    style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;padding:9px 16px;font-size:14px;cursor:pointer;font-weight:600;white-space:nowrap;">
+              Remover
+            </button>
+            {% endif %}
+          </div>
+        </form>
+        {% if not cliente.whatsapp2 %}
+        <p style="font-size:12px;color:#9ca3af;margin:8px 0 0;">
+          💡 Adicione um segundo número para que outra pessoa também possa registrar gastos na sua conta.
+        </p>
+        {% endif %}
+      </div>
+
     </div>
   </div>
 </div><!-- /tab-minha-conta -->
