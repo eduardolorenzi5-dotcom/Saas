@@ -1137,6 +1137,50 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 )
                 conn_lem.commit()
                 conn_lem.close()
+
+                # ── Auto-cadastra como conta mensal quando tem dia_mes ─────────
+                # Lembrete com dia fixo do mês = conta recorrente → registra automaticamente
+                if dia_mes:
+                    try:
+                        import re as _re
+                        # Extrai valor do texto do lembrete (ex: "pagar R$ 447,00 seguro")
+                        _valor_match = _re.search(r'R\$\s*([\d.,]+)', mensagem_lem)
+                        _valor_conta = None
+                        if _valor_match:
+                            _valor_conta = float(_valor_match.group(1).replace(".", "").replace(",", "."))
+                        # Extrai descrição: remove "pagar", "R$ xxx", "todo dia X" do texto
+                        _desc = _re.sub(r'(pagar|todo\s*dia\s*\d+|R\$\s*[\d.,]+)', '', mensagem_lem, flags=_re.IGNORECASE).strip()
+                        _desc = _re.sub(r'\s+', ' ', _desc).strip(" ,-")
+                        if not _desc:
+                            _desc = mensagem_lem[:40].strip()
+                        # Verifica se já existe conta com descrição similar
+                        conn_conta = get_db()
+                        if USE_PG:
+                            _existe = conn_conta.execute(
+                                "SELECT id FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE AND LOWER(descricao) LIKE %s",
+                                (cliente["id"], f"%{_desc[:15].lower()}%")
+                            ).fetchone()
+                            if not _existe:
+                                conn_conta.execute(
+                                    "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (%s, %s, %s, %s)",
+                                    (cliente["id"], _desc, _valor_conta, dia_mes)
+                                )
+                        else:
+                            _existe = conn_conta.execute(
+                                "SELECT id FROM contas_mensais WHERE cliente_id=? AND ativo=1 AND LOWER(descricao) LIKE ?",
+                                (cliente["id"], f"%{_desc[:15].lower()}%")
+                            ).fetchone()
+                            if not _existe:
+                                conn_conta.execute(
+                                    "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (?, ?, ?, ?)",
+                                    (cliente["id"], _desc, _valor_conta, dia_mes)
+                                )
+                        conn_conta.commit()
+                        conn_conta.close()
+                    except Exception as _e_conta:
+                        import logging; logging.warning(f"[AUTO-CONTA] Erro ao criar conta mensal: {_e_conta}")
+                # ─────────────────────────────────────────────────────────────
+
                 if dia_mes:
                     resposta = (
                         f"⏰ Lembrete mensal criado!\n"
