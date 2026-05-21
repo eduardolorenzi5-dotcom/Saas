@@ -2041,6 +2041,10 @@ def webhook_whatsapp():
             # Detecta áudio no formato inputs: query = "audioMessage|<messageId>"
             if msg and msg.startswith("audioMessage|"):
                 msg_id = msg.split("|", 1)[1]
+                # Dedup atômico — bloqueia duplicatas do webhook nativo que chega junto
+                if not _dedup_ok(msg_id):
+                    logging.warning(f"[DEDUP-PG] inputs áudio duplicado ignorado: msg_id={msg_id}")
+                    return jsonify({"output": "", "status": "ignorado"}), 200
                 # Usa dados do próprio payload quando disponíveis
                 ev_url = inputs.get("serverUrl") or os.environ.get("EVOLUTION_URL", "")
                 ev_key = inputs.get("apiKey") or os.environ.get("EVOLUTION_KEY", "")
@@ -2058,14 +2062,26 @@ def webhook_whatsapp():
                     if r.status_code in (200, 201):
                         audio_b64 = r.json().get("base64") or r.json().get("data")
                         if audio_b64 and fone:
-                            resposta = processar_audio(fone, audio_b64, "audio/ogg")
-                            return jsonify({"output": resposta, "status": "ok"})
+                            # Processa em background e retorna vazio ao Typebot
+                            # (processar_audio já envia a resposta internamente via WPP)
+                            # Retornar {"output": resposta} aqui causaria duplo envio (Typebot + interno)
+                            def _bg_audio_inp(f, ab):
+                                try:
+                                    processar_audio(f, ab, "audio/ogg")
+                                except Exception as _e:
+                                    logging.error(f"[AUDIO-BG-INP] Erro: {_e}")
+                            _threading.Thread(target=_bg_audio_inp, args=(fone, audio_b64), daemon=True).start()
+                            return jsonify({"output": "", "status": "processando"}), 200
                 except Exception as e:
                     logging.error(f"Erro ao buscar áudio inputs: {e}")
-                return jsonify({"output": "Não consegui processar o áudio. Tente em texto.", "status": "ok"}), 200
+                return jsonify({"output": "", "status": "ok"}), 200
             # Detecta imagem no formato inputs: query = "imageMessage|<messageId>"
             if msg and msg.startswith("imageMessage|"):
                 msg_id = msg.split("|", 1)[1]
+                # Dedup atômico
+                if not _dedup_ok(msg_id):
+                    logging.warning(f"[DEDUP-PG] inputs imagem duplicada ignorada: msg_id={msg_id}")
+                    return jsonify({"output": "", "status": "ignorado"}), 200
                 ev_url = inputs.get("serverUrl") or os.environ.get("EVOLUTION_URL", "")
                 ev_key = inputs.get("apiKey") or os.environ.get("EVOLUTION_KEY", "")
                 ev_inst = inputs.get("instanceName") or os.environ.get("EVOLUTION_INSTANCE", "")
@@ -2083,11 +2099,16 @@ def webhook_whatsapp():
                     if r2.status_code in (200, 201):
                         img_b64 = r2.json().get("base64") or r2.json().get("data")
                         if img_b64 and fone:
-                            resposta = processar_imagem(fone, img_b64, caption)
-                            return jsonify({"output": resposta, "status": "ok"})
+                            def _bg_img_inp(f, ib, cap):
+                                try:
+                                    processar_imagem(f, ib, cap)
+                                except Exception as _e:
+                                    logging.error(f"[IMG-BG-INP] Erro: {_e}")
+                            _threading.Thread(target=_bg_img_inp, args=(fone, img_b64, caption), daemon=True).start()
+                            return jsonify({"output": "", "status": "processando"}), 200
                 except Exception as e:
                     logging.error(f"Erro ao buscar imagem inputs: {e}")
-                return jsonify({"output": "Não consegui processar a imagem. Tente descrever o valor em texto.", "status": "ok"}), 200
+                return jsonify({"output": "", "status": "ok"}), 200
             imagem_b64 = _extrair_imagem_b64(payload, inputs)
         elif payload.get("query"):
             msg = payload.get("query", "")
