@@ -142,7 +142,7 @@
       transition: border-color .2s;
     }
     .input-wrap:focus-within { border-color: #1D9E75; }
-    .input-wrap svg { opacity: .4; flex-shrink: 0; }
+    .input-wrap > svg { opacity: .4; flex-shrink: 0; }
     .input-wrap input {
       flex: 1;
       background: none;
@@ -161,8 +161,9 @@
       -webkit-text-fill-color: #e5e7eb !important;
       caret-color: #e5e7eb;
     }
-    .toggle-pass { background: none; border: none; cursor: pointer; opacity: .4; padding: 4px; transition: opacity .15s; }
-    .toggle-pass:hover { opacity: .8; }
+    .toggle-pass { background: none; border: none; cursor: pointer; padding: 6px; transition: color .15s, opacity .15s; color: #6b7280; display: flex; align-items: center; flex-shrink: 0; }
+    .toggle-pass:hover { color: #a78bfa; }
+    .toggle-pass svg { opacity: 1; width: 18px; height: 18px; }
 
     .btn-submit {
       width: 100%;
@@ -358,15 +359,15 @@
 function toggleSenha() {
   const input = document.getElementById('senha');
   const icon = document.getElementById('eye-icon');
+  const btn = icon.closest('button');
   if (input.type === 'password') {
     input.type = 'text';
-    icon.innerHTML = `
-      <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>`;
+    btn.style.color = '#a78bfa';
+    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>`;
   } else {
     input.type = 'password';
-    icon.innerHTML = `
-      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-      <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>`;
+    btn.style.color = '#6b7280';
+    icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>`;
   }
 }
 </script>
