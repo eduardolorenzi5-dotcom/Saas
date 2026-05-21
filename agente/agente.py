@@ -490,7 +490,9 @@ Ao receber uma mensagem, identifique se é:
 14. REGISTRAR conta mensal — ex: "adiciona conta de luz vence dia 10", "todo mês pago aluguel de 1500 no dia 5", "tenho conta do cartão dia 15 de 800 reais", "adicionar conta internet dia 20", "conta a pagar: academia 99 reais dia 1"
 15. LISTAR contas mensais — ex: "minhas contas mensais", "contas a pagar", "quais contas tenho?", "agendamentos de pagamentos mensais", "como estão meus pagamentos mensais?", "contas do mês", "quais são minhas contas fixas?"
 16. EXCLUIR conta mensal — ex: "remover conta da luz", "excluir conta do aluguel", "apagar conta mensal da academia"
-17. Outra mensagem — responda de forma amigável
+17. MARCAR conta mensal como PAGA — ex: "paguei a conta de luz", "marquei o aluguel como pago", "paguei energia", "já paguei o cartão", "marcar plano de saúde como pago"
+18. MARCAR TODAS as contas vencidas como pagas — ex: "paguei todas as contas vencidas", "todas as contas com advertência foram pagas", "paguei tudo que estava vencido", "essas com advertência estão todas pagas esse mês", "marquei todas como pagas"
+19. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(cats_list)}
 (Use SEMPRE uma das categorias listadas acima. Se nenhuma se encaixar, use a última da lista.)
@@ -577,6 +579,12 @@ Se for LISTAR contas mensais:
 
 Se for EXCLUIR conta mensal:
 {{"acao": "excluir_conta_mensal", "descricao": "palavra-chave da conta"}}
+
+Se for MARCAR UMA conta como paga:
+{{"acao": "marcar_conta_paga", "descricao": "palavra-chave da conta"}}
+
+Se for MARCAR TODAS as contas vencidas/com advertência como pagas:
+{{"acao": "marcar_todas_pagas"}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -1435,20 +1443,39 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     "_\"aluguel de 1500 reais todo dia 5\"_"
                 )
             else:
+                mes_str = hoje_dt.strftime("%Y-%m")
                 gastos_desc = {g["desc"] for g in gastos_mes}
+                # Busca pagamentos explícitos desta tabela (marcados manualmente)
+                try:
+                    if USE_PG_loc:
+                        pagas_ids = {r["conta_id"] for r in conn_cm.execute(
+                            "SELECT conta_id FROM contas_pagamentos WHERE cliente_id=%s AND mes=%s AND conta_id IS NOT NULL",
+                            (cliente["id"], mes_str)
+                        ).fetchall()}
+                    else:
+                        pagas_ids = {r["conta_id"] for r in conn_cm.execute(
+                            "SELECT conta_id FROM contas_pagamentos WHERE cliente_id=? AND mes=? AND conta_id IS NOT NULL",
+                            (cliente["id"], mes_str)
+                        ).fetchall()}
+                except Exception:
+                    pagas_ids = set()
                 hoje_dia = hoje_dt.day
                 meses_pt = ["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
                 linhas = [f"📋 *Suas contas mensais — {meses_pt[mes_atual]}/{ano_atual}*\n"]
                 total_previsto = 0.0
+                total_pago = 0.0
                 for c in contas:
                     desc = c["descricao"]
                     valor_c = float(c["valor"]) if c["valor"] else None
                     dia_v = c["dia_vencimento"]
-                    # Verifica se já foi paga (descrição aparece nos gastos do mês)
-                    paga = any(desc.lower() in g or g in desc.lower() for g in gastos_desc)
+                    # Verifica se paga: tabela de pagamentos OU gastos do mês
+                    paga_manual = c["id"] in pagas_ids
+                    paga_gasto = any(desc.lower() in g or g in desc.lower() for g in gastos_desc)
+                    paga = paga_manual or paga_gasto
                     venceu = dia_v < hoje_dia
                     if paga:
                         status = "✅ paga"
+                        if valor_c: total_pago += valor_c
                     elif venceu:
                         status = "⚠️ vencida"
                     else:
@@ -1460,7 +1487,13 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     linhas.append(f"• *{desc}* — {valor_str} | dia {dia_v} | {status}")
                 if total_previsto > 0:
                     linhas.append(f"\n💰 Total previsto: R$ {total_previsto:.2f}")
-                linhas.append("\nPara remover, diga: _\"excluir conta da [nome]\"_")
+                    if total_pago > 0:
+                        linhas.append(f"✅ Já pago: R$ {total_pago:.2f}")
+                        pendente = total_previsto - total_pago
+                        if pendente > 0:
+                            linhas.append(f"⏳ Pendente: R$ {pendente:.2f}")
+                linhas.append("\nPara marcar como paga: _\"paguei a conta de [nome]\"_")
+                linhas.append("Para remover: _\"excluir conta da [nome]\"_")
                 resposta = "\n".join(linhas)
 
         elif acao == "excluir_conta_mensal":
@@ -1492,6 +1525,103 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                         resposta = f"Não encontrei nenhuma conta com \"{desc_busca}\". Envie *minhas contas* para ver a lista."
             finally:
                 try: conn_cm.close()
+                except: pass
+
+        elif acao == "marcar_conta_paga":
+            import datetime as _dt
+            desc_busca = resultado.get("descricao", "").strip().lower()
+            mes_str = _dt.date.today().strftime("%Y-%m")
+            USE_PG_mp = bool(os.environ.get("DATABASE_URL"))
+            conn_mp = get_db()
+            try:
+                if USE_PG_mp:
+                    conta = conn_mp.execute(
+                        "SELECT id, descricao, valor FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE AND LOWER(descricao) LIKE %s ORDER BY id DESC LIMIT 1",
+                        (cliente["id"], f"%{desc_busca}%")
+                    ).fetchone()
+                else:
+                    conta = conn_mp.execute(
+                        "SELECT id, descricao, valor FROM contas_mensais WHERE cliente_id=? AND ativo=1 AND LOWER(descricao) LIKE ? ORDER BY id DESC LIMIT 1",
+                        (cliente["id"], f"%{desc_busca}%")
+                    ).fetchone()
+                if conta:
+                    if USE_PG_mp:
+                        conn_mp.execute(
+                            "INSERT INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (%s,%s,%s,%s) ON CONFLICT (cliente_id,conta_id,mes) DO NOTHING",
+                            (cliente["id"], conta["id"], conta["descricao"], mes_str)
+                        )
+                    else:
+                        conn_mp.execute(
+                            "INSERT OR IGNORE INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (?,?,?,?)",
+                            (cliente["id"], conta["id"], conta["descricao"], mes_str)
+                        )
+                    conn_mp.commit()
+                    valor_str = f" de R$ {float(conta['valor']):.2f}" if conta["valor"] else ""
+                    resposta = (
+                        f"✅ *{conta['descricao']}*{valor_str} marcada como paga em {mes_str[5:]}/{mes_str[:4]}!\n\n"
+                        f"Envie *minhas contas* para ver o resumo atualizado."
+                    )
+                else:
+                    resposta = (
+                        f"Não encontrei conta com _\"{desc_busca}\"_ na sua lista.\n"
+                        f"Envie *minhas contas* para ver todas as suas contas mensais."
+                    )
+            finally:
+                try: conn_mp.close()
+                except: pass
+
+        elif acao == "marcar_todas_pagas":
+            import datetime as _dt
+            mes_str = _dt.date.today().strftime("%Y-%m")
+            hoje_dia = _dt.date.today().day
+            USE_PG_mp = bool(os.environ.get("DATABASE_URL"))
+            conn_mp = get_db()
+            try:
+                # Busca contas vencidas (dia_vencimento < hoje) que ainda não foram pagas
+                if USE_PG_mp:
+                    contas_vencidas = conn_mp.execute(
+                        """SELECT cm.id, cm.descricao, cm.valor FROM contas_mensais cm
+                           WHERE cm.cliente_id=%s AND cm.ativo=TRUE AND cm.dia_vencimento < %s
+                           AND cm.id NOT IN (
+                               SELECT conta_id FROM contas_pagamentos
+                               WHERE cliente_id=%s AND mes=%s AND conta_id IS NOT NULL
+                           )""",
+                        (cliente["id"], hoje_dia, cliente["id"], mes_str)
+                    ).fetchall()
+                    for c in contas_vencidas:
+                        conn_mp.execute(
+                            "INSERT INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (%s,%s,%s,%s) ON CONFLICT (cliente_id,conta_id,mes) DO NOTHING",
+                            (cliente["id"], c["id"], c["descricao"], mes_str)
+                        )
+                else:
+                    contas_vencidas = conn_mp.execute(
+                        """SELECT cm.id, cm.descricao, cm.valor FROM contas_mensais cm
+                           WHERE cm.cliente_id=? AND cm.ativo=1 AND cm.dia_vencimento < ?
+                           AND cm.id NOT IN (
+                               SELECT conta_id FROM contas_pagamentos
+                               WHERE cliente_id=? AND mes=? AND conta_id IS NOT NULL
+                           )""",
+                        (cliente["id"], hoje_dia, cliente["id"], mes_str)
+                    ).fetchall()
+                    for c in contas_vencidas:
+                        conn_mp.execute(
+                            "INSERT OR IGNORE INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (?,?,?,?)",
+                            (cliente["id"], c["id"], c["descricao"], mes_str)
+                        )
+                conn_mp.commit()
+                if not contas_vencidas:
+                    resposta = "Não há contas vencidas pendentes este mês. ✅"
+                else:
+                    total = sum(float(c["valor"]) for c in contas_vencidas if c["valor"])
+                    nomes = "\n".join(f"✅ {c['descricao']}" for c in contas_vencidas)
+                    total_str = f"\n\n💰 Total quitado: R$ {total:.2f}" if total > 0 else ""
+                    resposta = (
+                        f"✅ *{len(contas_vencidas)} conta(s) marcadas como pagas!*\n\n"
+                        f"{nomes}{total_str}\n\n"
+                        f"Envie *minhas contas* para ver o resumo atualizado."
+                    )
+            finally:
+                try: conn_mp.close()
                 except: pass
 
         elif acao == "compromissos_hoje":

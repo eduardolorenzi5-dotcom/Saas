@@ -180,6 +180,18 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        # Tabela de pagamentos de contas mensais (controle por mês)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS contas_pagamentos (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                conta_id INTEGER,
+                descricao TEXT NOT NULL,
+                mes TEXT NOT NULL,
+                pago_em TIMESTAMP DEFAULT NOW(),
+                UNIQUE (cliente_id, conta_id, mes)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -272,6 +284,15 @@ def init_db():
                 ativo INTEGER DEFAULT 1,
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
+            CREATE TABLE IF NOT EXISTS contas_pagamentos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                conta_id INTEGER,
+                descricao TEXT NOT NULL,
+                mes TEXT NOT NULL,
+                pago_em TEXT DEFAULT (datetime('now')),
+                UNIQUE (cliente_id, conta_id, mes)
             );
         """)
     # Adiciona colunas extras se não existirem
