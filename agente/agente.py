@@ -272,6 +272,58 @@ def verificar_agenda_conectada(cliente_id):
     conn.close()
     return bool(row and row["google_refresh_token"])
 
+def listar_eventos_google_hoje(cliente_id):
+    """Busca os eventos de hoje no Google Calendar do cliente. Retorna lista de dicts ou None se não conectado."""
+    import datetime as dt
+    conn = get_db()
+    row = conn.execute(
+        "SELECT google_access_token, google_refresh_token FROM clientes WHERE id=%s",
+        (cliente_id,)
+    ).fetchone()
+    conn.close()
+    if not row or not row["google_refresh_token"]:
+        return None  # agenda não conectada
+    access_token = row["google_access_token"]
+    hoje = dt.date.today()
+    time_min = dt.datetime(hoje.year, hoje.month, hoje.day, 0, 0, 0).isoformat() + "-03:00"
+    time_max = dt.datetime(hoje.year, hoje.month, hoje.day, 23, 59, 59).isoformat() + "-03:00"
+    for tentativa in range(2):
+        resp = requests.get(
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "singleEvents": "true",
+                "orderBy": "startTime",
+                "maxResults": 20,
+            },
+            timeout=15
+        )
+        if resp.status_code == 401 and tentativa == 0:
+            access_token = _google_refresh_token(row["google_refresh_token"])
+            conn2 = get_db()
+            conn2.execute("UPDATE clientes SET google_access_token=%s WHERE id=%s", (access_token, cliente_id))
+            conn2.commit()
+            conn2.close()
+            continue
+        if resp.status_code != 200:
+            return []
+        itens = resp.json().get("items", [])
+        eventos = []
+        for item in itens:
+            titulo = item.get("summary", "Sem título")
+            inicio = item.get("start", {})
+            hora_str = ""
+            if "dateTime" in inicio:
+                dt_obj = dt.datetime.fromisoformat(inicio["dateTime"])
+                hora_str = dt_obj.strftime("%H:%M")
+            else:
+                hora_str = "Dia todo"
+            eventos.append({"titulo": titulo, "hora": hora_str})
+        return eventos
+    return []
+
 def gerar_link_agenda(cliente_id):
     return f"{APP_URL}/agenda/conectar/{cliente_id}"
 
@@ -434,7 +486,8 @@ Ao receber uma mensagem, identifique se é:
 10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
 11. EXCLUIR um lembrete — ex: "exclua esse lembrete", "cancela o lembrete do médico", "excluir lembrete", "remove o lembrete de passear com os cachorros", "apagar lembrete"
 12. LISTAR lembretes ativos — ex: "quais meus lembretes?", "ver lembretes", "meus lembretes ativos"
-13. Outra mensagem — responda de forma amigável
+13. VER COMPROMISSOS DE HOJE — ex: "meus compromissos hoje", "o que tenho hoje?", "agenda de hoje", "me manda minha agenda", "lembretes de hoje", "o que está agendado hoje?", "quais eventos tenho hoje?"
+14. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(cats_list)}
 (Use SEMPRE uma das categorias listadas acima. Se nenhuma se encaixar, use a última da lista.)
@@ -506,6 +559,9 @@ Se for EXCLUIR lembrete (inclui "exclua esse lembrete", "cancela lembrete", "apa
 
 Se for LISTAR lembretes:
 {{"acao": "listar_lembretes"}}
+
+Se for VER COMPROMISSOS DE HOJE (agenda + lembretes do dia):
+{{"acao": "compromissos_hoje"}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -1249,6 +1305,74 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             finally:
                 try: conn_lem.close()
                 except: pass
+
+        elif acao == "compromissos_hoje":
+            import datetime as _dt
+            from datetime import timezone as _tz, timedelta as _td
+            hoje_dt = _dt.date.today()
+            hoje_str = hoje_dt.strftime("%d/%m/%Y")
+            dias_semana = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"]
+            dia_semana = dias_semana[hoje_dt.weekday()]
+            USE_PG_loc = bool(os.environ.get("DATABASE_URL"))
+            linhas = [f"📅 *Seus compromissos de hoje — {dia_semana}, {hoje_str}*", ""]
+
+            # ── Lembretes de hoje ───────────────────────────────────────────
+            conn_c = get_db()
+            try:
+                hoje_iso = hoje_dt.isoformat()
+                dia_mes_hoje = int(hoje_dt.strftime("%d"))
+                dia_semana_hoje = hoje_dt.weekday()  # 0=seg … 6=dom
+                if USE_PG_loc:
+                    lems = conn_c.execute("""
+                        SELECT mensagem, hora FROM lembretes
+                        WHERE cliente_id=%s AND ativo=TRUE
+                          AND (
+                            data = %s
+                            OR recorrente = TRUE
+                            OR dia_mes = %s
+                          )
+                        ORDER BY hora
+                    """, (cliente["id"], hoje_iso, dia_mes_hoje)).fetchall()
+                else:
+                    lems = conn_c.execute("""
+                        SELECT mensagem, hora FROM lembretes
+                        WHERE cliente_id=? AND ativo=1
+                          AND (data=? OR recorrente=1 OR dia_mes=?)
+                        ORDER BY hora
+                    """, (cliente["id"], hoje_iso, dia_mes_hoje)).fetchall()
+            except Exception as _e_lem:
+                import logging; logging.error(f"[COMPROMISSOS] lembretes: {_e_lem}")
+                lems = []
+            finally:
+                try: conn_c.close()
+                except: pass
+
+            if lems:
+                linhas.append("⏰ *Lembretes:*")
+                for l in lems:
+                    linhas.append(f"  • {l['mensagem']} — *{l['hora']}*")
+                linhas.append("")
+
+            # ── Eventos Google Calendar ─────────────────────────────────────
+            eventos = listar_eventos_google_hoje(cliente["id"])
+            if eventos is None:
+                # Agenda não conectada
+                if not lems:
+                    linhas.append("Você não tem lembretes para hoje.")
+                linhas.append("")
+                linhas.append("📌 _Sua agenda Google não está conectada._")
+                linhas.append(f"Conecte em: {gerar_link_agenda(cliente['id'])}")
+            elif eventos:
+                linhas.append("🗓️ *Eventos na agenda:*")
+                for ev in eventos:
+                    linhas.append(f"  • {ev['titulo']} — *{ev['hora']}*")
+            else:
+                if not lems:
+                    linhas.append("Você não tem compromissos agendados para hoje. 😊")
+                else:
+                    linhas.append("🗓️ _Nenhum evento na agenda hoje._")
+
+            resposta = "\n".join(linhas)
 
         else:
             resposta = resultado.get("texto", "Como posso te ajudar?")
