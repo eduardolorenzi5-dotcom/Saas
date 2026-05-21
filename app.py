@@ -167,6 +167,19 @@ def init_db():
                 processado_em TIMESTAMP DEFAULT NOW()
             )
         """)
+        # Tabela de contas mensais (contas a pagar recorrentes)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS contas_mensais (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL,
+                dia_vencimento INTEGER NOT NULL,
+                ativo BOOLEAN DEFAULT TRUE,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -249,6 +262,16 @@ def init_db():
             CREATE TABLE IF NOT EXISTS webhook_msgs (
                 msg_id TEXT PRIMARY KEY,
                 processado_em TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS contas_mensais (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL,
+                dia_vencimento INTEGER NOT NULL,
+                ativo INTEGER DEFAULT 1,
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             );
         """)
     # Adiciona colunas extras se não existirem

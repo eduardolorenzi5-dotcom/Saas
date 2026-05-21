@@ -487,7 +487,10 @@ Ao receber uma mensagem, identifique se é:
 11. EXCLUIR um lembrete — ex: "exclua esse lembrete", "cancela o lembrete do médico", "excluir lembrete", "remove o lembrete de passear com os cachorros", "apagar lembrete"
 12. LISTAR lembretes ativos — ex: "quais meus lembretes?", "ver lembretes", "meus lembretes ativos"
 13. VER COMPROMISSOS DE HOJE — ex: "meus compromissos hoje", "o que tenho hoje?", "agenda de hoje", "me manda minha agenda", "lembretes de hoje", "o que está agendado hoje?", "quais eventos tenho hoje?"
-14. Outra mensagem — responda de forma amigável
+14. REGISTRAR conta mensal — ex: "adiciona conta de luz vence dia 10", "todo mês pago aluguel de 1500 no dia 5", "tenho conta do cartão dia 15 de 800 reais", "adicionar conta internet dia 20", "conta a pagar: academia 99 reais dia 1"
+15. LISTAR contas mensais — ex: "minhas contas mensais", "contas a pagar", "quais contas tenho?", "agendamentos de pagamentos mensais", "como estão meus pagamentos mensais?", "contas do mês", "quais são minhas contas fixas?"
+16. EXCLUIR conta mensal — ex: "remover conta da luz", "excluir conta do aluguel", "apagar conta mensal da academia"
+17. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(cats_list)}
 (Use SEMPRE uma das categorias listadas acima. Se nenhuma se encaixar, use a última da lista.)
@@ -562,6 +565,18 @@ Se for LISTAR lembretes:
 
 Se for VER COMPROMISSOS DE HOJE (agenda + lembretes do dia):
 {{"acao": "compromissos_hoje"}}
+
+Se for REGISTRAR conta mensal (extraia descrição, valor opcional e dia do mês):
+{{"acao": "registrar_conta_mensal", "descricao": "Aluguel", "valor": 1500.00, "dia_vencimento": 5}}
+- valor: omita se o usuário não informar
+- dia_vencimento: número do dia do mês (1 a 31)
+- descricao: nome da conta (ex: "Luz", "Internet", "Cartão Nubank", "Aluguel")
+
+Se for LISTAR contas mensais:
+{{"acao": "listar_contas_mensais"}}
+
+Se for EXCLUIR conta mensal:
+{{"acao": "excluir_conta_mensal", "descricao": "palavra-chave da conta"}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -1304,6 +1319,135 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 resposta = "Não consegui buscar seus lembretes. Tente novamente."
             finally:
                 try: conn_lem.close()
+                except: pass
+
+        elif acao == "registrar_conta_mensal":
+            descricao = resultado.get("descricao", "").strip() or "Conta"
+            valor = resultado.get("valor")
+            dia = int(resultado.get("dia_vencimento", 1))
+            dia = max(1, min(31, dia))
+            USE_PG_cm = bool(os.environ.get("DATABASE_URL"))
+            conn_cm = get_db()
+            try:
+                if USE_PG_cm:
+                    conn_cm.execute(
+                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (%s, %s, %s, %s)",
+                        (cliente["id"], descricao, valor, dia)
+                    )
+                else:
+                    conn_cm.execute(
+                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (?, ?, ?, ?)",
+                        (cliente["id"], descricao, valor, dia)
+                    )
+                conn_cm.commit()
+            finally:
+                try: conn_cm.close()
+                except: pass
+            valor_str = f"R$ {valor:.2f}" if valor else "valor não informado"
+            resposta = (
+                f"✅ Conta mensal cadastrada!\n\n"
+                f"📋 *{descricao}*\n"
+                f"💲 Valor: {valor_str}\n"
+                f"📅 Vencimento: todo dia *{dia}* do mês\n\n"
+                f"Envie *minhas contas* para ver todas as suas contas mensais."
+            )
+
+        elif acao == "listar_contas_mensais":
+            import datetime as _dt
+            hoje_dt = _dt.date.today()
+            mes_atual = hoje_dt.month
+            ano_atual = hoje_dt.year
+            USE_PG_cm = bool(os.environ.get("DATABASE_URL"))
+            conn_cm = get_db()
+            try:
+                if USE_PG_cm:
+                    contas = conn_cm.execute(
+                        "SELECT id, descricao, valor, dia_vencimento FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_vencimento",
+                        (cliente["id"],)
+                    ).fetchall()
+                    # Verifica quais já foram pagas este mês (aparecem em gastos)
+                    gastos_mes = conn_cm.execute(
+                        "SELECT LOWER(descricao) as desc FROM gastos WHERE cliente_id=%s AND data LIKE %s",
+                        (cliente["id"], f"{hoje_dt.strftime('%Y-%m')}%")
+                    ).fetchall()
+                else:
+                    contas = conn_cm.execute(
+                        "SELECT id, descricao, valor, dia_vencimento FROM contas_mensais WHERE cliente_id=? AND ativo=1 ORDER BY dia_vencimento",
+                        (cliente["id"],)
+                    ).fetchall()
+                    gastos_mes = conn_cm.execute(
+                        "SELECT LOWER(descricao) as desc FROM gastos WHERE cliente_id=? AND data LIKE ?",
+                        (cliente["id"], f"{hoje_dt.strftime('%Y-%m')}%")
+                    ).fetchall()
+            finally:
+                try: conn_cm.close()
+                except: pass
+
+            if not contas:
+                resposta = (
+                    "Você ainda não tem contas mensais cadastradas. 📋\n\n"
+                    "Para cadastrar, diga:\n"
+                    "_\"adiciona conta de luz vence dia 10\"_\n"
+                    "_\"aluguel de 1500 reais todo dia 5\"_"
+                )
+            else:
+                gastos_desc = {g["desc"] for g in gastos_mes}
+                hoje_dia = hoje_dt.day
+                meses_pt = ["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+                linhas = [f"📋 *Suas contas mensais — {meses_pt[mes_atual]}/{ano_atual}*\n"]
+                total_previsto = 0.0
+                for c in contas:
+                    desc = c["descricao"]
+                    valor_c = float(c["valor"]) if c["valor"] else None
+                    dia_v = c["dia_vencimento"]
+                    # Verifica se já foi paga (descrição aparece nos gastos do mês)
+                    paga = any(desc.lower() in g or g in desc.lower() for g in gastos_desc)
+                    venceu = dia_v < hoje_dia
+                    if paga:
+                        status = "✅ paga"
+                    elif venceu:
+                        status = "⚠️ vencida"
+                    else:
+                        dias_p = dia_v - hoje_dia
+                        status = f"🔜 vence em {dias_p}d" if dias_p > 0 else "📌 vence hoje"
+                    valor_str = f"R$ {valor_c:.2f}" if valor_c else "—"
+                    if valor_c:
+                        total_previsto += valor_c
+                    linhas.append(f"• *{desc}* — {valor_str} | dia {dia_v} | {status}")
+                if total_previsto > 0:
+                    linhas.append(f"\n💰 Total previsto: R$ {total_previsto:.2f}")
+                linhas.append("\nPara remover, diga: _\"excluir conta da [nome]\"_")
+                resposta = "\n".join(linhas)
+
+        elif acao == "excluir_conta_mensal":
+            desc_busca = resultado.get("descricao", "").strip().lower()
+            USE_PG_cm = bool(os.environ.get("DATABASE_URL"))
+            conn_cm = get_db()
+            try:
+                if USE_PG_cm:
+                    conta = conn_cm.execute(
+                        "SELECT id, descricao FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE AND LOWER(descricao) LIKE %s ORDER BY id DESC LIMIT 1",
+                        (cliente["id"], f"%{desc_busca}%")
+                    ).fetchone()
+                    if conta:
+                        conn_cm.execute("UPDATE contas_mensais SET ativo=FALSE WHERE id=%s", (conta["id"],))
+                        conn_cm.commit()
+                        resposta = f"🗑️ Conta *{conta['descricao']}* removida das contas mensais."
+                    else:
+                        resposta = f"Não encontrei nenhuma conta com \"{desc_busca}\". Envie *minhas contas* para ver a lista."
+                else:
+                    conta = conn_cm.execute(
+                        "SELECT id, descricao FROM contas_mensais WHERE cliente_id=? AND ativo=1 AND LOWER(descricao) LIKE ? ORDER BY id DESC LIMIT 1",
+                        (cliente["id"], f"%{desc_busca}%")
+                    ).fetchone()
+                    if conta:
+                        conn_cm.execute("UPDATE contas_mensais SET ativo=0 WHERE id=?", (conta["id"],))
+                        conn_cm.commit()
+                        resposta = f"🗑️ Conta *{conta['descricao']}* removida das contas mensais."
+                    else:
+                        resposta = f"Não encontrei nenhuma conta com \"{desc_busca}\". Envie *minhas contas* para ver a lista."
+            finally:
+                try: conn_cm.close()
                 except: pass
 
         elif acao == "compromissos_hoje":
