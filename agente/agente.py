@@ -761,11 +761,12 @@ def processar_imagem(fone, imagem_b64, caption=""):
             data_comp
         )
         resposta = (
-            f"✅ Comprovante registrado!\n"
-            f"📝 {resultado['descricao']}\n"
-            f"💰 R$ {float(resultado['valor']):.2f}\n"
-            f"📂 {resultado['categoria']}\n"
-            f"📅 {formatar_data(data_comp)}"
+            f"✅ Transação registrada com sucesso!\n\n"
+            f"🔍 Tipo: Saída\n"
+            f"✏️ Descrição: {resultado['descricao']}\n"
+            f"💲 Valor: R$ {float(resultado['valor']):.2f}\n"
+            f"📂 Categoria: {resultado['categoria']}\n"
+            f"📅 Data: {formatar_data(data_comp)}"
         )
     except Exception as e:
         import logging, traceback
@@ -808,17 +809,18 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             )
             data_gasto = resultado.get("data", hoje_brasil().isoformat())
             resposta = (
-                f"✅ Registrado!\n"
-                f"📝 {resultado['descricao']}\n"
-                f"💰 R$ {float(resultado['valor']):.2f}\n"
-                f"📂 {resultado['categoria']}\n"
-                f"📅 {formatar_data(data_gasto)}"
+                f"✅ Transação registrada com sucesso!\n\n"
+                f"🔍 Tipo: Saída\n"
+                f"✏️ Descrição: {resultado['descricao']}\n"
+                f"💲 Valor: R$ {float(resultado['valor']):.2f}\n"
+                f"📂 Categoria: {resultado['categoria']}\n"
+                f"📅 Data: {formatar_data(data_gasto)}"
             )
 
         elif acao == "registrar_multiplos":
             gastos = resultado.get("gastos", [])
             total = 0.0
-            linhas = ["✅ Gastos registrados!\n"]
+            linhas = ["✅ Transações registradas com sucesso!\n"]
             for g in gastos:
                 data_g = g.get("data", hoje_brasil().isoformat())
                 salvar_gasto(
@@ -829,9 +831,15 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     data_g
                 )
                 total += float(g["valor"])
-                linhas.append(f"📝 {g['descricao']} — R$ {float(g['valor']):.2f} ({g['categoria']}) {formatar_data(data_g)}")
+                linhas.append(
+                    f"🔍 Tipo: Saída\n"
+                    f"✏️ Descrição: {g['descricao']}\n"
+                    f"💲 Valor: R$ {float(g['valor']):.2f}\n"
+                    f"📂 Categoria: {g['categoria']}\n"
+                    f"📅 Data: {formatar_data(data_g)}"
+                )
             linhas.append(f"\n💰 Total: R$ {total:.2f}")
-            resposta = "\n".join(linhas)
+            resposta = "\n\n".join(linhas)
 
         elif acao == "deletar_tudo":
             mes = resultado.get("mes")
@@ -968,13 +976,14 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 # Se for fixo, também atualiza renda_mensal de referência
                 if tipo == "fixo":
                     salvar_renda(cliente["id"], valor)
-                emoji_tipo = "💼" if tipo == "fixo" else "⚡"
                 label_tipo = "Renda fixa" if tipo == "fixo" else "Renda extra"
                 resposta = (
-                    f"✅ {label_tipo} registrada!\n"
-                    f"{emoji_tipo} {descricao}\n"
-                    f"💰 R$ {valor:.2f}\n"
-                    f"📅 {formatar_data(data_renda)}\n\n"
+                    f"✅ Transação registrada com sucesso!\n\n"
+                    f"🔍 Tipo: Entrada\n"
+                    f"✏️ Descrição: {descricao}\n"
+                    f"💲 Valor: R$ {valor:.2f}\n"
+                    f"📂 Categoria: {label_tipo}\n"
+                    f"📅 Data: {formatar_data(data_renda)}\n\n"
                     f"Envie *resumo* para ver seu saldo do mês!"
                 )
             else:
