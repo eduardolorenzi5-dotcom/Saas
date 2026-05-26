@@ -137,6 +137,9 @@
         <form method="POST" action="/admin/ativar/{{ c.id }}" style="display:inline;">
           <button class="action-btn btn-ativar" style="font-size:11px;padding:5px 10px;" title="Ativar manualmente">✓ Ativar</button>
         </form>
+        <form method="POST" action="/admin/deletar/{{ c.id }}" style="display:inline;" onsubmit="return confirm('Excluir {{ c.nome }}? Esta ação é irreversível e apaga todos os dados do cliente.');">
+          <button class="action-btn" style="font-size:11px;padding:5px 10px;background:#fee2e2;color:#991b1b;" title="Excluir cliente">🗑 Excluir</button>
+        </form>
       </div>
     </div>
     {% endfor %}
