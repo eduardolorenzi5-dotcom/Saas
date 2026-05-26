@@ -2373,7 +2373,41 @@ def _verificar_trials():
                     "SELECT id, nome, whatsapp, email, trial_expiry, ultimo_aviso_trial FROM clientes WHERE status='ativo' AND trial_expiry IS NOT NULL"
                 ).fetchall()
                 kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y")
+                banner_url = os.environ.get("TRIAL_BANNER_URL", "")  # URL de imagem para enviar junto
+                app_url = os.environ.get("APP_URL", "https://controlafacilai.com.br")
+                ev_url = os.environ.get("EVOLUTION_URL", "").rstrip("/")
+                ev_key = os.environ.get("EVOLUTION_KEY", "")
+                ev_inst = os.environ.get("EVOLUTION_INSTANCE", "")
                 hoje = agora.date()
+
+                def _enviar_trial_img(numero, caption):
+                    """Envia banner + texto. Se não tiver banner, envia só texto."""
+                    num = "".join(d for d in (numero or "") if d.isdigit())
+                    if not num:
+                        return
+                    if banner_url and ev_url and ev_key and ev_inst:
+                        import urllib.request as _ur, json as _jj
+                        try:
+                            pay = _jj.dumps({
+                                "number": num,
+                                "mediatype": "image",
+                                "media": banner_url,
+                                "caption": caption,
+                            }).encode()
+                            req = _ur.Request(
+                                f"{ev_url}/message/sendMedia/{ev_inst}",
+                                data=pay,
+                                headers={"apikey": ev_key, "Content-Type": "application/json"},
+                                method="POST"
+                            )
+                            with _ur.urlopen(req, timeout=15):
+                                pass
+                            return
+                        except Exception as _ie:
+                            logging.warning(f"[TRIAL] Falha ao enviar imagem: {_ie}")
+                    # Fallback: só texto
+                    _enviar(numero, caption)
+
                 for c in clientes_trial:
                     try:
                         expiry = _dt.strptime(str(c["trial_expiry"])[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=_tz(_td(hours=-3)))
@@ -2384,35 +2418,55 @@ def _verificar_trials():
                         if ultimo_aviso and str(ultimo_aviso)[:10] == str(hoje):
                             continue  # Já notificou hoje, pula
 
-                        # Aviso 2 dias antes (dia 5)
+                        nome = c["nome"].split()[0]  # só primeiro nome
+
+                        # Aviso 2 dias antes
                         if dias_restantes == 2:
-                            _enviar(c["whatsapp"],
-                                f"⏳ *{c['nome']}, seu teste gratuito expira em 2 dias!*\n\n"
-                                f"Para continuar usando o Controla Fácil sem interrupção, assine agora por apenas R$ 9,90/mês:\n\n"
+                            _enviar_trial_img(c["whatsapp"],
+                                f"⏳ *{nome}, faltam apenas 2 dias para o seu teste acabar!*\n\n"
+                                f"Nesses 7 dias você viu como é fácil controlar as finanças pelo WhatsApp.\n\n"
+                                f"Não perca o acesso a:\n"
+                                f"✅ Registro por texto, áudio e foto\n"
+                                f"✅ Resumo e saldo automático\n"
+                                f"✅ Controle de contas mensais\n"
+                                f"✅ Lembretes automáticos\n"
+                                f"✅ Relatório PDF + Dashboard\n\n"
+                                f"Continue por apenas *R$ 9,90/mês* — menos de 33 centavos por dia! 💚\n\n"
                                 f"👉 {kiwify_url}"
                             )
                             conn.execute("UPDATE clientes SET ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
                             conn.commit()
                             logging.info(f"[TRIAL] Aviso 2 dias enviado para {c['email']}")
+
                         # Aviso 1 dia antes
                         elif dias_restantes == 1:
-                            _enviar(c["whatsapp"],
-                                f"⏳ *{c['nome']}, seu teste gratuito expira amanhã!*\n\n"
-                                f"Para continuar usando o Controla Fácil sem interrupção, assine agora por apenas R$ 9,90/mês:\n\n"
-                                f"👉 {kiwify_url}"
+                            _enviar_trial_img(c["whatsapp"],
+                                f"🚨 *{nome}, amanhã é o último dia do seu teste gratuito!*\n\n"
+                                f"Depois de amanhã você perde acesso ao seu assistente financeiro pessoal.\n\n"
+                                f"Por apenas *R$ 9,90/mês* você mantém tudo funcionando:\n"
+                                f"📊 Seus gastos organizados\n"
+                                f"🎤 Registro por áudio e foto\n"
+                                f"📋 Controle de contas a pagar\n"
+                                f"🔒 Todos os seus dados preservados\n\n"
+                                f"*Assine agora e continue sem interrupção:*\n"
+                                f"👉 {kiwify_url}\n\n"
+                                f"_Cancele quando quiser, sem multa._ 😊"
                             )
                             conn.execute("UPDATE clientes SET ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
                             conn.commit()
                             logging.info(f"[TRIAL] Aviso 1 dia enviado para {c['email']}")
+
                         # Trial expirado
                         elif dias_restantes < 0:
                             conn.execute("UPDATE clientes SET status='pendente', ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
                             conn.commit()
-                            _enviar(c["whatsapp"],
-                                f"😕 *{c['nome']}, seu período de teste gratuito encerrou.*\n\n"
-                                f"Para voltar a usar o Controla Fácil, assine por apenas R$ 9,90/mês:\n\n"
+                            _enviar_trial_img(c["whatsapp"],
+                                f"😕 *{nome}, seu período gratuito encerrou hoje.*\n\n"
+                                f"Seus dados estão todos salvos e esperando por você! 🔒\n\n"
+                                f"Para voltar a ter seu assistente financeiro no WhatsApp:\n"
                                 f"👉 {kiwify_url}\n\n"
-                                f"_Seus dados estão salvos e serão restaurados assim que você assinar!_ 🔒"
+                                f"*R$ 9,90/mês* — seus dados restaurados na hora!\n"
+                                f"_Cancele quando quiser, sem multa._ 💚"
                             )
                             logging.info(f"[TRIAL] Expirado e desativado: {c['email']}")
                     except Exception as e:
