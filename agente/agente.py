@@ -15,6 +15,9 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 EVOLUTION_URL = os.environ.get("EVOLUTION_URL", "http://localhost:8080")
 EVOLUTION_KEY = os.environ.get("EVOLUTION_KEY", "")
 EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
+
+# Abstração de provedor WhatsApp (evolution ou meta)
+from agente.wpp_provider import send_text as _wpp_send_text, send_image_b64 as _wpp_send_image_b64
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 APP_URL = os.environ.get("APP_URL", "https://saas-production-2a7a.up.railway.app")
@@ -672,29 +675,12 @@ def gerar_imagem_dashboard(cliente_id):
     return base64.b64encode(buf.read()).decode("utf-8")
 
 def enviar_imagem_whatsapp(fone, imagem_b64, caption=""):
-    if not EVOLUTION_KEY:
-        return
-    url = f"{EVOLUTION_URL}/message/sendMedia/{EVOLUTION_INSTANCE}"
-    headers = {"apikey": EVOLUTION_KEY, "Content-Type": "application/json"}
-    body = {
-        "number": fone,
-        "mediatype": "image",
-        "mimetype": "image/png",
-        "caption": caption,
-        "media": imagem_b64,
-        "fileName": "relatorio.png",
-    }
-    requests.post(url, headers=headers, json=body, timeout=20)
+    """Envia imagem base64 via provedor ativo (Evolution ou Meta)."""
+    _wpp_send_image_b64(fone, imagem_b64, caption=caption, filename="relatorio.png")
 
 def enviar_whatsapp(fone, mensagem):
-    """Envia mensagem de resposta via Evolution API."""
-    if not EVOLUTION_KEY:
-        print(f"[WPP → {fone}] {mensagem}")
-        return
-    url = f"{EVOLUTION_URL}/message/sendText/{EVOLUTION_INSTANCE}"
-    headers = {"apikey": EVOLUTION_KEY, "Content-Type": "application/json"}
-    body = {"number": fone, "text": mensagem}
-    requests.post(url, headers=headers, json=body, timeout=10)
+    """Envia mensagem de texto via provedor ativo (Evolution ou Meta)."""
+    _wpp_send_text(fone, mensagem)
 
 def analisar_comprovante_claude(imagem_b64, caption="", categorias=None):
     cats_list = categorias if categorias else CATEGORIAS
