@@ -182,7 +182,7 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
     # Monta filtro de conta
     conta_nome = None
     if conta_id:
-        c = conn.execute("SELECT nome FROM contas WHERE id=%s AND cliente_id=%s",
+        c = conn.execute("SELECT nome FROM contas_bancarias WHERE id=%s AND cliente_id=%s",
                          (conta_id, cliente_id)).fetchone()
         conta_nome = c["nome"] if c else None
         conta_filtro_sql   = "AND conta_id=%s"
@@ -516,7 +516,7 @@ def gerar_e_enviar_pdf_wpp(cliente_id, mes, whatsapp, conta_id=None):
         try:
             from db import get_db as _get_db
             _conn = _get_db()
-            _c = _conn.execute("SELECT nome FROM contas WHERE id=%s", (conta_id,)).fetchone()
+            _c = _conn.execute("SELECT nome FROM contas_bancarias WHERE id=%s", (conta_id,)).fetchone()
             _conn.close()
             if _c:
                 conta_label = f" — {_c['nome']}"

@@ -2823,7 +2823,7 @@ def relatorio_por_conta(conta_id):
         # Verifica que a conta pertence ao cliente
         conn = get_db()
         conta = conn.execute(
-            "SELECT * FROM contas WHERE id=%s AND cliente_id=%s", (conta_id, cid)
+            "SELECT * FROM contas_bancarias WHERE id=%s AND cliente_id=%s", (conta_id, cid)
         ).fetchone()
         conn.close()
         if not conta:

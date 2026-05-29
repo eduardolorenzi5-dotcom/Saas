@@ -1169,7 +1169,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             # Localiza a conta pelo nome (busca parcial)
             conn_rc = get_db()
             contas_rc = conn_rc.execute(
-                "SELECT id, nome FROM contas WHERE cliente_id=%s AND ativo=TRUE ORDER BY nome",
+                "SELECT id, nome FROM contas_bancarias WHERE cliente_id=%s AND ativo=TRUE ORDER BY nome",
                 (cliente["id"],)
             ).fetchall()
             conn_rc.close()
