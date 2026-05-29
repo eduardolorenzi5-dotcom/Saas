@@ -339,7 +339,7 @@
         <div class="form-card-title">Adicionar gasto</div>
         <div class="form-grid">
           <div class="form-field"><label>Descrição</label><input type="text" id="inp-desc" placeholder="Ex: Mercado"/></div>
-          <div class="form-field"><label>Valor (R$)</label><input type="number" id="inp-val" placeholder="0,00" step="0.01"/></div>
+          <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="inp-val" placeholder="0,00" oninput="mascaraMoeda(this)"/></div>
           <div class="form-field"><label>Categoria</label>
             <select id="inp-cat">
               {% for c in cats_usuario %}
@@ -476,7 +476,7 @@
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div class="form-field"><label>Descrição</label><input type="text" id="renda-desc" placeholder="Ex: Salário, Freela, Comissão"/></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div class="form-field"><label>Valor (R$)</label><input type="number" id="renda-val" placeholder="0,00" step="0.01"/></div>
+          <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="renda-val" placeholder="0,00" oninput="mascaraMoeda(this)"/></div>
           <div class="form-field"><label>Tipo</label>
             <select id="renda-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#f9fafb;">
               <option value="fixo">💼 Renda Fixa</option>
@@ -577,7 +577,9 @@
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;">Saldo inicial (R$)</label>
-            <input type="number" id="edit-saldo-{{ conta.id }}" value="{{ conta.saldo_inicial }}" step="0.01"
+            <input type="text" inputmode="numeric" class="moeda-br" id="edit-saldo-{{ conta.id }}"
+                   data-valor="{{ conta.saldo_inicial }}"
+                   oninput="mascaraMoeda(this)"
                    style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;margin-top:3px;"/>
             <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Valor inicial da conta no momento do cadastro</div>
           </div>
@@ -619,7 +621,7 @@
       </div>
       <div class="form-field" style="max-width:260px;">
         <label>Saldo inicial (R$)</label>
-        <input type="number" id="nova-conta-saldo" placeholder="0,00" step="0.01" min="0"/>
+        <input type="text" inputmode="numeric" class="moeda-br" id="nova-conta-saldo" placeholder="0,00" oninput="mascaraMoeda(this)"/>
         <small style="font-size:11px;color:#9ca3af;">Saldo atual da conta no momento do cadastro</small>
       </div>
       <button class="btn-add" onclick="adicionarConta()" style="align-self:flex-start;padding:10px 24px;">+ Cadastrar conta</button>
@@ -654,7 +656,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div class="form-field">
           <label>Valor (R$)</label>
-          <input type="number" id="tx-valor" placeholder="0,00" step="0.01" min="0.01"/>
+          <input type="text" inputmode="numeric" class="moeda-br" id="tx-valor" placeholder="0,00" oninput="mascaraMoeda(this)"/>
         </div>
         <div class="form-field">
           <label>Descrição</label>
@@ -733,7 +735,7 @@
       <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">+ Nova conta mensal</div>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
         <div class="form-field"><label>Descrição</label><input type="text" id="cm-desc" placeholder="Ex: Energia, Aluguel"/></div>
-        <div class="form-field"><label>Valor (R$)</label><input type="number" id="cm-valor" placeholder="100,00" step="0.01" min="0.01"/></div>
+        <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="cm-valor" placeholder="100,00" oninput="mascaraMoeda(this)"/></div>
         <div class="form-field"><label>Dia do mês</label><input type="number" id="cm-dia" placeholder="10" min="1" max="31"/></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
@@ -809,7 +811,7 @@
       <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">+ Novo parcelamento</div>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
         <div class="form-field"><label>Descrição</label><input type="text" id="parc-desc" placeholder="Ex: Geladeira, Sapato"/></div>
-        <div class="form-field"><label>Valor por parcela (R$)</label><input type="number" id="parc-valor" placeholder="150,00" step="0.01" min="0.01"/></div>
+        <div class="form-field"><label>Valor por parcela (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="parc-valor" placeholder="150,00" oninput="mascaraMoeda(this)"/></div>
         <div class="form-field"><label>Nº de parcelas</label><input type="number" id="parc-num" placeholder="10" min="1" max="360"/></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
@@ -1058,7 +1060,7 @@ if (labels.length > 0) {
 // RENDAS
 async function addRenda() {
   const desc = document.getElementById('renda-desc').value.trim();
-  const val = parseFloat(document.getElementById('renda-val').value);
+  const val = parseMoeda(document.getElementById('renda-val').value);
   const tipo = document.getElementById('renda-tipo').value;
   const data = document.getElementById('renda-data').value || new Date().toISOString().slice(0,10);
   const contaEl = document.getElementById('renda-conta');
@@ -1076,7 +1078,7 @@ async function addRenda() {
 async function adicionarConta() {
   const nome = document.getElementById('nova-conta-nome').value.trim();
   const tipo = document.getElementById('nova-conta-tipo').value;
-  const saldo_inicial = parseFloat(document.getElementById('nova-conta-saldo').value) || 0;
+  const saldo_inicial = parseMoeda(document.getElementById('nova-conta-saldo').value);
   const msg = document.getElementById('conta-msg');
   const btn = document.querySelector('[onclick="adicionarConta()"]');
   if (!nome) { msg.textContent = 'Digite um nome para a conta.'; msg.style.display='block'; return; }
@@ -1171,7 +1173,7 @@ async function deletarCategoria(nome) {
 async function criarTransferencia() {
   const origem  = parseInt(document.getElementById('tx-origem').value);
   const destino = parseInt(document.getElementById('tx-destino').value);
-  const valor   = parseFloat(document.getElementById('tx-valor').value);
+  const valor   = parseMoeda(document.getElementById('tx-valor').value);
   const desc    = document.getElementById('tx-desc').value.trim() || 'Transferência';
   const data    = document.getElementById('tx-data').value || new Date().toISOString().slice(0,10);
   const msg     = document.getElementById('tx-msg');
@@ -1213,7 +1215,7 @@ function fecharEditarConta(id) {
 async function salvarEdicaoConta(id) {
   const nome  = document.getElementById(`edit-nome-${id}`).value.trim();
   const tipo  = document.getElementById(`edit-tipo-${id}`).value;
-  const saldo = parseFloat(document.getElementById(`edit-saldo-${id}`).value) || 0;
+  const saldo = parseMoeda(document.getElementById(`edit-saldo-${id}`).value);
   const msg   = document.getElementById(`edit-msg-${id}`);
   if (!nome) { msg.textContent = 'Informe o nome da conta.'; msg.style.display = 'block'; return; }
   const r = await fetch(`/api/contas/${id}`, {
@@ -1229,7 +1231,7 @@ async function salvarEdicaoConta(id) {
 // DÉBITOS AUTOMÁTICOS (contas mensais)
 async function salvarContaMensal() {
   const desc  = document.getElementById('cm-desc').value.trim();
-  const valor = parseFloat(document.getElementById('cm-valor').value);
+  const valor = parseMoeda(document.getElementById('cm-valor').value);
   const dia   = parseInt(document.getElementById('cm-dia').value);
   const cat   = document.getElementById('cm-cat')?.value || 'Outros';
   const contaEl = document.getElementById('cm-conta');
@@ -1256,7 +1258,7 @@ async function deletarContaMensal(id) {
 // PARCELAMENTOS
 async function salvarParcelamento() {
   const desc  = document.getElementById('parc-desc').value.trim();
-  const valor = parseFloat(document.getElementById('parc-valor').value);
+  const valor = parseMoeda(document.getElementById('parc-valor').value);
   const num   = parseInt(document.getElementById('parc-num').value);
   const data  = document.getElementById('parc-data').value;
   const cat   = document.getElementById('parc-cat')?.value || 'Outros';
