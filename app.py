@@ -2028,6 +2028,89 @@ def criar_conta():
     conn.close()
     return jsonify({"ok": True, "id": new_id})
 
+@app.route("/api/contas/<int:conta_id>/extrato", methods=["GET"])
+@login_required
+def extrato_conta(conta_id):
+    """Retorna todas as movimentações de uma conta específica."""
+    cid = session["cliente_id"]
+    mes = request.args.get("mes", "")  # YYYY-MM, vazio = todos os meses
+    conn = get_db()
+    # Verifica que a conta pertence ao cliente
+    conta = conn.execute(
+        "SELECT * FROM contas_bancarias WHERE id=%s AND cliente_id=%s AND ativo=TRUE", (conta_id, cid)
+    ).fetchone()
+    if not conta:
+        conn.close()
+        return jsonify({"erro": "Conta não encontrada"}), 404
+
+    filtro_mes = f" AND data LIKE '{mes}%'" if mes else ""
+
+    gastos = conn.execute(
+        f"SELECT id, descricao, valor, categoria, data, fonte FROM gastos WHERE cliente_id=%s AND conta_id=%s{filtro_mes} ORDER BY data DESC, id DESC",
+        (cid, conta_id)
+    ).fetchall()
+
+    rendas = conn.execute(
+        f"SELECT id, descricao, valor, tipo, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s{filtro_mes} ORDER BY data DESC, id DESC",
+        (cid, conta_id)
+    ).fetchall()
+
+    # Transferências de entrada (destino = esta conta)
+    filtro_mes_t = f" AND t.data LIKE '{mes}%'" if mes else ""
+    entradas = conn.execute(
+        f"""SELECT t.id, t.valor, t.descricao, t.data, o.nome as outra_conta
+            FROM transferencias t
+            JOIN contas_bancarias o ON t.conta_origem_id = o.id
+            WHERE t.cliente_id=%s AND t.conta_destino_id=%s{filtro_mes_t}
+            ORDER BY t.data DESC, t.id DESC""",
+        (cid, conta_id)
+    ).fetchall()
+
+    # Transferências de saída (origem = esta conta)
+    saidas = conn.execute(
+        f"""SELECT t.id, t.valor, t.descricao, t.data, d.nome as outra_conta
+            FROM transferencias t
+            JOIN contas_bancarias d ON t.conta_destino_id = d.id
+            WHERE t.cliente_id=%s AND t.conta_origem_id=%s{filtro_mes_t}
+            ORDER BY t.data DESC, t.id DESC""",
+        (cid, conta_id)
+    ).fetchall()
+
+    calc = _calcular_saldo_conta(conn, cid, conta_id, conta["saldo_inicial"])
+    conn.close()
+
+    # Monta lista unificada de movimentações
+    movs = []
+    for g in gastos:
+        movs.append({"id": g["id"], "tipo": "gasto", "descricao": g["descricao"],
+                     "valor": float(g["valor"]), "data": g["data"],
+                     "categoria": g["categoria"], "fonte": g["fonte"]})
+    for r in rendas:
+        movs.append({"id": r["id"], "tipo": "renda", "descricao": r["descricao"],
+                     "valor": float(r["valor"]), "data": r["data"],
+                     "subtipo": r["tipo"], "fonte": r["fonte"]})
+    for e in entradas:
+        movs.append({"id": e["id"], "tipo": "transferencia_entrada",
+                     "descricao": e["descricao"] or f"Transferência de {e['outra_conta']}",
+                     "valor": float(e["valor"]), "data": e["data"],
+                     "outra_conta": e["outra_conta"]})
+    for s in saidas:
+        movs.append({"id": s["id"], "tipo": "transferencia_saida",
+                     "descricao": s["descricao"] or f"Transferência para {s['outra_conta']}",
+                     "valor": float(s["valor"]), "data": s["data"],
+                     "outra_conta": s["outra_conta"]})
+
+    movs.sort(key=lambda x: x["data"], reverse=True)
+
+    return jsonify({
+        "conta": {"id": conta_id, "nome": conta["nome"], "tipo": conta["tipo"],
+                  "saldo_inicial": float(conta["saldo_inicial"])},
+        "saldo": calc["saldo"],
+        "total_receitas": calc["total_receitas"],
+        "total_despesas": calc["total_despesas"],
+        "movimentacoes": movs
+    })
+
 @app.route("/api/contas/<int:conta_id>", methods=["PUT"])
 @login_required
 def atualizar_conta(conta_id):

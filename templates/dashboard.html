@@ -151,6 +151,28 @@
       .cards-row { grid-template-columns: 1fr 1fr; }
       .form-grid { grid-template-columns: 1fr; }
     }
+
+    /* MODAL EXTRATO */
+    #modal-extrato.aberto { display:flex !important; }
+    .extrato-item { display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid #f9fafb;transition:background .1s; }
+    .extrato-item:hover { background:#fafafa; }
+    .extrato-item:last-child { border-bottom:none; }
+    .extrato-icon { width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0; }
+    .extrato-icon.saida { background:#fee2e2; }
+    .extrato-icon.entrada { background:#d1fae5; }
+    .extrato-icon.transf { background:#ede9fe; }
+    .extrato-desc { flex:1;min-width:0; }
+    .extrato-desc-nome { font-size:13px;font-weight:600;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .extrato-desc-meta { font-size:11px;color:#9ca3af;margin-top:1px; }
+    .extrato-valor { font-size:14px;font-weight:700;white-space:nowrap; }
+    .extrato-valor.saida { color:#dc2626; }
+    .extrato-valor.entrada { color:#059669; }
+    .extrato-valor.transf-in { color:#6366f1; }
+    .extrato-valor.transf-out { color:#8b5cf6; }
+    @media(max-width:600px) {
+      #modal-extrato > div { max-height:96vh;border-radius:16px 16px 0 0;position:fixed;bottom:0;left:0;right:0;max-width:100%; }
+      #modal-extrato.aberto { align-items:flex-end !important;padding:0 !important; }
+    }
   </style>
 </head>
 <body>
@@ -546,12 +568,17 @@
                     style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:18px;padding:0;line-height:1;" title="Remover conta">×</button>
           </div>
         </div>
-        <div style="font-size:28px;font-weight:700;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};margin-bottom:8px;">
+        <div onclick="abrirExtrato({{ conta.id }}, '{{ conta.nome }}')"
+             style="font-size:28px;font-weight:700;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};margin-bottom:8px;cursor:pointer;" title="Ver extrato">
           R$ {{ "%.2f"|format(conta.saldo) }}
         </div>
-        <div style="display:flex;gap:16px;font-size:11px;color:#9ca3af;">
-          <span>▲ R$ {{ "%.2f"|format(conta.total_receitas) }}</span>
-          <span>▼ R$ {{ "%.2f"|format(conta.total_despesas) }}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;gap:16px;font-size:11px;color:#9ca3af;">
+            <span>▲ R$ {{ "%.2f"|format(conta.total_receitas) }}</span>
+            <span>▼ R$ {{ "%.2f"|format(conta.total_despesas) }}</span>
+          </div>
+          <button onclick="abrirExtrato({{ conta.id }}, '{{ conta.nome }}')"
+                  style="background:none;border:none;color:#6366f1;font-size:11px;cursor:pointer;padding:0;font-weight:600;">Ver extrato →</button>
         </div>
         {% if conta.saldo_inicial != 0 %}
         <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Saldo inicial: R$ {{ "%.2f"|format(conta.saldo_inicial) }}</div>
@@ -837,6 +864,33 @@
     </div>
   </div>
 
+</div>
+
+<!-- ===== MODAL: EXTRATO DA CONTA ===== -->
+<div id="modal-extrato" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:620px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:1px solid #f3f4f6;">
+      <div>
+        <div id="extrato-nome" style="font-size:18px;font-weight:700;color:#1a1a2e;"></div>
+        <div id="extrato-saldo-header" style="font-size:13px;color:#6b7280;margin-top:2px;"></div>
+      </div>
+      <button onclick="fecharExtrato()" style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;line-height:1;padding:4px;">×</button>
+    </div>
+    <!-- Resumo -->
+    <div id="extrato-resumo" style="display:flex;gap:0;border-bottom:1px solid #f3f4f6;"></div>
+    <!-- Filtro de mês -->
+    <div style="padding:12px 24px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:13px;color:#6b7280;font-weight:500;">Período:</span>
+      <select id="extrato-mes-sel" onchange="filtrarExtrato()" style="border:1px solid #e5e7eb;border-radius:7px;padding:5px 10px;font-size:13px;background:#f9fafb;color:#374151;cursor:pointer;">
+        <option value="">Todos os meses</option>
+      </select>
+    </div>
+    <!-- Lista de movimentações -->
+    <div id="extrato-lista" style="overflow-y:auto;flex:1;padding:8px 0;">
+      <div style="text-align:center;padding:40px;color:#9ca3af;font-size:14px;">Carregando...</div>
+    </div>
+  </div>
 </div>
 
 <!-- ===== ABA: MINHA CONTA ===== -->
@@ -1202,6 +1256,125 @@ async function deletarTransferencia(id) {
   if (r.ok) { document.getElementById(`tx-${id}`)?.remove(); }
   else { const d = await r.json(); alert(d.erro || 'Erro ao estornar.'); }
 }
+
+// EXTRATO DA CONTA
+let _extratoContaId = null;
+
+async function abrirExtrato(contaId, contaNome) {
+  _extratoContaId = contaId;
+  document.getElementById('extrato-nome').textContent = '🏦 ' + contaNome;
+  document.getElementById('extrato-saldo-header').textContent = 'Carregando...';
+  document.getElementById('extrato-resumo').innerHTML = '';
+  document.getElementById('extrato-lista').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;font-size:14px;">⏳ Carregando...</div>';
+  // Preenche o select de meses (últimos 12 meses)
+  const sel = document.getElementById('extrato-mes-sel');
+  sel.innerHTML = '<option value="">Todos os meses</option>';
+  const hoje = new Date();
+  const mesesPT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label = `${mesesPT[d.getMonth()]}/${d.getFullYear()}`;
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  document.getElementById('modal-extrato').classList.add('aberto');
+  document.body.style.overflow = 'hidden';
+  await carregarExtrato();
+}
+
+async function fecharExtrato() {
+  document.getElementById('modal-extrato').classList.remove('aberto');
+  document.body.style.overflow = '';
+  _extratoContaId = null;
+}
+
+async function filtrarExtrato() {
+  if (_extratoContaId) await carregarExtrato();
+}
+
+async function carregarExtrato() {
+  const mes = document.getElementById('extrato-mes-sel').value;
+  const url = `/api/contas/${_extratoContaId}/extrato` + (mes ? `?mes=${mes}` : '');
+  const r = await fetch(url);
+  if (!r.ok) { document.getElementById('extrato-lista').innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">Erro ao carregar.</div>'; return; }
+  const d = await r.json();
+
+  // Header saldo
+  const cor = d.saldo >= 0 ? '#059669' : '#dc2626';
+  document.getElementById('extrato-saldo-header').innerHTML =
+    `Saldo atual: <strong style="color:${cor}">R$ ${d.saldo.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>`;
+
+  // Resumo 3 colunas
+  const fmt = v => 'R$ ' + parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('extrato-resumo').innerHTML = `
+    <div style="flex:1;padding:12px 16px;text-align:center;border-right:1px solid #f3f4f6;">
+      <div style="font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Entradas</div>
+      <div style="font-size:16px;font-weight:700;color:#059669;">${fmt(d.total_receitas)}</div>
+    </div>
+    <div style="flex:1;padding:12px 16px;text-align:center;border-right:1px solid #f3f4f6;">
+      <div style="font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Saídas</div>
+      <div style="font-size:16px;font-weight:700;color:#dc2626;">${fmt(d.total_despesas)}</div>
+    </div>
+    <div style="flex:1;padding:12px 16px;text-align:center;">
+      <div style="font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Saldo</div>
+      <div style="font-size:16px;font-weight:700;color:${cor};">${fmt(d.saldo)}</div>
+    </div>`;
+
+  // Lista de movimentações
+  const lista = document.getElementById('extrato-lista');
+  const movs = d.movimentacoes;
+  if (!movs.length) {
+    lista.innerHTML = '<div style="text-align:center;padding:48px 24px;color:#9ca3af;font-size:14px;">Nenhuma movimentação' + (mes ? ' neste período.' : '.') + '</div>';
+    return;
+  }
+
+  const icones = { gasto:'💸', renda:'💰', transferencia_entrada:'↙️', transferencia_saida:'↗️' };
+  const tipoLabel = { gasto:'Gasto', renda:'Receita', transferencia_entrada:'Transferência recebida', transferencia_saida:'Transferência enviada' };
+  const classeIcon = { gasto:'saida', renda:'entrada', transferencia_entrada:'transf', transferencia_saida:'transf' };
+  const classeValor = { gasto:'saida', renda:'entrada', transferencia_entrada:'transf-in', transferencia_saida:'transf-out' };
+  const sinal = { gasto:'− ', renda:'+ ', transferencia_entrada:'+ ', transferencia_saida:'− ' };
+
+  // Agrupa por data
+  const porData = {};
+  movs.forEach(m => { if (!porData[m.data]) porData[m.data] = []; porData[m.data].push(m); });
+  const datas = Object.keys(porData).sort().reverse();
+
+  let html = '';
+  datas.forEach(data => {
+    const [y,mo,d2] = data.split('-');
+    const mesesPT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    html += `<div style="padding:8px 24px 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;background:#f9fafb;border-bottom:1px solid #f3f4f6;">${d2} ${mesesPT[parseInt(mo)-1]} ${y}</div>`;
+    porData[data].forEach(m => {
+      const meta = m.tipo === 'gasto' ? m.categoria
+                 : m.tipo === 'renda' ? (m.subtipo === 'fixo' ? 'Renda fixa' : 'Renda extra')
+                 : (m.outra_conta ? (m.tipo === 'transferencia_entrada' ? `De: ${m.outra_conta}` : `Para: ${m.outra_conta}`) : '');
+      const autoTag = m.fonte === 'auto' ? ' <span style="font-size:9px;background:#dcfce7;color:#16a34a;border-radius:4px;padding:1px 5px;font-weight:600;">AUTO</span>' : '';
+      html += `<div class="extrato-item">
+        <div class="extrato-icon ${classeIcon[m.tipo]}">${icones[m.tipo]}</div>
+        <div class="extrato-desc">
+          <div class="extrato-desc-nome">${m.descricao}${autoTag}</div>
+          <div class="extrato-desc-meta">${tipoLabel[m.tipo]}${meta ? ' · ' + meta : ''}</div>
+        </div>
+        <div class="extrato-valor ${classeValor[m.tipo]}">${sinal[m.tipo]}R$ ${parseFloat(m.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      </div>`;
+    });
+  });
+  lista.innerHTML = html;
+}
+
+// Fechar modal ao clicar fora
+document.addEventListener('click', e => {
+  const modal = document.getElementById('modal-extrato');
+  if (modal && modal.classList.contains('aberto') && e.target === modal) fecharExtrato();
+});
+
+// Fechar modal com Esc
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') fecharExtrato();
+});
 
 // EDITAR CONTA BANCÁRIA
 function abrirEditarConta(id, nome, tipo, saldoInicial) {
