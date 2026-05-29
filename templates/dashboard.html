@@ -766,14 +766,22 @@ async function adicionarConta() {
   const tipo = document.getElementById('nova-conta-tipo').value;
   const saldo_inicial = parseFloat(document.getElementById('nova-conta-saldo').value) || 0;
   const msg = document.getElementById('conta-msg');
+  const btn = document.querySelector('[onclick="adicionarConta()"]');
   if (!nome) { msg.textContent = 'Digite um nome para a conta.'; msg.style.display='block'; return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   const r = await fetch('/api/contas', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({nome, tipo, saldo_inicial})
   });
   const data = await r.json();
-  if (!r.ok) { msg.textContent = data.erro || 'Erro ao criar conta.'; msg.style.display='block'; return; }
+  if (!r.ok) {
+    msg.textContent = data.erro || 'Erro ao criar conta.';
+    msg.style.color = '#ef4444';
+    msg.style.display='block';
+    if (btn) { btn.disabled = false; btn.textContent = '+ Cadastrar conta'; }
+    return;
+  }
   msg.style.display='none';
   location.reload();
 }

@@ -1838,6 +1838,14 @@ def criar_conta():
     if len(nome) > 60:
         return jsonify({"erro": "Nome muito longo (máx. 60 caracteres)"}), 400
     conn = get_db()
+    # Verifica duplicata por nome (case-insensitive)
+    existente = conn.execute(
+        "SELECT id FROM contas_bancarias WHERE cliente_id=%s AND LOWER(nome)=LOWER(%s) AND ativo=TRUE",
+        (cid, nome)
+    ).fetchone()
+    if existente:
+        conn.close()
+        return jsonify({"erro": f'Você já tem uma conta chamada "{nome}". Use um nome diferente.'}), 400
     try:
         if USE_PG:
             row = conn.execute(
