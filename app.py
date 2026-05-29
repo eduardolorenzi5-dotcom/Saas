@@ -2998,6 +2998,27 @@ def deletar_conta_mensal_api(cid_):
     conn.close()
     return jsonify({"ok": True})
 
+@app.route("/api/contas-mensais/<int:cid_>", methods=["PUT"])
+@login_required
+def editar_conta_mensal_api(cid_):
+    cid  = session["cliente_id"]
+    data = request.json or {}
+    descricao      = (data.get("descricao") or "").strip()
+    valor          = float(data.get("valor") or 0) or None
+    dia_vencimento = max(1, min(31, int(data.get("dia_vencimento") or 1)))
+    categoria      = data.get("categoria") or "Outros"
+    conta_id       = int(data.get("conta_id")) if data.get("conta_id") else None
+    if not descricao:
+        return jsonify({"erro": "Informe a descrição."}), 400
+    conn = get_db()
+    conn.execute(
+        "UPDATE contas_mensais SET descricao=%s, valor=%s, dia_vencimento=%s, categoria=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
+        (descricao, valor, dia_vencimento, categoria, conta_id, cid_, cid)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 # ── RENDAS RECORRENTES (API REST) ─────────────────────────────────────────────
 
 @app.route("/api/rendas-recorrentes", methods=["GET"])
@@ -3039,6 +3060,27 @@ def deletar_renda_recorrente_api(rid):
     cid = session["cliente_id"]
     conn = get_db()
     conn.execute("UPDATE rendas_recorrentes SET ativo=FALSE WHERE id=%s AND cliente_id=%s", (rid, cid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/rendas-recorrentes/<int:rid>", methods=["PUT"])
+@login_required
+def editar_renda_recorrente_api(rid):
+    cid  = session["cliente_id"]
+    data = request.json or {}
+    descricao   = (data.get("descricao") or "").strip()
+    valor       = float(data.get("valor") or 0) or None
+    dia_credito = max(1, min(31, int(data.get("dia_credito") or 1)))
+    tipo        = data.get("tipo") or "fixo"
+    conta_id    = int(data.get("conta_id")) if data.get("conta_id") else None
+    if not descricao:
+        return jsonify({"erro": "Informe a descrição."}), 400
+    conn = get_db()
+    conn.execute(
+        "UPDATE rendas_recorrentes SET descricao=%s, valor=%s, dia_credito=%s, tipo=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
+        (descricao, valor, dia_credito, tipo, conta_id, rid, cid)
+    )
     conn.commit()
     conn.close()
     return jsonify({"ok": True})

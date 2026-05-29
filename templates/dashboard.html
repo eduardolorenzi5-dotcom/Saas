@@ -737,15 +737,48 @@
     {% if contas_mensais_ativas %}
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
       {% for cm in contas_mensais_ativas %}
-      <div id="cm-{{ cm.id }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;">
-        <div>
-          <div style="font-size:14px;font-weight:600;color:#1a1a2e;">{{ cm.descricao }}</div>
-          <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Todo dia <strong>{{ cm.dia_vencimento }}</strong> · {{ cm.categoria or 'Outros' }}</div>
+      <div id="cm-{{ cm.id }}">
+        <!-- Visão normal -->
+        <div class="cm-view-{{ cm.id }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;">{{ cm.descricao }}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Todo dia <strong>{{ cm.dia_vencimento }}</strong> · {{ cm.categoria or 'Outros' }}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            {% if cm.valor %}<span style="font-size:15px;font-weight:700;color:#dc2626;">R$ {{ "%.2f"|format(cm.valor) }}</span>{% endif %}
+            <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+            <button onclick="abrirEditarCM({{ cm.id }})" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
+            <button onclick="deletarContaMensal({{ cm.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          {% if cm.valor %}<span style="font-size:15px;font-weight:700;color:#dc2626;">R$ {{ "%.2f"|format(cm.valor) }}</span>{% endif %}
-          <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
-          <button onclick="deletarContaMensal({{ cm.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
+        <!-- Formulário de edição inline -->
+        <div class="cm-edit-{{ cm.id }}" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px 16px;margin-top:4px;">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div class="form-field"><label style="font-size:11px;">Descrição</label><input type="text" id="cm-edit-desc-{{ cm.id }}" value="{{ cm.descricao }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
+            <div class="form-field"><label style="font-size:11px;">Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="cm-edit-valor-{{ cm.id }}" data-valor="{{ cm.valor or 0 }}" oninput="mascaraMoeda(this)" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
+            <div class="form-field"><label style="font-size:11px;">Dia do mês</label><input type="number" id="cm-edit-dia-{{ cm.id }}" value="{{ cm.dia_vencimento }}" min="1" max="31" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <div class="form-field">
+              <label style="font-size:11px;">Categoria</label>
+              <select id="cm-edit-cat-{{ cm.id }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
+                {% for c in cats_usuario %}<option value="{{ c.nome }}" {% if c.nome == cm.categoria %}selected{% endif %}>{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
+              </select>
+            </div>
+            {% if contas_bancarias %}
+            <div class="form-field">
+              <label style="font-size:11px;">Conta bancária</label>
+              <select id="cm-edit-conta-{{ cm.id }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
+                <option value="">— Nenhuma —</option>
+                {% for c in contas_bancarias %}<option value="{{ c.id }}" {% if c.id == cm.conta_id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+              </select>
+            </div>
+            {% endif %}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="salvarEdicaoCM({{ cm.id }})" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+            <button onclick="fecharEditarCM({{ cm.id }})" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;">Cancelar</button>
+          </div>
         </div>
       </div>
       {% endfor %}
@@ -798,15 +831,49 @@
     {% if rendas_recorrentes_ativas %}
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
       {% for rr in rendas_recorrentes_ativas %}
-      <div id="rr-{{ rr.id }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;">
-        <div>
-          <div style="font-size:14px;font-weight:600;color:#1a1a2e;">{{ rr.descricao }}</div>
-          <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Todo dia <strong>{{ rr.dia_credito }}</strong> · {{ rr.tipo|capitalize }}</div>
+      <div id="rr-{{ rr.id }}">
+        <!-- Visão normal -->
+        <div class="rr-view-{{ rr.id }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;">{{ rr.descricao }}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Todo dia <strong>{{ rr.dia_credito }}</strong> · {{ rr.tipo|capitalize }}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            {% if rr.valor %}<span style="font-size:15px;font-weight:700;color:#059669;">R$ {{ "%.2f"|format(rr.valor) }}</span>{% endif %}
+            <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+            <button onclick="abrirEditarRR({{ rr.id }})" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
+            <button onclick="deletarRendaRecorrente({{ rr.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          {% if rr.valor %}<span style="font-size:15px;font-weight:700;color:#059669;">R$ {{ "%.2f"|format(rr.valor) }}</span>{% endif %}
-          <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
-          <button onclick="deletarRendaRecorrente({{ rr.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
+        <!-- Formulário de edição inline -->
+        <div class="rr-edit-{{ rr.id }}" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;margin-top:4px;">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div class="form-field"><label style="font-size:11px;">Descrição</label><input type="text" id="rr-edit-desc-{{ rr.id }}" value="{{ rr.descricao }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
+            <div class="form-field"><label style="font-size:11px;">Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="rr-edit-valor-{{ rr.id }}" data-valor="{{ rr.valor or 0 }}" oninput="mascaraMoeda(this)" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
+            <div class="form-field"><label style="font-size:11px;">Dia do mês</label><input type="number" id="rr-edit-dia-{{ rr.id }}" value="{{ rr.dia_credito }}" min="1" max="31" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <div class="form-field">
+              <label style="font-size:11px;">Tipo</label>
+              <select id="rr-edit-tipo-{{ rr.id }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
+                <option value="fixo" {% if rr.tipo == 'fixo' %}selected{% endif %}>Renda Fixa</option>
+                <option value="extra" {% if rr.tipo == 'extra' %}selected{% endif %}>Renda Extra</option>
+              </select>
+            </div>
+            {% if contas_bancarias %}
+            <div class="form-field">
+              <label style="font-size:11px;">Conta bancária</label>
+              <select id="rr-edit-conta-{{ rr.id }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
+                <option value="">— Nenhuma —</option>
+                {% for c in contas_bancarias %}<option value="{{ c.id }}" {% if c.id == rr.conta_id %}selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+              </select>
+            </div>
+            {% endif %}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="salvarEdicaoRR({{ rr.id }})" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+            <button onclick="fecharEditarRR({{ rr.id }})" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;">Cancelar</button>
+          </div>
         </div>
       </div>
       {% endfor %}
@@ -1499,6 +1566,69 @@ async function salvarEdicaoConta(id) {
   const d = await r.json();
   if (!r.ok) { msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display = 'block'; return; }
   location.reload();
+}
+
+// EDITAR DÉBITO AUTOMÁTICO (conta mensal)
+function abrirEditarCM(id) {
+  document.querySelector(`.cm-view-${id}`).style.display = 'none';
+  const el = document.querySelector(`.cm-edit-${id}`);
+  el.style.display = 'block';
+  // inicializa máscara de moeda
+  const inp = document.getElementById(`cm-edit-valor-${id}`);
+  if (inp && inp.dataset.valor) { const raw = parseFloat(inp.dataset.valor); inp.value = isNaN(raw) ? '' : formatarMoeda(raw); }
+}
+function fecharEditarCM(id) {
+  document.querySelector(`.cm-edit-${id}`).style.display = 'none';
+  document.querySelector(`.cm-view-${id}`).style.display = 'flex';
+}
+async function salvarEdicaoCM(id) {
+  const desc  = document.getElementById(`cm-edit-desc-${id}`).value.trim();
+  const valor = parseMoeda(document.getElementById(`cm-edit-valor-${id}`).value);
+  const dia   = parseInt(document.getElementById(`cm-edit-dia-${id}`).value);
+  const cat   = document.getElementById(`cm-edit-cat-${id}`)?.value || 'Outros';
+  const contaEl = document.getElementById(`cm-edit-conta-${id}`);
+  const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  if (!desc) { alert('Informe a descrição.'); return; }
+  if (!valor || valor <= 0) { alert('Informe um valor válido.'); return; }
+  if (!dia || dia < 1 || dia > 31) { alert('Dia inválido (1–31).'); return; }
+  const r = await fetch(`/api/contas-mensais/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({descricao: desc, valor, dia_vencimento: dia, categoria: cat, conta_id})
+  });
+  if (r.ok) location.reload();
+  else { const d = await r.json(); alert(d.erro || 'Erro ao salvar.'); }
+}
+
+// EDITAR CRÉDITO RECORRENTE
+function abrirEditarRR(id) {
+  document.querySelector(`.rr-view-${id}`).style.display = 'none';
+  const el = document.querySelector(`.rr-edit-${id}`);
+  el.style.display = 'block';
+  const inp = document.getElementById(`rr-edit-valor-${id}`);
+  if (inp && inp.dataset.valor) { const raw = parseFloat(inp.dataset.valor); inp.value = isNaN(raw) ? '' : formatarMoeda(raw); }
+}
+function fecharEditarRR(id) {
+  document.querySelector(`.rr-edit-${id}`).style.display = 'none';
+  document.querySelector(`.rr-view-${id}`).style.display = 'flex';
+}
+async function salvarEdicaoRR(id) {
+  const desc  = document.getElementById(`rr-edit-desc-${id}`).value.trim();
+  const valor = parseMoeda(document.getElementById(`rr-edit-valor-${id}`).value);
+  const dia   = parseInt(document.getElementById(`rr-edit-dia-${id}`).value);
+  const tipo  = document.getElementById(`rr-edit-tipo-${id}`)?.value || 'fixo';
+  const contaEl = document.getElementById(`rr-edit-conta-${id}`);
+  const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  if (!desc) { alert('Informe a descrição.'); return; }
+  if (!valor || valor <= 0) { alert('Informe um valor válido.'); return; }
+  if (!dia || dia < 1 || dia > 31) { alert('Dia inválido (1–31).'); return; }
+  const r = await fetch(`/api/rendas-recorrentes/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({descricao: desc, valor, dia_credito: dia, tipo, conta_id})
+  });
+  if (r.ok) location.reload();
+  else { const d = await r.json(); alert(d.erro || 'Erro ao salvar.'); }
 }
 
 // DÉBITOS AUTOMÁTICOS (contas mensais)
