@@ -734,6 +734,49 @@
               style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
     </div>
 
+    <!-- Formulário nova conta mensal (TOPO) -->
+    <div id="form-nova-conta-mensal" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:20px;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">➕ Nova conta mensal</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-field"><label>Descrição</label><input type="text" id="cm-desc" placeholder="Ex: Energia, Aluguel"/></div>
+        <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="cm-valor" placeholder="100,00" oninput="mascaraMoeda(this)"/></div>
+        <div class="form-field"><label>Dia do mês</label><input type="number" id="cm-dia" placeholder="10" min="1" max="31"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="form-field">
+          <label>Categoria</label>
+          <select id="cm-cat" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            {% for c in cats_usuario %}<option value="{{ c.nome }}">{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Duração</label>
+          <select id="cm-prazo-tipo" onchange="document.getElementById('cm-prazo-box').style.display=this.value==='com'?'block':'none'" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="sem">Sem prazo (recorrente)</option>
+            <option value="com">Por X meses</option>
+          </select>
+        </div>
+        <div class="form-field" id="cm-prazo-box" style="display:none;">
+          <label>Nº de meses</label>
+          <input type="number" id="cm-total-meses" min="1" max="360" placeholder="Ex: 3"/>
+        </div>
+        {% if contas_bancarias %}
+        <div class="form-field">
+          <label>Conta bancária (opcional)</label>
+          <select id="cm-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="">— Nenhuma —</option>
+            {% for c in contas_bancarias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div id="cm-msg" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-add" onclick="salvarContaMensal()" style="padding:9px 20px;">💾 Salvar débito automático</button>
+        <button onclick="toggleForm('form-nova-conta-mensal')" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;">Cancelar</button>
+      </div>
+    </div>
+
     {% if contas_mensais_ativas %}
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
       {% for cm in contas_mensais_ativas %}
@@ -805,45 +848,6 @@
     </div>
     {% endif %}
 
-    <!-- Formulário nova conta mensal -->
-    <div id="form-nova-conta-mensal" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-top:8px;">
-      <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">+ Nova conta mensal</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div class="form-field"><label>Descrição</label><input type="text" id="cm-desc" placeholder="Ex: Energia, Aluguel"/></div>
-        <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="cm-valor" placeholder="100,00" oninput="mascaraMoeda(this)"/></div>
-        <div class="form-field"><label>Dia do mês</label><input type="number" id="cm-dia" placeholder="10" min="1" max="31"/></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
-        <div class="form-field">
-          <label>Categoria</label>
-          <select id="cm-cat" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
-            {% for c in cats_usuario %}<option value="{{ c.nome }}">{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="form-field">
-          <label>Duração</label>
-          <select id="cm-prazo-tipo" onchange="document.getElementById('cm-prazo-box').style.display=this.value==='com'?'block':'none'" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
-            <option value="sem">Sem prazo (recorrente)</option>
-            <option value="com">Por X meses</option>
-          </select>
-        </div>
-        <div class="form-field" id="cm-prazo-box" style="display:none;">
-          <label>Nº de meses</label>
-          <input type="number" id="cm-total-meses" min="1" max="360" placeholder="Ex: 3"/>
-        </div>
-        {% if contas_bancarias %}
-        <div class="form-field">
-          <label>Conta bancária (opcional)</label>
-          <select id="cm-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
-            <option value="">— Nenhuma —</option>
-            {% for c in contas_bancarias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
-          </select>
-        </div>
-        {% endif %}
-      </div>
-      <div id="cm-msg" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
-      <button class="btn-add" onclick="salvarContaMensal()" style="padding:9px 20px;">💾 Salvar débito automático</button>
-    </div>
   </div>
 
   <!-- CRÉDITOS RECORRENTES -->
@@ -852,6 +856,50 @@
       <h2 style="font-size:16px;font-weight:700;color:#1a1a2e;">💰 Créditos recorrentes mensais</h2>
       <button onclick="toggleForm('form-nova-renda-recorrente')"
               style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
+    </div>
+
+    <!-- Formulário nova renda recorrente (TOPO) -->
+    <div id="form-nova-renda-recorrente" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">➕ Novo crédito recorrente</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-field"><label>Descrição</label><input type="text" id="rr-desc" placeholder="Ex: Salário, Aluguel, Aposentadoria"/></div>
+        <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="rr-valor" placeholder="3.000,00" oninput="mascaraMoeda(this)"/></div>
+        <div class="form-field"><label>Dia do mês</label><input type="number" id="rr-dia" placeholder="5" min="1" max="31"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="form-field">
+          <label>Tipo</label>
+          <select id="rr-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="fixo">Renda Fixa (Salário, Aposentadoria, Aluguel)</option>
+            <option value="extra">Renda Extra</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Duração</label>
+          <select id="rr-prazo-tipo" onchange="document.getElementById('rr-prazo-box').style.display=this.value==='com'?'block':'none'" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="sem">Sem prazo (recorrente)</option>
+            <option value="com">Por X meses</option>
+          </select>
+        </div>
+        <div class="form-field" id="rr-prazo-box" style="display:none;">
+          <label>Nº de meses</label>
+          <input type="number" id="rr-total-meses" min="1" max="360" placeholder="Ex: 3"/>
+        </div>
+        {% if contas_bancarias %}
+        <div class="form-field">
+          <label>Conta bancária (opcional)</label>
+          <select id="rr-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="">— Nenhuma —</option>
+            {% for c in contas_bancarias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div id="rr-msg" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-add" onclick="salvarRendaRecorrente()" style="padding:9px 20px;background:#059669;">💾 Salvar crédito automático</button>
+        <button onclick="toggleForm('form-nova-renda-recorrente')" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;">Cancelar</button>
+      </div>
     </div>
 
     {% if rendas_recorrentes_ativas %}
@@ -926,46 +974,6 @@
     </div>
     {% endif %}
 
-    <!-- Formulário nova renda recorrente -->
-    <div id="form-nova-renda-recorrente" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-top:8px;">
-      <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">+ Novo crédito recorrente</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div class="form-field"><label>Descrição</label><input type="text" id="rr-desc" placeholder="Ex: Salário, Aluguel, Aposentadoria"/></div>
-        <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="rr-valor" placeholder="3.000,00" oninput="mascaraMoeda(this)"/></div>
-        <div class="form-field"><label>Dia do mês</label><input type="number" id="rr-dia" placeholder="5" min="1" max="31"/></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
-        <div class="form-field">
-          <label>Tipo</label>
-          <select id="rr-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
-            <option value="fixo">Renda Fixa (Salário, Aposentadoria, Aluguel)</option>
-            <option value="extra">Renda Extra</option>
-          </select>
-        </div>
-        <div class="form-field">
-          <label>Duração</label>
-          <select id="rr-prazo-tipo" onchange="document.getElementById('rr-prazo-box').style.display=this.value==='com'?'block':'none'" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
-            <option value="sem">Sem prazo (recorrente)</option>
-            <option value="com">Por X meses</option>
-          </select>
-        </div>
-        <div class="form-field" id="rr-prazo-box" style="display:none;">
-          <label>Nº de meses</label>
-          <input type="number" id="rr-total-meses" min="1" max="360" placeholder="Ex: 3"/>
-        </div>
-        {% if contas_bancarias %}
-        <div class="form-field">
-          <label>Conta bancária (opcional)</label>
-          <select id="rr-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
-            <option value="">— Nenhuma —</option>
-            {% for c in contas_bancarias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
-          </select>
-        </div>
-        {% endif %}
-      </div>
-      <div id="rr-msg" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
-      <button class="btn-add" onclick="salvarRendaRecorrente()" style="padding:9px 20px;background:#059669;">💾 Salvar crédito automático</button>
-    </div>
   </div>
 
   <!-- PARCELAMENTOS -->
