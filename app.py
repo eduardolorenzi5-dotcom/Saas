@@ -1926,6 +1926,17 @@ def adicionar_renda():
     conn.close()
     return jsonify({"ok": True})
 
+@app.route("/api/renda-referencia", methods=["DELETE"])
+@login_required
+def limpar_renda_referencia():
+    """Limpa o campo renda_mensal (renda de referência) sem afetar as rendas registradas."""
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("UPDATE clientes SET renda_mensal=NULL WHERE id=%s", (cid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 @app.route("/api/rendas/<int:rid>", methods=["DELETE"])
 @login_required
 def deletar_renda(rid):

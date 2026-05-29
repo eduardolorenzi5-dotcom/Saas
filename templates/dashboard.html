@@ -197,7 +197,14 @@
     <div class="card card-green">
       <div class="card-label">Renda mensal</div>
       <div class="card-val">R$ {{ "%.2f"|format(renda) }}</div>
+      {% if total_renda_mes == 0 and cliente.renda_mensal %}
+      <div class="card-sub" style="color:#f59e0b;">
+        Referência salva
+        <button onclick="limparRendaReferencia()" style="background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;padding:0;margin-left:4px;text-decoration:underline;">Limpar</button>
+      </div>
+      {% else %}
       <div class="card-sub">Cadastrada no sistema</div>
+      {% endif %}
     </div>
     <div class="card {{ 'card-green' if saldo >= 0 else 'card-red' }}">
       <div class="card-label">Saldo disponível</div>
@@ -784,6 +791,12 @@ async function adicionarConta() {
   }
   msg.style.display='none';
   location.reload();
+}
+
+async function limparRendaReferencia() {
+  if (!confirm('Limpar a renda de referência (R$ {{ "%.2f"|format(renda or 0) }})?')) return;
+  const r = await fetch('/api/renda-referencia', {method: 'DELETE'});
+  if (r.ok) location.reload();
 }
 
 async function confirmarDeletarConta(id, nome) {
