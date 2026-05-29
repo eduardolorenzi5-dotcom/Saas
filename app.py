@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file
 import os, hashlib, secrets, logging, time, threading
 from datetime import datetime, date, timezone, timedelta
 
@@ -2817,7 +2817,6 @@ def relatorio_por_conta(conta_id):
     Query params: mes=YYYY-MM (default: mês atual)
     Se ?enviar_wpp=1 envia pelo WhatsApp e retorna JSON.
     """
-    from flask import send_file
     cid = session["cliente_id"]
 
     # Verifica que a conta pertence ao cliente
@@ -2842,11 +2841,16 @@ def relatorio_por_conta(conta_id):
         ok = gerar_e_enviar_pdf_wpp(cid, mes, cliente["whatsapp"] if cliente else "", conta_id=conta_id)
         return jsonify({"ok": ok, "conta": conta["nome"], "mes": mes})
 
-    from relatorio.gerador import gerar_pdf
-    caminho = gerar_pdf(cid, mes, conta_id=conta_id)
-    return send_file(caminho, as_attachment=True,
-                     download_name=f"relatorio_{conta['nome']}_{mes}.pdf",
-                     mimetype="application/pdf")
+    import logging, traceback
+    try:
+        from relatorio.gerador import gerar_pdf
+        caminho = gerar_pdf(cid, mes, conta_id=conta_id)
+        return send_file(caminho, as_attachment=True,
+                         download_name=f"relatorio_{conta['nome']}_{mes}.pdf",
+                         mimetype="application/pdf")
+    except Exception as e:
+        logging.error(f"[RELATORIO_CONTA] Erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"erro": str(e)}), 500
 
 with app.app_context():
     init_db()

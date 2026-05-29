@@ -1383,7 +1383,11 @@ async function gerarRelatorioConta() {
   const url = `/api/contas/${_extratoContaId}/relatorio?mes=${mes}`;
   try {
     const r = await fetch(url);
-    if (!r.ok) throw new Error('Falha ao gerar PDF');
+    if (!r.ok) {
+      let msg = 'Falha ao gerar PDF';
+      try { const j = await r.json(); msg = j.erro || msg; } catch(_){}
+      throw new Error(msg);
+    }
     const blob = await r.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1393,7 +1397,7 @@ async function gerarRelatorioConta() {
     a.click();
     URL.revokeObjectURL(a.href);
   } catch(e) {
-    alert('Erro ao gerar relatório. Tente novamente.');
+    alert('Erro ao gerar relatório: ' + e.message);
   } finally {
     btn.innerHTML = orig;
     btn.disabled = false;
