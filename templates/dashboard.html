@@ -787,6 +787,68 @@
     </div>
   </div>
 
+  <!-- CRÉDITOS RECORRENTES -->
+  <div style="margin-top:36px;max-width:760px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h2 style="font-size:16px;font-weight:700;color:#1a1a2e;">💰 Créditos recorrentes mensais</h2>
+      <button onclick="document.getElementById('form-nova-renda-recorrente').style.display=document.getElementById('form-nova-renda-recorrente').style.display==='none'?'block':'none'"
+              style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
+    </div>
+
+    {% if rendas_recorrentes_ativas %}
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+      {% for rr in rendas_recorrentes_ativas %}
+      <div id="rr-{{ rr.id }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#1a1a2e;">{{ rr.descricao }}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Todo dia <strong>{{ rr.dia_credito }}</strong> · {{ rr.tipo|capitalize }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          {% if rr.valor %}<span style="font-size:15px;font-weight:700;color:#059669;">R$ {{ "%.2f"|format(rr.valor) }}</span>{% endif %}
+          <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+          <button onclick="deletarRendaRecorrente({{ rr.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="color:#9ca3af;font-size:13px;padding:16px 0;text-align:center;">
+      Nenhum crédito automático cadastrado. Clique em "+ Novo" ou diga no WhatsApp:<br>
+      <em>"salário 3000 todo dia 5"</em>
+    </div>
+    {% endif %}
+
+    <!-- Formulário nova renda recorrente -->
+    <div id="form-nova-renda-recorrente" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-top:8px;">
+      <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">+ Novo crédito recorrente</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-field"><label>Descrição</label><input type="text" id="rr-desc" placeholder="Ex: Salário, Aluguel, Aposentadoria"/></div>
+        <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="rr-valor" placeholder="3.000,00" oninput="mascaraMoeda(this)"/></div>
+        <div class="form-field"><label>Dia do mês</label><input type="number" id="rr-dia" placeholder="5" min="1" max="31"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="form-field">
+          <label>Tipo</label>
+          <select id="rr-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="fixo">Renda Fixa (Salário, Aposentadoria, Aluguel)</option>
+            <option value="extra">Renda Extra</option>
+          </select>
+        </div>
+        {% if contas_bancarias %}
+        <div class="form-field">
+          <label>Conta bancária (opcional)</label>
+          <select id="rr-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="">— Nenhuma —</option>
+            {% for c in contas_bancarias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div id="rr-msg" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
+      <button class="btn-add" onclick="salvarRendaRecorrente()" style="padding:9px 20px;background:#059669;">💾 Salvar crédito automático</button>
+    </div>
+  </div>
+
   <!-- PARCELAMENTOS -->
   <div style="margin-top:36px;max-width:760px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -1464,6 +1526,33 @@ async function deletarContaMensal(id) {
   if (!confirm('Remover este débito automático?')) return;
   const r = await fetch(`/api/contas-mensais/${id}`, {method: 'DELETE'});
   if (r.ok) { document.getElementById(`cm-${id}`)?.remove(); }
+}
+
+// CRÉDITOS RECORRENTES
+async function salvarRendaRecorrente() {
+  const desc  = document.getElementById('rr-desc').value.trim();
+  const valor = parseMoeda(document.getElementById('rr-valor').value);
+  const dia   = parseInt(document.getElementById('rr-dia').value);
+  const tipo  = document.getElementById('rr-tipo')?.value || 'fixo';
+  const contaEl = document.getElementById('rr-conta');
+  const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  const msg = document.getElementById('rr-msg');
+  if (!desc) { msg.textContent='Informe a descrição.'; msg.style.display='block'; return; }
+  if (!valor || valor <= 0) { msg.textContent='Informe um valor válido.'; msg.style.display='block'; return; }
+  if (!dia || dia < 1 || dia > 31) { msg.textContent='Informe o dia do mês (1 a 31).'; msg.style.display='block'; return; }
+  const r = await fetch('/api/rendas-recorrentes', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({descricao: desc, valor, dia_credito: dia, tipo, conta_id})
+  });
+  if (r.ok) { location.reload(); }
+  else { const d = await r.json(); msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display='block'; }
+}
+
+async function deletarRendaRecorrente(id) {
+  if (!confirm('Remover este crédito automático?')) return;
+  const r = await fetch(`/api/rendas-recorrentes/${id}`, {method: 'DELETE'});
+  if (r.ok) { document.getElementById(`rr-${id}`)?.remove(); }
 }
 
 // PARCELAMENTOS

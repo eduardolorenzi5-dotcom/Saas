@@ -376,6 +376,17 @@ def init_db():
                 ativo INTEGER DEFAULT 1,
                 criado_em TEXT DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS rendas_recorrentes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL,
+                dia_credito INTEGER NOT NULL,
+                tipo TEXT DEFAULT 'fixo',
+                conta_id INTEGER,
+                ativo INTEGER DEFAULT 1,
+                criado_em TEXT DEFAULT (datetime('now'))
+            );
         """)
     # Adiciona colunas extras se não existirem
     if USE_PG:
@@ -401,6 +412,21 @@ def init_db():
         conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS auto_debitar BOOLEAN DEFAULT TRUE")
         conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS conta_id INTEGER")
         conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Outros'")
+        # Créditos recorrentes (rendas automáticas mensais)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rendas_recorrentes (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor REAL,
+                dia_credito INTEGER NOT NULL,
+                tipo TEXT DEFAULT 'fixo',
+                conta_id INTEGER,
+                ativo BOOLEAN DEFAULT TRUE,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
         # Limpa dedup de mensagens antigas (> 2 horas) para não acumular
         conn.execute("DELETE FROM webhook_msgs WHERE processado_em < NOW() - INTERVAL '2 hours'")
     else:
@@ -866,7 +892,7 @@ def admin_deletar(cliente_id):
     conn = get_db()
     cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     # Remove todas as tabelas filhas antes de deletar o cliente
-    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico", "transferencias", "parcelamentos", "contas_mensais", "contas_pagamentos", "contas_bancarias"):
+    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico", "transferencias", "parcelamentos", "contas_mensais", "contas_pagamentos", "contas_bancarias", "rendas_recorrentes"):
         try:
             conn.execute(f"DELETE FROM {tabela} WHERE cliente_id=%s", (cliente_id,))
         except Exception as e:
@@ -1673,6 +1699,11 @@ def dashboard():
                 "data": p["proxima_data"], "id": p["id"]
             })
     proximos_debitos.sort(key=lambda x: x["data"])
+
+    # Créditos recorrentes
+    rendas_recorrentes_ativas = conn.execute(
+        "SELECT * FROM rendas_recorrentes WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_credito", (cid,)
+    ).fetchall()
     conn.close()
     total_renda_mes = sum(float(r["valor"]) for r in rendas_mes)
     renda_fixa_mes = sum(float(r["valor"]) for r in rendas_mes if r["tipo"] == "fixo")
@@ -1732,6 +1763,7 @@ def dashboard():
         parcelamentos=parcelamentos,
         contas_mensais_ativas=contas_mensais_ativas,
         proximos_debitos=proximos_debitos,
+        rendas_recorrentes_ativas=rendas_recorrentes_ativas,
     )
 
 @app.route("/debug/session")
@@ -2966,6 +2998,51 @@ def deletar_conta_mensal_api(cid_):
     conn.close()
     return jsonify({"ok": True})
 
+# ── RENDAS RECORRENTES (API REST) ─────────────────────────────────────────────
+
+@app.route("/api/rendas-recorrentes", methods=["GET"])
+@login_required
+def listar_rendas_recorrentes_api():
+    cid = session["cliente_id"]
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM rendas_recorrentes WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_credito", (cid,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/rendas-recorrentes", methods=["POST"])
+@login_required
+def criar_renda_recorrente_api():
+    cid  = session["cliente_id"]
+    data = request.json or {}
+    descricao   = (data.get("descricao") or "").strip()
+    valor       = float(data.get("valor") or 0) or None
+    dia_credito = int(data.get("dia_credito") or 1)
+    dia_credito = max(1, min(31, dia_credito))
+    tipo        = data.get("tipo") or "fixo"
+    conta_id    = int(data.get("conta_id")) if data.get("conta_id") else None
+    if not descricao:
+        return jsonify({"erro": "Informe a descrição."}), 400
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO rendas_recorrentes (cliente_id, descricao, valor, dia_credito, tipo, conta_id) VALUES (%s,%s,%s,%s,%s,%s)",
+        (cid, descricao, valor, dia_credito, tipo, conta_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/rendas-recorrentes/<int:rid>", methods=["DELETE"])
+@login_required
+def deletar_renda_recorrente_api(rid):
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("UPDATE rendas_recorrentes SET ativo=FALSE WHERE id=%s AND cliente_id=%s", (rid, cid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 # ── THREAD DE LEMBRETES ──────────────────────────────────────────────────────
 def calcular_data_parcela(data_primeira_str, numero_parcela):
     """Retorna date da parcela N (1-indexed). Datas subsequentes: mesmo dia, meses seguintes."""
@@ -3163,6 +3240,73 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
                 except Exception: pass
     except Exception as e:
         logging.error(f"[AUTO-DEBIT] Erro ao buscar parcelamentos: {e}")
+
+    # ── 3. RENDAS RECORRENTES (créditos automáticos) ─────────────────────────
+    try:
+        if USE_PG:
+            rendas_rec = conn.execute("""
+                SELECT rr.id, rr.cliente_id, rr.descricao, rr.valor,
+                       rr.tipo, rr.conta_id, c.whatsapp
+                FROM rendas_recorrentes rr
+                JOIN clientes c ON rr.cliente_id = c.id
+                WHERE rr.ativo = TRUE AND rr.dia_credito = %s
+                  AND rr.valor IS NOT NULL AND c.status = 'ativo'
+            """, (dia_mes,)).fetchall()
+        else:
+            rendas_rec = conn.execute("""
+                SELECT rr.id, rr.cliente_id, rr.descricao, rr.valor,
+                       rr.tipo, rr.conta_id, c.whatsapp
+                FROM rendas_recorrentes rr
+                JOIN clientes c ON rr.cliente_id = c.id
+                WHERE rr.ativo = 1 AND rr.dia_credito = ?
+                  AND rr.valor IS NOT NULL AND c.status = 'ativo'
+            """, (dia_mes,)).fetchall()
+
+        for rr in rendas_rec:
+            try:
+                # Verifica se já foi creditada este mês
+                if USE_PG:
+                    ja_creditado = conn.execute(
+                        "SELECT id FROM rendas WHERE cliente_id=%s AND descricao=%s AND data LIKE %s AND fonte='auto'",
+                        (rr["cliente_id"], rr["descricao"], f"{mes_str}%")
+                    ).fetchone()
+                else:
+                    ja_creditado = conn.execute(
+                        "SELECT id FROM rendas WHERE cliente_id=? AND descricao=? AND data LIKE ? AND fonte='auto'",
+                        (rr["cliente_id"], rr["descricao"], f"{mes_str}%")
+                    ).fetchone()
+                if ja_creditado:
+                    continue
+
+                tipo = rr["tipo"] or "fixo"
+                if USE_PG:
+                    conn.execute(
+                        "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (rr["cliente_id"], rr["descricao"], float(rr["valor"]), tipo, data_atual_str, "auto", rr["conta_id"])
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (?,?,?,?,?,?,?)",
+                        (rr["cliente_id"], rr["descricao"], float(rr["valor"]), tipo, data_atual_str, "auto", rr["conta_id"])
+                    )
+                conn.commit()
+                logging.info(f"[AUTO-CREDIT] Renda recorrente '{rr['descricao']}' creditada p/ cliente {rr['cliente_id']}")
+
+                if enviar_whatsapp and rr["whatsapp"]:
+                    enviar_whatsapp(rr["whatsapp"],
+                        f"💰 *Crédito automático registrado!*\n\n"
+                        f"📋 {rr['descricao']}\n"
+                        f"💲 R$ {float(rr['valor']):.2f}\n"
+                        f"📅 {dd_mm_yyyy}\n\n"
+                        f"_Lançado automaticamente pelo Controla Fácil_ ✅\n"
+                        f"Acesse o dashboard para ver o extrato."
+                    )
+            except Exception as e:
+                logging.error(f"[AUTO-CREDIT] Erro renda_recorrente {rr['id']}: {e}")
+                try: conn._raw.rollback()
+                except Exception: pass
+    except Exception as e:
+        logging.error(f"[AUTO-CREDIT] Erro ao buscar rendas_recorrentes: {e}")
 
 def _verificar_lembretes():
     """Roda em background, verifica lembretes a cada minuto e envia via WhatsApp."""

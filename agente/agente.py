@@ -667,6 +667,22 @@ Se for LISTAR lembretes:
 Se for VER COMPROMISSOS DE HOJE (agenda + lembretes do dia):
 {{"acao": "compromissos_hoje"}}
 
+Se for REGISTRAR crédito recorrente mensal (renda que cai automaticamente todo mês: salário, aposentadoria, aluguel recebido, pensão):
+{{"acao": "registrar_renda_recorrente", "descricao": "Salário", "valor": 3000.00, "dia_credito": 5, "tipo": "fixo"}}
+- descricao: nome da renda (ex: "Salário", "Aposentadoria", "Aluguel recebido")
+- valor: valor que entra todo mês
+- dia_credito: dia do mês em que cai (1 a 31)
+- tipo: "fixo" (padrão) ou "extra"
+- conta_id: inclua se o usuário mencionar uma conta bancária
+- Exemplos: "salário 3000 todo dia 5" → {{"acao":"registrar_renda_recorrente","descricao":"Salário","valor":3000.00,"dia_credito":5,"tipo":"fixo"}}
+            "aposentadoria 1800 dia 10" → {{"acao":"registrar_renda_recorrente","descricao":"Aposentadoria","valor":1800.00,"dia_credito":10,"tipo":"fixo"}}
+
+Se for LISTAR créditos recorrentes:
+{{"acao": "listar_rendas_recorrentes"}}
+
+Se for CANCELAR/EXCLUIR crédito recorrente:
+{{"acao": "cancelar_renda_recorrente", "descricao": "palavra-chave da renda"}}
+
 Se for REGISTRAR conta mensal recorrente com DÉBITO AUTOMÁTICO (ex: energia todo dia 10, aluguel todo dia 5):
 {{"acao": "registrar_conta_mensal", "descricao": "Energia", "valor": 100.00, "dia_vencimento": 10, "categoria": "Moradia"}}
 - valor: obrigatório para débito automático
@@ -1630,6 +1646,98 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 + (f"🏦 Conta: {conta_nome}\n" if conta_nome else "")
                 + f"\n💡 O sistema vai lançar esse gasto automaticamente todo mês nessa data e te avisar aqui."
             )
+
+        elif acao == "registrar_renda_recorrente":
+            descricao  = resultado.get("descricao", "").strip() or "Renda"
+            valor      = resultado.get("valor")
+            dia        = int(resultado.get("dia_credito", 1))
+            dia        = max(1, min(31, dia))
+            tipo       = resultado.get("tipo") or "fixo"
+            conta_id   = resultado.get("conta_id") or None
+            conta_nome = next((c["nome"] for c in contas if c["id"] == conta_id), None) if conta_id else None
+            USE_PG_rr  = bool(os.environ.get("DATABASE_URL"))
+            conn_rr    = get_db()
+            try:
+                if USE_PG_rr:
+                    conn_rr.execute(
+                        "INSERT INTO rendas_recorrentes (cliente_id, descricao, valor, dia_credito, tipo, conta_id) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (cliente["id"], descricao, valor, dia, tipo, conta_id)
+                    )
+                else:
+                    conn_rr.execute(
+                        "INSERT INTO rendas_recorrentes (cliente_id, descricao, valor, dia_credito, tipo, conta_id) VALUES (?,?,?,?,?,?)",
+                        (cliente["id"], descricao, valor, dia, tipo, conta_id)
+                    )
+                conn_rr.commit()
+            finally:
+                try: conn_rr.close()
+                except: pass
+            valor_str = f"R$ {valor:.2f}" if valor else "valor não informado"
+            resposta = (
+                f"✅ Crédito recorrente cadastrado!\n\n"
+                f"💰 *{descricao}*\n"
+                f"💲 Valor: {valor_str}\n"
+                f"📅 Todo dia *{dia}* do mês\n"
+                + (f"🏦 Conta: {conta_nome}\n" if conta_nome else "")
+                + f"\n💡 O sistema vai lançar essa receita automaticamente todo mês nessa data e te avisar aqui."
+            )
+
+        elif acao == "listar_rendas_recorrentes":
+            USE_PG_rr2 = bool(os.environ.get("DATABASE_URL"))
+            conn_rr2   = get_db()
+            try:
+                if USE_PG_rr2:
+                    rrs = conn_rr2.execute(
+                        "SELECT descricao, valor, dia_credito FROM rendas_recorrentes WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_credito",
+                        (cliente["id"],)
+                    ).fetchall()
+                else:
+                    rrs = conn_rr2.execute(
+                        "SELECT descricao, valor, dia_credito FROM rendas_recorrentes WHERE cliente_id=? AND ativo=1 ORDER BY dia_credito",
+                        (cliente["id"],)
+                    ).fetchall()
+                if rrs:
+                    linhas = ["💰 *Seus créditos recorrentes:*\n"]
+                    for rr in rrs:
+                        v = f"R$ {float(rr['valor']):.2f}" if rr["valor"] else "—"
+                        linhas.append(f"• *{rr['descricao']}* — {v} — todo dia *{rr['dia_credito']}*")
+                    resposta = "\n".join(linhas)
+                else:
+                    resposta = "Você não tem créditos recorrentes cadastrados. Diga, por exemplo: *salário 3000 todo dia 5*."
+            finally:
+                try: conn_rr2.close()
+                except: pass
+
+        elif acao == "cancelar_renda_recorrente":
+            busca     = resultado.get("descricao", "").strip().lower()
+            USE_PG_rr3 = bool(os.environ.get("DATABASE_URL"))
+            conn_rr3   = get_db()
+            try:
+                if USE_PG_rr3:
+                    rr_item = conn_rr3.execute(
+                        "SELECT id, descricao FROM rendas_recorrentes WHERE cliente_id=%s AND ativo=TRUE AND LOWER(descricao) LIKE %s ORDER BY id DESC LIMIT 1",
+                        (cliente["id"], f"%{busca}%")
+                    ).fetchone()
+                    if rr_item:
+                        conn_rr3.execute("UPDATE rendas_recorrentes SET ativo=FALSE WHERE id=%s", (rr_item["id"],))
+                        conn_rr3.commit()
+                        resposta = f"✅ Crédito recorrente *{rr_item['descricao']}* cancelado com sucesso."
+                    else:
+                        resposta = f"Não encontrei um crédito recorrente com '{busca}'. Diga *listar créditos* para ver seus cadastros."
+                else:
+                    rr_item = conn_rr3.execute(
+                        "SELECT id, descricao FROM rendas_recorrentes WHERE cliente_id=? AND ativo=1 AND LOWER(descricao) LIKE ? ORDER BY id DESC LIMIT 1",
+                        (cliente["id"], f"%{busca}%")
+                    ).fetchone()
+                    if rr_item:
+                        conn_rr3.execute("UPDATE rendas_recorrentes SET ativo=0 WHERE id=?", (rr_item["id"],))
+                        conn_rr3.commit()
+                        resposta = f"✅ Crédito recorrente *{rr_item['descricao']}* cancelado com sucesso."
+                    else:
+                        resposta = f"Não encontrei um crédito recorrente com '{busca}'. Diga *listar créditos* para ver seus cadastros."
+            finally:
+                try: conn_rr3.close()
+                except: pass
 
         elif acao == "parcelamento":
             import calendar as _cal_p
