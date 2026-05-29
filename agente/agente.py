@@ -1298,11 +1298,18 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                             conn_r.execute("DELETE FROM rendas WHERE id=%s", (row["id"],))
                         else:
                             conn_r.execute("DELETE FROM rendas WHERE id=?", (row["id"],))
-                    # Limpa renda_mensal estática para não aparecer no fallback do resumo
+                    conn_r.commit()
+                    # Recalcula renda_mensal com as rendas fixas que ainda restam no mês
+                    mes_atual_str = hoje_brasil().strftime("%Y-%m")
+                    total_fixo_restante = conn_r.execute(
+                        "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND tipo='fixo' AND data LIKE %s",
+                        (cliente["id"], f"{mes_atual_str}%")
+                    ).fetchone()["t"]
+                    nova_renda_ref = float(total_fixo_restante) if float(total_fixo_restante) > 0 else None
                     if USE_PG:
-                        conn_r.execute("UPDATE clientes SET renda_mensal=NULL WHERE id=%s", (cliente["id"],))
+                        conn_r.execute("UPDATE clientes SET renda_mensal=%s WHERE id=%s", (nova_renda_ref, cliente["id"]))
                     else:
-                        conn_r.execute("UPDATE clientes SET renda_mensal=NULL WHERE id=?", (cliente["id"],))
+                        conn_r.execute("UPDATE clientes SET renda_mensal=? WHERE id=?", (nova_renda_ref, cliente["id"]))
                     conn_r.commit()
                     if len(rows) == 1:
                         r = rows[0]

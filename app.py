@@ -1933,6 +1933,15 @@ def deletar_renda(rid):
     conn = get_db()
     conn.execute("DELETE FROM rendas WHERE id=%s AND cliente_id=%s", (rid, cid))
     conn.commit()
+    # Recalcula renda_mensal (soma das rendas fixas ainda existentes no mês atual)
+    mes_atual = hoje_brasil().strftime("%Y-%m")
+    total_fixo = conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND tipo='fixo' AND data LIKE %s",
+        (cid, f"{mes_atual}%")
+    ).fetchone()["t"]
+    nova_renda = float(total_fixo) if float(total_fixo) > 0 else None
+    conn.execute("UPDATE clientes SET renda_mensal=%s WHERE id=%s", (nova_renda, cid))
+    conn.commit()
     conn.close()
     return jsonify({"ok": True})
 
