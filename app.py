@@ -1758,6 +1758,29 @@ def adicionar_gasto():
     conn.close()
     return jsonify({"ok": True})
 
+@app.route("/api/gastos/<int:gid>", methods=["PUT"])
+@login_required
+def editar_gasto(gid):
+    cid  = session["cliente_id"]
+    data = request.json or {}
+    conn = get_db()
+    gasto = conn.execute("SELECT * FROM gastos WHERE id=%s AND cliente_id=%s", (gid, cid)).fetchone()
+    if not gasto:
+        conn.close()
+        return jsonify({"erro": "Gasto não encontrado"}), 404
+    descricao = data.get("descricao", gasto["descricao"])
+    valor     = float(data["valor"]) if "valor" in data else float(gasto["valor"])
+    categoria = data.get("categoria", gasto["categoria"])
+    data_g    = data.get("data", gasto["data"])
+    conta_id  = data.get("conta_id", gasto["conta_id"]) if "conta_id" in data else gasto["conta_id"]
+    conn.execute(
+        "UPDATE gastos SET descricao=%s, valor=%s, categoria=%s, data=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
+        (descricao, valor, categoria, data_g, conta_id, gid, cid)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 @app.route("/api/gastos/<int:gid>", methods=["DELETE"])
 @login_required
 def deletar_gasto(gid):
@@ -2053,6 +2076,29 @@ def limpar_renda_referencia():
     cid = session["cliente_id"]
     conn = get_db()
     conn.execute("UPDATE clientes SET renda_mensal=NULL WHERE id=%s", (cid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/rendas/<int:rid>", methods=["PUT"])
+@login_required
+def editar_renda(rid):
+    cid  = session["cliente_id"]
+    data = request.json or {}
+    conn = get_db()
+    renda = conn.execute("SELECT * FROM rendas WHERE id=%s AND cliente_id=%s", (rid, cid)).fetchone()
+    if not renda:
+        conn.close()
+        return jsonify({"erro": "Renda não encontrada"}), 404
+    descricao = data.get("descricao", renda["descricao"])
+    valor     = float(data["valor"]) if "valor" in data else float(renda["valor"])
+    tipo      = data.get("tipo", renda["tipo"])
+    data_r    = data.get("data", renda["data"])
+    conta_id  = data.get("conta_id", renda["conta_id"]) if "conta_id" in data else renda["conta_id"]
+    conn.execute(
+        "UPDATE rendas SET descricao=%s, valor=%s, tipo=%s, data=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
+        (descricao, valor, tipo, data_r, conta_id, rid, cid)
+    )
     conn.commit()
     conn.close()
     return jsonify({"ok": True})

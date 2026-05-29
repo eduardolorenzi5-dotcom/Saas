@@ -200,6 +200,56 @@ def deletar_gasto_por_descricao(cliente_id, descricao, valor=None):
     conn.close()
     return dict(gasto)
 
+def editar_gasto_por_descricao(cliente_id, descricao, novo_valor=None, nova_descricao=None, nova_categoria=None, nova_data=None):
+    """Encontra o gasto mais recente pela descrição e atualiza os campos informados."""
+    conn = get_db()
+    gasto = conn.execute(
+        "SELECT id, descricao, valor, categoria, data FROM gastos "
+        "WHERE cliente_id=%s AND LOWER(descricao) LIKE LOWER(%s) ORDER BY criado_em DESC LIMIT 1",
+        (cliente_id, f"%{descricao}%")
+    ).fetchone()
+    if not gasto:
+        conn.close()
+        return None
+    gasto = dict(gasto)
+    val_final  = float(novo_valor)      if novo_valor      is not None else float(gasto["valor"])
+    desc_final = nova_descricao.strip() if nova_descricao               else gasto["descricao"]
+    cat_final  = nova_categoria         if nova_categoria               else gasto["categoria"]
+    data_final = nova_data              if nova_data                    else gasto["data"]
+    conn.execute(
+        "UPDATE gastos SET descricao=%s, valor=%s, categoria=%s, data=%s WHERE id=%s AND cliente_id=%s",
+        (desc_final, val_final, cat_final, data_final, gasto["id"], cliente_id)
+    )
+    conn.commit()
+    conn.close()
+    gasto.update({"valor": val_final, "descricao": desc_final, "categoria": cat_final, "data": data_final})
+    return gasto
+
+def editar_renda_por_descricao(cliente_id, descricao, novo_valor=None, nova_descricao=None, novo_tipo=None, nova_data=None):
+    """Encontra a renda mais recente pela descrição e atualiza os campos informados."""
+    conn = get_db()
+    renda = conn.execute(
+        "SELECT id, descricao, valor, tipo, data FROM rendas "
+        "WHERE cliente_id=%s AND LOWER(descricao) LIKE LOWER(%s) ORDER BY criado_em DESC LIMIT 1",
+        (cliente_id, f"%{descricao}%")
+    ).fetchone()
+    if not renda:
+        conn.close()
+        return None
+    renda = dict(renda)
+    val_final  = float(novo_valor)      if novo_valor      is not None else float(renda["valor"])
+    desc_final = nova_descricao.strip() if nova_descricao               else renda["descricao"]
+    tipo_final = novo_tipo              if novo_tipo                    else renda["tipo"]
+    data_final = nova_data              if nova_data                    else renda["data"]
+    conn.execute(
+        "UPDATE rendas SET descricao=%s, valor=%s, tipo=%s, data=%s WHERE id=%s AND cliente_id=%s",
+        (desc_final, val_final, tipo_final, data_final, renda["id"], cliente_id)
+    )
+    conn.commit()
+    conn.close()
+    renda.update({"valor": val_final, "descricao": desc_final, "tipo": tipo_final, "data": data_final})
+    return renda
+
 def historico_gastos(cliente_id):
     from datetime import timedelta
     hoje = hoje_brasil()
@@ -514,6 +564,8 @@ Ao receber uma mensagem, identifique se é:
 8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
 9. Um REGISTRO de renda — ex: "recebi meu salário de 3000", "caiu meu salário", "recebi um freela de 500", "entrou 200 de renda extra", "ganho 3000 por mês", "meu salário é 5000"
 9b. EXCLUIR renda — ex: "excluir minha renda extra", "apagar renda de freela", "remover renda do mês", "excluir informações de renda", "deletar renda extra", "apaga minha renda"
+9c. EDITAR gasto — ex: "corrige o uber para 45", "muda o mercado de 80 para 65", "a categoria do almoço é Alimentação", "o gasto do posto foi 120 não 90", "arruma o valor do netflix", "edita o lançamento do mercado"
+9d. EDITAR renda — ex: "corrige meu salário para 3500", "o freela foi 800 não 600", "muda a descrição da renda para Comissão"
 10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
 11. EXCLUIR um lembrete — ex: "exclua esse lembrete", "cancela o lembrete do médico", "excluir lembrete", "remove o lembrete de passear com os cachorros", "apagar lembrete"
 12. LISTAR lembretes ativos — ex: "quais meus lembretes?", "ver lembretes", "meus lembretes ativos"
@@ -575,6 +627,19 @@ Se for registro de renda:
 - Use tipo "extra" SOMENTE se o usuário usar explicitamente as palavras "extra", "renda extra" ou "adicional"
 - Em TODOS os outros casos use tipo "fixo" (salário, freela, comissão, bico, venda, qualquer renda)
 - descricao: nome da renda (ex: "Salário", "Freela design", "Comissão de vendas")
+
+Se for EDITAR/CORRIGIR um gasto existente (valor, descrição, categoria ou data):
+{{"acao": "editar_gasto", "descricao": "palavra-chave do gasto", "novo_valor": 0.00, "nova_descricao": "...", "nova_categoria": "...", "nova_data": "YYYY-MM-DD"}}
+- descricao: palavra-chave para localizar o gasto (obrigatório)
+- novo_valor / nova_descricao / nova_categoria / nova_data: inclua SOMENTE os campos que o usuário quer mudar
+- Exemplos: "corrige o uber para 45 reais" → {{"acao":"editar_gasto","descricao":"uber","novo_valor":45.00}}
+            "muda categoria do mercado para Alimentação" → {{"acao":"editar_gasto","descricao":"mercado","nova_categoria":"Alimentação"}}
+            "o almoço de ontem foi 32 reais, não 25" → {{"acao":"editar_gasto","descricao":"almoço","novo_valor":32.00}}
+
+Se for EDITAR/CORRIGIR uma renda existente:
+{{"acao": "editar_renda", "descricao": "palavra-chave da renda", "novo_valor": 0.00, "nova_descricao": "...", "novo_tipo": "fixo", "nova_data": "YYYY-MM-DD"}}
+- descricao: palavra-chave para localizar a renda (obrigatório)
+- inclua SOMENTE os campos que o usuário quer mudar
 
 Se for EXCLUIR renda:
 {{"acao": "deletar_renda", "tipo": "extra", "descricao": ""}}
@@ -993,6 +1058,60 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 resposta = f"🗑️ Gasto removido!\n📝 {gasto['descricao']} — R$ {float(gasto['valor']):.2f}"
             else:
                 resposta = f"Não encontrei nenhum gasto com '{desc}' para remover."
+
+        elif acao == "editar_gasto":
+            desc        = resultado.get("descricao", "")
+            novo_valor  = resultado.get("novo_valor")
+            nova_desc   = resultado.get("nova_descricao")
+            nova_cat    = resultado.get("nova_categoria")
+            nova_data   = resultado.get("nova_data")
+            if not desc:
+                resposta = "Me diga o nome do gasto que quer corrigir. Ex: 'corrige o uber para R$ 45'."
+            else:
+                gasto = editar_gasto_por_descricao(
+                    cliente["id"], desc,
+                    novo_valor=float(novo_valor) if novo_valor is not None else None,
+                    nova_descricao=nova_desc,
+                    nova_categoria=nova_cat,
+                    nova_data=nova_data
+                )
+                if gasto:
+                    resposta = (
+                        f"✏️ Gasto atualizado!\n\n"
+                        f"📝 Descrição: {gasto['descricao']}\n"
+                        f"💲 Valor: R$ {float(gasto['valor']):.2f}\n"
+                        f"📂 Categoria: {gasto['categoria']}\n"
+                        f"📅 Data: {formatar_data(gasto['data'])}"
+                    )
+                else:
+                    resposta = f"Não encontrei nenhum gasto com '{desc}'. Verifique o nome e tente novamente."
+
+        elif acao == "editar_renda":
+            desc       = resultado.get("descricao", "")
+            novo_valor = resultado.get("novo_valor")
+            nova_desc  = resultado.get("nova_descricao")
+            novo_tipo  = resultado.get("novo_tipo")
+            nova_data  = resultado.get("nova_data")
+            if not desc:
+                resposta = "Me diga o nome da renda que quer corrigir. Ex: 'corrige o salário para R$ 3500'."
+            else:
+                renda = editar_renda_por_descricao(
+                    cliente["id"], desc,
+                    novo_valor=float(novo_valor) if novo_valor is not None else None,
+                    nova_descricao=nova_desc,
+                    novo_tipo=novo_tipo,
+                    nova_data=nova_data
+                )
+                if renda:
+                    resposta = (
+                        f"✏️ Renda atualizada!\n\n"
+                        f"📝 Descrição: {renda['descricao']}\n"
+                        f"💲 Valor: R$ {float(renda['valor']):.2f}\n"
+                        f"📂 Tipo: {'Fixa 💼' if renda['tipo'] == 'fixo' else 'Extra ⚡'}\n"
+                        f"📅 Data: {formatar_data(renda['data'])}"
+                    )
+                else:
+                    resposta = f"Não encontrei nenhuma renda com '{desc}'. Verifique o nome e tente novamente."
 
         elif acao == "dashboard":
             imagem = gerar_imagem_dashboard(cliente["id"])
