@@ -730,7 +730,7 @@
   <div style="margin-top:36px;max-width:760px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <h2 style="font-size:16px;font-weight:700;color:#1a1a2e;">🔄 Débitos automáticos mensais</h2>
-      <button onclick="document.getElementById('form-nova-conta-mensal').style.display=document.getElementById('form-nova-conta-mensal').style.display==='none'?'block':'none'"
+      <button onclick="toggleForm('form-nova-conta-mensal')"
               style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
     </div>
 
@@ -850,7 +850,7 @@
   <div style="margin-top:36px;max-width:760px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <h2 style="font-size:16px;font-weight:700;color:#1a1a2e;">💰 Créditos recorrentes mensais</h2>
-      <button onclick="document.getElementById('form-nova-renda-recorrente').style.display=document.getElementById('form-nova-renda-recorrente').style.display==='none'?'block':'none'"
+      <button onclick="toggleForm('form-nova-renda-recorrente')"
               style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
     </div>
 
@@ -972,7 +972,7 @@
   <div style="margin-top:36px;max-width:760px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <h2 style="font-size:16px;font-weight:700;color:#1a1a2e;">📦 Parcelamentos</h2>
-      <button onclick="document.getElementById('form-novo-parcelamento').style.display=document.getElementById('form-novo-parcelamento').style.display==='none'?'block':'none'"
+      <button onclick="toggleForm('form-novo-parcelamento')"
               style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
     </div>
 
@@ -1618,6 +1618,13 @@ async function salvarEdicaoConta(id) {
   const d = await r.json();
   if (!r.ok) { msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display = 'block'; return; }
   location.reload();
+}
+
+// Toggle genérico para abrir/fechar formulários "+ Novo"
+function toggleForm(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = (el.style.display === '' || el.style.display === 'none') ? 'block' : 'none';
 }
 
 // Toggle visibilidade do campo "nº de meses" nos formulários de prazo
