@@ -532,24 +532,64 @@
     {% for conta in contas_bancarias %}
     {% set tipo_icon = '🏦' if conta.tipo == 'corrente' else ('🐷' if conta.tipo == 'poupanca' else ('💳' if conta.tipo == 'carteira' else '📈')) %}
     <div class="card" id="conta-card-{{ conta.id }}" style="position:relative;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-        <div>
-          <div class="card-label">{{ tipo_icon }} {{ conta.tipo|capitalize }}</div>
-          <div style="font-size:16px;font-weight:700;color:#1a1a2e;">{{ conta.nome }}</div>
+      <!-- Modo visualização -->
+      <div id="conta-view-{{ conta.id }}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+          <div>
+            <div class="card-label">{{ tipo_icon }} {{ conta.tipo|capitalize }}</div>
+            <div style="font-size:16px;font-weight:700;color:#1a1a2e;">{{ conta.nome }}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button onclick="abrirEditarConta({{ conta.id }}, '{{ conta.nome }}', '{{ conta.tipo }}', {{ conta.saldo_inicial }})"
+                    style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:0;line-height:1;" title="Editar conta">✏️</button>
+            <button onclick="confirmarDeletarConta({{ conta.id }}, '{{ conta.nome }}')"
+                    style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:18px;padding:0;line-height:1;" title="Remover conta">×</button>
+          </div>
         </div>
-        <button onclick="confirmarDeletarConta({{ conta.id }}, '{{ conta.nome }}')"
-                style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:18px;padding:0;line-height:1;" title="Remover conta">×</button>
+        <div style="font-size:28px;font-weight:700;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};margin-bottom:8px;">
+          R$ {{ "%.2f"|format(conta.saldo) }}
+        </div>
+        <div style="display:flex;gap:16px;font-size:11px;color:#9ca3af;">
+          <span>▲ R$ {{ "%.2f"|format(conta.total_receitas) }}</span>
+          <span>▼ R$ {{ "%.2f"|format(conta.total_despesas) }}</span>
+        </div>
+        {% if conta.saldo_inicial != 0 %}
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Saldo inicial: R$ {{ "%.2f"|format(conta.saldo_inicial) }}</div>
+        {% endif %}
       </div>
-      <div style="font-size:28px;font-weight:700;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};margin-bottom:8px;">
-        R$ {{ "%.2f"|format(conta.saldo) }}
+      <!-- Modo edição (oculto por padrão) -->
+      <div id="conta-edit-{{ conta.id }}" style="display:none;">
+        <div style="font-size:13px;font-weight:600;color:#1a1a2e;margin-bottom:12px;">✏️ Editar conta</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;">Nome</label>
+            <input type="text" id="edit-nome-{{ conta.id }}" value="{{ conta.nome }}"
+                   style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;margin-top:3px;"/>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;">Tipo</label>
+            <select id="edit-tipo-{{ conta.id }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;margin-top:3px;background:#fff;">
+              <option value="corrente" {% if conta.tipo=='corrente' %}selected{% endif %}>🏦 Conta Corrente</option>
+              <option value="poupanca" {% if conta.tipo=='poupanca' %}selected{% endif %}>🐷 Poupança</option>
+              <option value="carteira" {% if conta.tipo=='carteira' %}selected{% endif %}>💳 Carteira / Dinheiro</option>
+              <option value="investimento" {% if conta.tipo=='investimento' %}selected{% endif %}>📈 Investimentos</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;">Saldo inicial (R$)</label>
+            <input type="number" id="edit-saldo-{{ conta.id }}" value="{{ conta.saldo_inicial }}" step="0.01"
+                   style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;margin-top:3px;"/>
+            <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Valor inicial da conta no momento do cadastro</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button onclick="salvarEdicaoConta({{ conta.id }})"
+                    style="flex:1;background:#1a1a2e;color:#fff;border:none;border-radius:7px;padding:8px;font-size:13px;cursor:pointer;font-weight:600;">💾 Salvar</button>
+            <button onclick="fecharEditarConta({{ conta.id }})"
+                    style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;border-radius:7px;padding:8px 12px;font-size:13px;cursor:pointer;">Cancelar</button>
+          </div>
+          <div id="edit-msg-{{ conta.id }}" style="font-size:11px;color:#ef4444;display:none;"></div>
+        </div>
       </div>
-      <div style="display:flex;gap:16px;font-size:11px;color:#9ca3af;">
-        <span>▲ R$ {{ "%.2f"|format(conta.total_receitas) }}</span>
-        <span>▼ R$ {{ "%.2f"|format(conta.total_despesas) }}</span>
-      </div>
-      {% if conta.saldo_inicial != 0 %}
-      <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Saldo inicial: R$ {{ "%.2f"|format(conta.saldo_inicial) }}</div>
-      {% endif %}
     </div>
     {% else %}
     <div id="contas-vazio" style="grid-column:1/-1;text-align:center;color:#9ca3af;padding:40px 0;font-size:14px;">
@@ -1159,6 +1199,31 @@ async function deletarTransferencia(id) {
   const r = await fetch(`/api/transferencias/${id}`, {method: 'DELETE'});
   if (r.ok) { document.getElementById(`tx-${id}`)?.remove(); }
   else { const d = await r.json(); alert(d.erro || 'Erro ao estornar.'); }
+}
+
+// EDITAR CONTA BANCÁRIA
+function abrirEditarConta(id, nome, tipo, saldoInicial) {
+  document.getElementById(`conta-view-${id}`).style.display = 'none';
+  document.getElementById(`conta-edit-${id}`).style.display = 'block';
+}
+function fecharEditarConta(id) {
+  document.getElementById(`conta-edit-${id}`).style.display = 'none';
+  document.getElementById(`conta-view-${id}`).style.display = 'block';
+}
+async function salvarEdicaoConta(id) {
+  const nome  = document.getElementById(`edit-nome-${id}`).value.trim();
+  const tipo  = document.getElementById(`edit-tipo-${id}`).value;
+  const saldo = parseFloat(document.getElementById(`edit-saldo-${id}`).value) || 0;
+  const msg   = document.getElementById(`edit-msg-${id}`);
+  if (!nome) { msg.textContent = 'Informe o nome da conta.'; msg.style.display = 'block'; return; }
+  const r = await fetch(`/api/contas/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome, tipo, saldo_inicial: saldo })
+  });
+  const d = await r.json();
+  if (!r.ok) { msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display = 'block'; return; }
+  location.reload();
 }
 
 // DÉBITOS AUTOMÁTICOS (contas mensais)
