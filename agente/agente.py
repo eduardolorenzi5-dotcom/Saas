@@ -271,27 +271,68 @@ def resumo_mes(cliente_id):
     return total, [dict(r) for r in por_cat]
 
 def resumo_mes_conta(cliente_id, conta_id):
-    """Resumo financeiro filtrado por conta bancária específica."""
+    """Resumo financeiro filtrado por conta bancária específica.
+    Retorna: (saldo_real, gastos_mes, por_cat_mes, rendas_mes, ultimos_lancamentos)
+    - saldo_real = saldo_inicial + todas as rendas - todos os gastos (desde sempre)
+    - gastos_mes / rendas_mes = apenas o mês atual
+    - ultimos_lancamentos = últimos 8 lançamentos desta conta (gastos + rendas)
+    """
     mes = hoje_brasil().strftime("%Y-%m")
     conn = get_db()
-    total_gastos = conn.execute(
+
+    # Saldo inicial da conta
+    conta_row = conn.execute(
+        "SELECT saldo_inicial FROM contas_bancarias WHERE id=%s AND cliente_id=%s",
+        (conta_id, cliente_id)
+    ).fetchone()
+    saldo_inicial = float(conta_row["saldo_inicial"]) if conta_row and conta_row["saldo_inicial"] else 0.0
+
+    # Total de gastos ALL TIME nesta conta
+    total_gastos_all = float(conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s",
+        (cliente_id, conta_id)
+    ).fetchone()["t"])
+
+    # Total de rendas ALL TIME nesta conta
+    total_rendas_all = float(conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s",
+        (cliente_id, conta_id)
+    ).fetchone()["t"])
+
+    # Saldo real da conta
+    saldo_real = saldo_inicial + total_rendas_all - total_gastos_all
+
+    # Gastos e rendas do mês atual
+    gastos_mes = float(conn.execute(
         "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s",
         (cliente_id, conta_id, f"{mes}%")
-    ).fetchone()["t"]
+    ).fetchone()["t"])
     por_cat = conn.execute(
         "SELECT categoria, SUM(valor) as s FROM gastos WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s GROUP BY categoria ORDER BY s DESC",
         (cliente_id, conta_id, f"{mes}%")
     ).fetchall()
-    total_rendas = conn.execute(
+    rendas_mes = float(conn.execute(
         "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s",
         (cliente_id, conta_id, f"{mes}%")
-    ).fetchone()["t"]
-    rendas_rows = conn.execute(
-        "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s ORDER BY tipo, valor DESC",
-        (cliente_id, conta_id, f"{mes}%")
+    ).fetchone()["t"])
+
+    # Últimos 8 lançamentos desta conta (gastos e rendas juntos)
+    gastos_rec = conn.execute(
+        "SELECT data, descricao, valor, categoria, 'saida' as tipo FROM gastos WHERE cliente_id=%s AND conta_id=%s ORDER BY data DESC, id DESC LIMIT 8",
+        (cliente_id, conta_id)
     ).fetchall()
+    rendas_rec = conn.execute(
+        "SELECT data, descricao, valor, tipo as categoria, 'entrada' as tipo FROM rendas WHERE cliente_id=%s AND conta_id=%s ORDER BY data DESC, id DESC LIMIT 8",
+        (cliente_id, conta_id)
+    ).fetchall()
+    # Mescla e ordena por data desc, pega os 8 mais recentes
+    lancamentos = sorted(
+        [dict(r) for r in gastos_rec] + [dict(r) for r in rendas_rec],
+        key=lambda x: x["data"], reverse=True
+    )[:8]
+
     conn.close()
-    return float(total_gastos), [dict(r) for r in por_cat], float(total_rendas), [dict(r) for r in rendas_rows]
+    return saldo_real, gastos_mes, [dict(r) for r in por_cat], rendas_mes, lancamentos
 
 def gerar_analise_financeira(gastos):
     if not gastos:
@@ -1317,33 +1358,34 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     f"Tente com o nome exato ou cadastre a conta no dashboard."
                 )
             else:
-                total_g, por_cat_c, total_r, rendas_c = resumo_mes_conta(cliente["id"], conta_achada["id"])
+                saldo_real, gastos_mes, por_cat_c, rendas_mes, lancamentos = resumo_mes_conta(cliente["id"], conta_achada["id"])
                 mes_label = mes_ano_pt()
-                linhas = [f"🏦 *Resumo {conta_achada['nome']} — {mes_label}*", ""]
-                if total_r > 0 or total_g > 0:
-                    saldo_c = total_r - total_g
-                    if total_r > 0:
-                        pct_c = (total_g / total_r * 100) if total_r else 0
-                        linhas.append(f"💵 *Entradas: R$ {total_r:.2f}*")
-                        linhas.append(f"💸 Saídas: R$ {total_g:.2f} ({pct_c:.1f}%)")
-                        linhas.append(f"{'✅' if saldo_c >= 0 else '⚠️'} Saldo: R$ {saldo_c:.2f}")
-                    else:
-                        linhas.append(f"💸 *Total de saídas: R$ {total_g:.2f}*")
+                emoji_saldo = "✅" if saldo_real >= 0 else "⚠️"
+                linhas = [
+                    f"🏦 *{conta_achada['nome']}*",
+                    f"{emoji_saldo} *Saldo atual: R$ {saldo_real:.2f}*",
+                    ""
+                ]
+                # Resumo do mês atual
+                linhas.append(f"📅 *{mes_label}:*")
+                if rendas_mes > 0:
+                    linhas.append(f"  💵 Entradas: R$ {rendas_mes:.2f}")
+                if gastos_mes > 0:
+                    linhas.append(f"  💸 Saídas: R$ {gastos_mes:.2f}")
                     if por_cat_c:
-                        linhas.append("")
-                        linhas.append("📋 *Por categoria:*")
                         for c in por_cat_c:
-                            linhas.append(f"  • {c['categoria']}: R$ {c['s']:.2f}")
-                    if rendas_c:
-                        linhas.append("")
-                        linhas.append("💰 *Entradas registradas:*")
-                        for r in rendas_c:
-                            linhas.append(f"  • {r['descricao']}: R$ {float(r['valor']):.2f}")
-                else:
-                    linhas.append(f"Nenhum lançamento registrado nesta conta em {mes_label}.")
+                            linhas.append(f"    · {c['categoria']}: R$ {c['s']:.2f}")
+                if rendas_mes == 0 and gastos_mes == 0:
+                    linhas.append(f"  Nenhum lançamento neste mês.")
+                # Últimos lançamentos
+                if lancamentos:
                     linhas.append("")
-                    linhas.append("💡 Ao registrar um gasto, mencione a conta:")
-                    linhas.append(f'_"gastei 50 no mercado pelo {conta_achada["nome"]}"_')
+                    linhas.append("🕓 *Últimos lançamentos:*")
+                    for lc in lancamentos:
+                        data_fmt = lc["data"][8:10] + "/" + lc["data"][5:7]
+                        seta = "💸" if lc["tipo"] == "saida" else "💵"
+                        sinal = "-" if lc["tipo"] == "saida" else "+"
+                        linhas.append(f"  {seta} {data_fmt} {lc['descricao']} {sinal}R$ {float(lc['valor']):.2f}")
                 resposta = "\n".join(linhas)
 
         elif acao == "registrar_renda":
