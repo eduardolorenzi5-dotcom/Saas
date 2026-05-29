@@ -746,7 +746,11 @@
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
             {% if cm.valor %}<span style="font-size:15px;font-weight:700;color:#dc2626;">R$ {{ "%.2f"|format(cm.valor) }}</span>{% endif %}
-            <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+            {% if cm.total_meses %}
+              <span style="font-size:10px;background:#fef3c7;color:#d97706;border-radius:100px;padding:2px 8px;font-weight:600;">{{ cm.meses_executados or 0 }}/{{ cm.total_meses }} meses</span>
+            {% else %}
+              <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+            {% endif %}
             <button onclick="abrirEditarCM({{ cm.id }})" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
             <button onclick="deletarContaMensal({{ cm.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
           </div>
@@ -758,12 +762,23 @@
             <div class="form-field"><label style="font-size:11px;">Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="cm-edit-valor-{{ cm.id }}" data-valor="{{ cm.valor or 0 }}" oninput="mascaraMoeda(this)" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
             <div class="form-field"><label style="font-size:11px;">Dia do mês</label><input type="number" id="cm-edit-dia-{{ cm.id }}" value="{{ cm.dia_vencimento }}" min="1" max="31" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
             <div class="form-field">
               <label style="font-size:11px;">Categoria</label>
               <select id="cm-edit-cat-{{ cm.id }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
                 {% for c in cats_usuario %}<option value="{{ c.nome }}" {% if c.nome == cm.categoria %}selected{% endif %}>{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
               </select>
+            </div>
+            <div class="form-field">
+              <label style="font-size:11px;">Duração</label>
+              <select id="cm-edit-prazo-tipo-{{ cm.id }}" onchange="togglePrazoInput('cm',{{ cm.id }})" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
+                <option value="sem" {% if not cm.total_meses %}selected{% endif %}>Sem prazo</option>
+                <option value="com" {% if cm.total_meses %}selected{% endif %}>Por X meses</option>
+              </select>
+            </div>
+            <div class="form-field" id="cm-edit-prazo-box-{{ cm.id }}" style="{% if not cm.total_meses %}display:none;{% endif %}">
+              <label style="font-size:11px;">Nº de meses</label>
+              <input type="number" id="cm-edit-total-meses-{{ cm.id }}" value="{{ cm.total_meses or '' }}" min="1" max="360" placeholder="Ex: 3" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/>
             </div>
             {% if contas_bancarias %}
             <div class="form-field">
@@ -798,12 +813,23 @@
         <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="cm-valor" placeholder="100,00" oninput="mascaraMoeda(this)"/></div>
         <div class="form-field"><label>Dia do mês</label><input type="number" id="cm-dia" placeholder="10" min="1" max="31"/></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
         <div class="form-field">
           <label>Categoria</label>
           <select id="cm-cat" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
             {% for c in cats_usuario %}<option value="{{ c.nome }}">{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
           </select>
+        </div>
+        <div class="form-field">
+          <label>Duração</label>
+          <select id="cm-prazo-tipo" onchange="document.getElementById('cm-prazo-box').style.display=this.value==='com'?'block':'none'" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="sem">Sem prazo (recorrente)</option>
+            <option value="com">Por X meses</option>
+          </select>
+        </div>
+        <div class="form-field" id="cm-prazo-box" style="display:none;">
+          <label>Nº de meses</label>
+          <input type="number" id="cm-total-meses" min="1" max="360" placeholder="Ex: 3"/>
         </div>
         {% if contas_bancarias %}
         <div class="form-field">
@@ -840,7 +866,11 @@
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
             {% if rr.valor %}<span style="font-size:15px;font-weight:700;color:#059669;">R$ {{ "%.2f"|format(rr.valor) }}</span>{% endif %}
-            <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+            {% if rr.total_meses %}
+              <span style="font-size:10px;background:#fef3c7;color:#d97706;border-radius:100px;padding:2px 8px;font-weight:600;">{{ rr.meses_executados or 0 }}/{{ rr.total_meses }} meses</span>
+            {% else %}
+              <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+            {% endif %}
             <button onclick="abrirEditarRR({{ rr.id }})" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
             <button onclick="deletarRendaRecorrente({{ rr.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
           </div>
@@ -852,13 +882,24 @@
             <div class="form-field"><label style="font-size:11px;">Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="rr-edit-valor-{{ rr.id }}" data-valor="{{ rr.valor or 0 }}" oninput="mascaraMoeda(this)" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
             <div class="form-field"><label style="font-size:11px;">Dia do mês</label><input type="number" id="rr-edit-dia-{{ rr.id }}" value="{{ rr.dia_credito }}" min="1" max="31" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/></div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
             <div class="form-field">
               <label style="font-size:11px;">Tipo</label>
               <select id="rr-edit-tipo-{{ rr.id }}" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
                 <option value="fixo" {% if rr.tipo == 'fixo' %}selected{% endif %}>Renda Fixa</option>
                 <option value="extra" {% if rr.tipo == 'extra' %}selected{% endif %}>Renda Extra</option>
               </select>
+            </div>
+            <div class="form-field">
+              <label style="font-size:11px;">Duração</label>
+              <select id="rr-edit-prazo-tipo-{{ rr.id }}" onchange="togglePrazoInput('rr',{{ rr.id }})" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;">
+                <option value="sem" {% if not rr.total_meses %}selected{% endif %}>Sem prazo</option>
+                <option value="com" {% if rr.total_meses %}selected{% endif %}>Por X meses</option>
+              </select>
+            </div>
+            <div class="form-field" id="rr-edit-prazo-box-{{ rr.id }}" style="{% if not rr.total_meses %}display:none;{% endif %}">
+              <label style="font-size:11px;">Nº de meses</label>
+              <input type="number" id="rr-edit-total-meses-{{ rr.id }}" value="{{ rr.total_meses or '' }}" min="1" max="360" placeholder="Ex: 3" style="width:100%;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;font-size:13px;"/>
             </div>
             {% if contas_bancarias %}
             <div class="form-field">
@@ -893,13 +934,24 @@
         <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="rr-valor" placeholder="3.000,00" oninput="mascaraMoeda(this)"/></div>
         <div class="form-field"><label>Dia do mês</label><input type="number" id="rr-dia" placeholder="5" min="1" max="31"/></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
         <div class="form-field">
           <label>Tipo</label>
           <select id="rr-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
             <option value="fixo">Renda Fixa (Salário, Aposentadoria, Aluguel)</option>
             <option value="extra">Renda Extra</option>
           </select>
+        </div>
+        <div class="form-field">
+          <label>Duração</label>
+          <select id="rr-prazo-tipo" onchange="document.getElementById('rr-prazo-box').style.display=this.value==='com'?'block':'none'" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="sem">Sem prazo (recorrente)</option>
+            <option value="com">Por X meses</option>
+          </select>
+        </div>
+        <div class="form-field" id="rr-prazo-box" style="display:none;">
+          <label>Nº de meses</label>
+          <input type="number" id="rr-total-meses" min="1" max="360" placeholder="Ex: 3"/>
         </div>
         {% if contas_bancarias %}
         <div class="form-field">
@@ -1568,6 +1620,13 @@ async function salvarEdicaoConta(id) {
   location.reload();
 }
 
+// Toggle visibilidade do campo "nº de meses" nos formulários de prazo
+function togglePrazoInput(prefix, id) {
+  const sel = document.getElementById(`${prefix}-edit-prazo-tipo-${id}`);
+  const box = document.getElementById(`${prefix}-edit-prazo-box-${id}`);
+  if (box) box.style.display = sel.value === 'com' ? 'block' : 'none';
+}
+
 // EDITAR DÉBITO AUTOMÁTICO (conta mensal)
 function abrirEditarCM(id) {
   document.querySelector(`.cm-view-${id}`).style.display = 'none';
@@ -1588,13 +1647,17 @@ async function salvarEdicaoCM(id) {
   const cat   = document.getElementById(`cm-edit-cat-${id}`)?.value || 'Outros';
   const contaEl = document.getElementById(`cm-edit-conta-${id}`);
   const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  const prazoTipo = document.getElementById(`cm-edit-prazo-tipo-${id}`)?.value;
+  const totalMesesEl = document.getElementById(`cm-edit-total-meses-${id}`);
+  const total_meses = (prazoTipo === 'com' && totalMesesEl) ? (parseInt(totalMesesEl.value) || null) : null;
   if (!desc) { alert('Informe a descrição.'); return; }
   if (!valor || valor <= 0) { alert('Informe um valor válido.'); return; }
   if (!dia || dia < 1 || dia > 31) { alert('Dia inválido (1–31).'); return; }
+  if (prazoTipo === 'com' && (!total_meses || total_meses < 1)) { alert('Informe o número de meses (mínimo 1).'); return; }
   const r = await fetch(`/api/contas-mensais/${id}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({descricao: desc, valor, dia_vencimento: dia, categoria: cat, conta_id})
+    body: JSON.stringify({descricao: desc, valor, dia_vencimento: dia, categoria: cat, conta_id, total_meses})
   });
   if (r.ok) location.reload();
   else { const d = await r.json(); alert(d.erro || 'Erro ao salvar.'); }
@@ -1619,13 +1682,17 @@ async function salvarEdicaoRR(id) {
   const tipo  = document.getElementById(`rr-edit-tipo-${id}`)?.value || 'fixo';
   const contaEl = document.getElementById(`rr-edit-conta-${id}`);
   const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  const prazoTipo = document.getElementById(`rr-edit-prazo-tipo-${id}`)?.value;
+  const totalMesesEl = document.getElementById(`rr-edit-total-meses-${id}`);
+  const total_meses = (prazoTipo === 'com' && totalMesesEl) ? (parseInt(totalMesesEl.value) || null) : null;
   if (!desc) { alert('Informe a descrição.'); return; }
   if (!valor || valor <= 0) { alert('Informe um valor válido.'); return; }
   if (!dia || dia < 1 || dia > 31) { alert('Dia inválido (1–31).'); return; }
+  if (prazoTipo === 'com' && (!total_meses || total_meses < 1)) { alert('Informe o número de meses (mínimo 1).'); return; }
   const r = await fetch(`/api/rendas-recorrentes/${id}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({descricao: desc, valor, dia_credito: dia, tipo, conta_id})
+    body: JSON.stringify({descricao: desc, valor, dia_credito: dia, tipo, conta_id, total_meses})
   });
   if (r.ok) location.reload();
   else { const d = await r.json(); alert(d.erro || 'Erro ao salvar.'); }
@@ -1639,14 +1706,17 @@ async function salvarContaMensal() {
   const cat   = document.getElementById('cm-cat')?.value || 'Outros';
   const contaEl = document.getElementById('cm-conta');
   const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  const prazoTipo = document.getElementById('cm-prazo-tipo')?.value;
+  const total_meses = (prazoTipo === 'com') ? (parseInt(document.getElementById('cm-total-meses')?.value) || null) : null;
   const msg = document.getElementById('cm-msg');
   if (!desc) { msg.textContent='Informe a descrição.'; msg.style.display='block'; return; }
   if (!valor || valor <= 0) { msg.textContent='Informe um valor válido.'; msg.style.display='block'; return; }
   if (!dia || dia < 1 || dia > 31) { msg.textContent='Informe o dia do mês (1 a 31).'; msg.style.display='block'; return; }
+  if (prazoTipo === 'com' && (!total_meses || total_meses < 1)) { msg.textContent='Informe o número de meses.'; msg.style.display='block'; return; }
   const r = await fetch('/api/contas-mensais', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({descricao: desc, valor, dia_vencimento: dia, categoria: cat, conta_id, auto_debitar: true})
+    body: JSON.stringify({descricao: desc, valor, dia_vencimento: dia, categoria: cat, conta_id, auto_debitar: true, total_meses})
   });
   if (r.ok) { location.reload(); }
   else { const d = await r.json(); msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display='block'; }
@@ -1666,14 +1736,17 @@ async function salvarRendaRecorrente() {
   const tipo  = document.getElementById('rr-tipo')?.value || 'fixo';
   const contaEl = document.getElementById('rr-conta');
   const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  const prazoTipo = document.getElementById('rr-prazo-tipo')?.value;
+  const total_meses = (prazoTipo === 'com') ? (parseInt(document.getElementById('rr-total-meses')?.value) || null) : null;
   const msg = document.getElementById('rr-msg');
   if (!desc) { msg.textContent='Informe a descrição.'; msg.style.display='block'; return; }
   if (!valor || valor <= 0) { msg.textContent='Informe um valor válido.'; msg.style.display='block'; return; }
   if (!dia || dia < 1 || dia > 31) { msg.textContent='Informe o dia do mês (1 a 31).'; msg.style.display='block'; return; }
+  if (prazoTipo === 'com' && (!total_meses || total_meses < 1)) { msg.textContent='Informe o número de meses.'; msg.style.display='block'; return; }
   const r = await fetch('/api/rendas-recorrentes', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({descricao: desc, valor, dia_credito: dia, tipo, conta_id})
+    body: JSON.stringify({descricao: desc, valor, dia_credito: dia, tipo, conta_id, total_meses})
   });
   if (r.ok) { location.reload(); }
   else { const d = await r.json(); msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display='block'; }

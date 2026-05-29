@@ -427,6 +427,11 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        # Migration: prazo em meses para contas mensais e rendas recorrentes
+        conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS total_meses INTEGER")
+        conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS meses_executados INTEGER DEFAULT 0")
+        conn.execute("ALTER TABLE rendas_recorrentes ADD COLUMN IF NOT EXISTS total_meses INTEGER")
+        conn.execute("ALTER TABLE rendas_recorrentes ADD COLUMN IF NOT EXISTS meses_executados INTEGER DEFAULT 0")
         # Limpa dedup de mensagens antigas (> 2 horas) para não acumular
         conn.execute("DELETE FROM webhook_msgs WHERE processado_em < NOW() - INTERVAL '2 hours'")
     else:
@@ -2977,12 +2982,13 @@ def criar_conta_mensal_api():
     categoria      = data.get("categoria") or "Outros"
     conta_id       = data.get("conta_id") or None
     auto_debitar   = bool(data.get("auto_debitar", True))
+    total_meses    = int(data["total_meses"]) if data.get("total_meses") else None
     if not descricao:
         return jsonify({"erro": "Informe a descrição."}), 400
     conn = get_db()
     conn.execute(
-        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-        (cid, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar)
+        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar, total_meses) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        (cid, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar, total_meses)
     )
     conn.commit()
     conn.close()
@@ -3008,12 +3014,13 @@ def editar_conta_mensal_api(cid_):
     dia_vencimento = max(1, min(31, int(data.get("dia_vencimento") or 1)))
     categoria      = data.get("categoria") or "Outros"
     conta_id       = int(data.get("conta_id")) if data.get("conta_id") else None
+    total_meses    = int(data["total_meses"]) if data.get("total_meses") else None
     if not descricao:
         return jsonify({"erro": "Informe a descrição."}), 400
     conn = get_db()
     conn.execute(
-        "UPDATE contas_mensais SET descricao=%s, valor=%s, dia_vencimento=%s, categoria=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
-        (descricao, valor, dia_vencimento, categoria, conta_id, cid_, cid)
+        "UPDATE contas_mensais SET descricao=%s, valor=%s, dia_vencimento=%s, categoria=%s, conta_id=%s, total_meses=%s WHERE id=%s AND cliente_id=%s",
+        (descricao, valor, dia_vencimento, categoria, conta_id, total_meses, cid_, cid)
     )
     conn.commit()
     conn.close()
@@ -3043,12 +3050,13 @@ def criar_renda_recorrente_api():
     dia_credito = max(1, min(31, dia_credito))
     tipo        = data.get("tipo") or "fixo"
     conta_id    = int(data.get("conta_id")) if data.get("conta_id") else None
+    total_meses = int(data["total_meses"]) if data.get("total_meses") else None
     if not descricao:
         return jsonify({"erro": "Informe a descrição."}), 400
     conn = get_db()
     conn.execute(
-        "INSERT INTO rendas_recorrentes (cliente_id, descricao, valor, dia_credito, tipo, conta_id) VALUES (%s,%s,%s,%s,%s,%s)",
-        (cid, descricao, valor, dia_credito, tipo, conta_id)
+        "INSERT INTO rendas_recorrentes (cliente_id, descricao, valor, dia_credito, tipo, conta_id, total_meses) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        (cid, descricao, valor, dia_credito, tipo, conta_id, total_meses)
     )
     conn.commit()
     conn.close()
@@ -3074,12 +3082,13 @@ def editar_renda_recorrente_api(rid):
     dia_credito = max(1, min(31, int(data.get("dia_credito") or 1)))
     tipo        = data.get("tipo") or "fixo"
     conta_id    = int(data.get("conta_id")) if data.get("conta_id") else None
+    total_meses = int(data["total_meses"]) if data.get("total_meses") else None
     if not descricao:
         return jsonify({"erro": "Informe a descrição."}), 400
     conn = get_db()
     conn.execute(
-        "UPDATE rendas_recorrentes SET descricao=%s, valor=%s, dia_credito=%s, tipo=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
-        (descricao, valor, dia_credito, tipo, conta_id, rid, cid)
+        "UPDATE rendas_recorrentes SET descricao=%s, valor=%s, dia_credito=%s, tipo=%s, conta_id=%s, total_meses=%s WHERE id=%s AND cliente_id=%s",
+        (descricao, valor, dia_credito, tipo, conta_id, total_meses, rid, cid)
     )
     conn.commit()
     conn.close()
@@ -3118,7 +3127,8 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
         if USE_PG:
             contas = conn.execute("""
                 SELECT cm.id, cm.cliente_id, cm.descricao, cm.valor,
-                       cm.conta_id, cm.categoria, c.whatsapp, c.nome as cliente_nome
+                       cm.conta_id, cm.categoria, cm.total_meses, cm.meses_executados,
+                       c.whatsapp, c.nome as cliente_nome
                 FROM contas_mensais cm
                 JOIN clientes c ON cm.cliente_id = c.id
                 WHERE cm.ativo = TRUE AND cm.auto_debitar = TRUE
@@ -3128,7 +3138,8 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
         else:
             contas = conn.execute("""
                 SELECT cm.id, cm.cliente_id, cm.descricao, cm.valor,
-                       cm.conta_id, cm.categoria, c.whatsapp, c.nome as cliente_nome
+                       cm.conta_id, cm.categoria, cm.total_meses, cm.meses_executados,
+                       c.whatsapp, c.nome as cliente_nome
                 FROM contas_mensais cm
                 JOIN clientes c ON cm.cliente_id = c.id
                 WHERE cm.ativo = 1 AND cm.auto_debitar = 1
@@ -3153,6 +3164,9 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
                     continue
 
                 categoria = cm["categoria"] or "Outros"
+                nova_exec = (cm["meses_executados"] or 0) + 1
+                total_m   = cm["total_meses"]
+
                 # Cria o gasto
                 if USE_PG:
                     conn.execute(
@@ -3163,6 +3177,13 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
                         "INSERT INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING",
                         (cm["cliente_id"], cm["id"], cm["descricao"], mes_str)
                     )
+                    conn.execute(
+                        "UPDATE contas_mensais SET meses_executados=%s WHERE id=%s",
+                        (nova_exec, cm["id"])
+                    )
+                    # Desativa se atingiu prazo
+                    if total_m and nova_exec >= total_m:
+                        conn.execute("UPDATE contas_mensais SET ativo=FALSE WHERE id=%s", (cm["id"],))
                 else:
                     conn.execute(
                         "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (?,?,?,?,?,?,?)",
@@ -3172,17 +3193,33 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
                         "INSERT OR IGNORE INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (?,?,?,?)",
                         (cm["cliente_id"], cm["id"], cm["descricao"], mes_str)
                     )
+                    conn.execute(
+                        "UPDATE contas_mensais SET meses_executados=? WHERE id=?",
+                        (nova_exec, cm["id"])
+                    )
+                    if total_m and nova_exec >= total_m:
+                        conn.execute("UPDATE contas_mensais SET ativo=0 WHERE id=?", (cm["id"],))
                 conn.commit()
-                logging.info(f"[AUTO-DEBIT] Conta mensal '{cm['descricao']}' debitada p/ cliente {cm['cliente_id']}")
 
+                prazo_info = f" ({nova_exec}/{total_m})" if total_m else ""
+                logging.info(f"[AUTO-DEBIT] Conta mensal '{cm['descricao']}'{prazo_info} debitada p/ cliente {cm['cliente_id']}")
+
+                # Mensagem WhatsApp
                 if enviar_whatsapp and cm["whatsapp"]:
+                    if total_m and nova_exec >= total_m:
+                        msg_extra = f"\n\n✅ *Última parcela!* Este débito foi concluído ({total_m}/{total_m} meses)."
+                    elif total_m:
+                        restam = total_m - nova_exec
+                        msg_extra = f"\n\n📊 Parcela *{nova_exec}/{total_m}* · Restam *{restam} {'mês' if restam==1 else 'meses'}*."
+                    else:
+                        msg_extra = ""
                     enviar_whatsapp(cm["whatsapp"],
                         f"💳 *Débito automático registrado!*\n\n"
                         f"📋 {cm['descricao']}\n"
                         f"💲 R$ {float(cm['valor']):.2f}\n"
-                        f"📅 {dd_mm_yyyy}\n\n"
-                        f"_Lançado automaticamente pelo Controla Fácil_ ✅\n"
-                        f"Acesse o dashboard para ver o extrato."
+                        f"📅 {dd_mm_yyyy}"
+                        f"{msg_extra}\n\n"
+                        f"_Lançado automaticamente pelo Controla Fácil_ ✅"
                     )
             except Exception as e:
                 logging.error(f"[AUTO-DEBIT] Erro conta_mensal {cm['id']}: {e}")
@@ -3288,7 +3325,7 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
         if USE_PG:
             rendas_rec = conn.execute("""
                 SELECT rr.id, rr.cliente_id, rr.descricao, rr.valor,
-                       rr.tipo, rr.conta_id, c.whatsapp
+                       rr.tipo, rr.conta_id, rr.total_meses, rr.meses_executados, c.whatsapp
                 FROM rendas_recorrentes rr
                 JOIN clientes c ON rr.cliente_id = c.id
                 WHERE rr.ativo = TRUE AND rr.dia_credito = %s
@@ -3297,7 +3334,7 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
         else:
             rendas_rec = conn.execute("""
                 SELECT rr.id, rr.cliente_id, rr.descricao, rr.valor,
-                       rr.tipo, rr.conta_id, c.whatsapp
+                       rr.tipo, rr.conta_id, rr.total_meses, rr.meses_executados, c.whatsapp
                 FROM rendas_recorrentes rr
                 JOIN clientes c ON rr.cliente_id = c.id
                 WHERE rr.ativo = 1 AND rr.dia_credito = ?
@@ -3321,27 +3358,51 @@ def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
                     continue
 
                 tipo = rr["tipo"] or "fixo"
+                nova_exec = (rr["meses_executados"] or 0) + 1
+                total_m   = rr["total_meses"]
+
                 if USE_PG:
                     conn.execute(
                         "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                         (rr["cliente_id"], rr["descricao"], float(rr["valor"]), tipo, data_atual_str, "auto", rr["conta_id"])
                     )
+                    conn.execute(
+                        "UPDATE rendas_recorrentes SET meses_executados=%s WHERE id=%s",
+                        (nova_exec, rr["id"])
+                    )
+                    if total_m and nova_exec >= total_m:
+                        conn.execute("UPDATE rendas_recorrentes SET ativo=FALSE WHERE id=%s", (rr["id"],))
                 else:
                     conn.execute(
                         "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (?,?,?,?,?,?,?)",
                         (rr["cliente_id"], rr["descricao"], float(rr["valor"]), tipo, data_atual_str, "auto", rr["conta_id"])
                     )
+                    conn.execute(
+                        "UPDATE rendas_recorrentes SET meses_executados=? WHERE id=?",
+                        (nova_exec, rr["id"])
+                    )
+                    if total_m and nova_exec >= total_m:
+                        conn.execute("UPDATE rendas_recorrentes SET ativo=0 WHERE id=?", (rr["id"],))
                 conn.commit()
-                logging.info(f"[AUTO-CREDIT] Renda recorrente '{rr['descricao']}' creditada p/ cliente {rr['cliente_id']}")
+
+                prazo_info = f" ({nova_exec}/{total_m})" if total_m else ""
+                logging.info(f"[AUTO-CREDIT] Renda recorrente '{rr['descricao']}'{prazo_info} creditada p/ cliente {rr['cliente_id']}")
 
                 if enviar_whatsapp and rr["whatsapp"]:
+                    if total_m and nova_exec >= total_m:
+                        msg_extra = f"\n\n✅ *Último crédito!* Este recebimento foi concluído ({total_m}/{total_m} meses)."
+                    elif total_m:
+                        restam = total_m - nova_exec
+                        msg_extra = f"\n\n📊 Crédito *{nova_exec}/{total_m}* · Restam *{restam} {'mês' if restam==1 else 'meses'}*."
+                    else:
+                        msg_extra = ""
                     enviar_whatsapp(rr["whatsapp"],
                         f"💰 *Crédito automático registrado!*\n\n"
                         f"📋 {rr['descricao']}\n"
                         f"💲 R$ {float(rr['valor']):.2f}\n"
-                        f"📅 {dd_mm_yyyy}\n\n"
-                        f"_Lançado automaticamente pelo Controla Fácil_ ✅\n"
-                        f"Acesse o dashboard para ver o extrato."
+                        f"📅 {dd_mm_yyyy}"
+                        f"{msg_extra}\n\n"
+                        f"_Lançado automaticamente pelo Controla Fácil_ ✅"
                     )
             except Exception as e:
                 logging.error(f"[AUTO-CREDIT] Erro renda_recorrente {rr['id']}: {e}")
