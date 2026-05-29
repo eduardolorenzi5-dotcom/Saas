@@ -192,6 +192,19 @@ def init_db():
                 UNIQUE (cliente_id, conta_id, mes)
             )
         """)
+        # Tabela de contas bancárias (Fase 1: cadastro manual)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS contas_bancarias (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                nome TEXT NOT NULL,
+                tipo TEXT DEFAULT 'corrente',
+                saldo_inicial REAL DEFAULT 0,
+                ativo BOOLEAN DEFAULT TRUE,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -294,6 +307,16 @@ def init_db():
                 pago_em TEXT DEFAULT (datetime('now')),
                 UNIQUE (cliente_id, conta_id, mes)
             );
+            CREATE TABLE IF NOT EXISTS contas_bancarias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                nome TEXT NOT NULL,
+                tipo TEXT DEFAULT 'corrente',
+                saldo_inicial REAL DEFAULT 0,
+                ativo INTEGER DEFAULT 1,
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
         """)
     # Adiciona colunas extras se não existirem
     if USE_PG:
@@ -312,6 +335,9 @@ def init_db():
         # Migration: Plano Casal — segundo número e grupo WhatsApp
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp2 TEXT")
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS grupo_wpp_id TEXT")
+        # Migration: conta bancária vinculada a cada transação
+        conn.execute("ALTER TABLE gastos ADD COLUMN IF NOT EXISTS conta_id INTEGER")
+        conn.execute("ALTER TABLE rendas ADD COLUMN IF NOT EXISTS conta_id INTEGER")
         # Limpa dedup de mensagens antigas (> 2 horas) para não acumular
         conn.execute("DELETE FROM webhook_msgs WHERE processado_em < NOW() - INTERVAL '2 hours'")
     else:
@@ -340,6 +366,14 @@ def init_db():
             pass
         try:
             conn.execute("ALTER TABLE clientes ADD COLUMN grupo_wpp_id TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE gastos ADD COLUMN conta_id INTEGER")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE rendas ADD COLUMN conta_id INTEGER")
         except Exception:
             pass
     conn.commit()
@@ -769,7 +803,7 @@ def admin_deletar(cliente_id):
     conn = get_db()
     cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     # Remove todas as tabelas filhas antes de deletar o cliente
-    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico"):
+    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico", "contas_bancarias"):
         try:
             conn.execute(f"DELETE FROM {tabela} WHERE cliente_id=%s", (cliente_id,))
         except Exception as e:
@@ -1500,6 +1534,26 @@ def dashboard():
         "SELECT id, descricao, valor, tipo, data FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
         (cid, f"{mes}%")
     ).fetchall()
+    # Contas bancárias com saldo calculado (receitas - despesas + saldo inicial)
+    contas_raw = conn.execute(
+        "SELECT * FROM contas_bancarias WHERE cliente_id=%s AND ativo=TRUE ORDER BY nome",
+        (cid,)
+    ).fetchall()
+    contas_bancarias = []
+    for conta in contas_raw:
+        total_receitas = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s",
+            (cid, conta["id"])
+        ).fetchone()["t"]
+        total_despesas = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s",
+            (cid, conta["id"])
+        ).fetchone()["t"]
+        c = dict(conta)
+        c["saldo"] = round(float(conta["saldo_inicial"]) + float(total_receitas) - float(total_despesas), 2)
+        c["total_receitas"] = float(total_receitas)
+        c["total_despesas"] = float(total_despesas)
+        contas_bancarias.append(c)
     conn.close()
     total_renda_mes = sum(float(r["valor"]) for r in rendas_mes)
     renda_fixa_mes = sum(float(r["valor"]) for r in rendas_mes if r["tipo"] == "fixo")
@@ -1554,6 +1608,7 @@ def dashboard():
         renda_extra_mes=renda_extra_mes,
         trial_dias_restantes=trial_dias_restantes,
         kiwify_url=os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y"),
+        contas_bancarias=contas_bancarias,
     )
 
 @app.route("/debug/session")
@@ -1658,11 +1713,12 @@ def cancelar_assinatura():
 def adicionar_gasto():
     data = request.json
     cid  = session["cliente_id"]
+    conta_id = data.get("conta_id") or None
     conn = get_db()
     conn.execute(
-        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
+        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
         (cid, data["descricao"], float(data["valor"]), data["categoria"],
-         data.get("data", hoje_brasil().isoformat()), data.get("fonte", "manual"))
+         data.get("data", hoje_brasil().isoformat()), data.get("fonte", "manual"), conta_id)
     )
     conn.commit()
     conn.close()
@@ -1745,6 +1801,102 @@ def deletar_categoria(nome):
     conn.close()
     return jsonify({"ok": True})
 
+@app.route("/api/contas", methods=["GET"])
+@login_required
+def listar_contas():
+    cid = session["cliente_id"]
+    conn = get_db()
+    contas = conn.execute(
+        "SELECT * FROM contas_bancarias WHERE cliente_id=%s AND ativo=TRUE ORDER BY nome", (cid,)
+    ).fetchall()
+    result = []
+    for conta in contas:
+        receitas = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s",
+            (cid, conta["id"])
+        ).fetchone()["t"]
+        despesas = conn.execute(
+            "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s",
+            (cid, conta["id"])
+        ).fetchone()["t"]
+        c = dict(conta)
+        c["saldo"] = round(float(conta["saldo_inicial"]) + float(receitas) - float(despesas), 2)
+        result.append(c)
+    conn.close()
+    return jsonify(result)
+
+@app.route("/api/contas", methods=["POST"])
+@login_required
+def criar_conta():
+    cid = session["cliente_id"]
+    data = request.json or {}
+    nome = (data.get("nome") or "").strip()
+    tipo = data.get("tipo", "corrente")
+    saldo_inicial = float(data.get("saldo_inicial") or 0)
+    if not nome:
+        return jsonify({"erro": "Nome obrigatório"}), 400
+    if len(nome) > 60:
+        return jsonify({"erro": "Nome muito longo (máx. 60 caracteres)"}), 400
+    conn = get_db()
+    try:
+        if USE_PG:
+            row = conn.execute(
+                "INSERT INTO contas_bancarias (cliente_id, nome, tipo, saldo_inicial) VALUES (%s, %s, %s, %s) RETURNING id",
+                (cid, nome, tipo, saldo_inicial)
+            ).fetchone()
+            new_id = row["id"]
+        else:
+            conn.execute(
+                "INSERT INTO contas_bancarias (cliente_id, nome, tipo, saldo_inicial) VALUES (?, ?, ?, ?)",
+                (cid, nome, tipo, saldo_inicial)
+            )
+            new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        return jsonify({"erro": str(e)}), 500
+    conn.close()
+    return jsonify({"ok": True, "id": new_id})
+
+@app.route("/api/contas/<int:conta_id>", methods=["PUT"])
+@login_required
+def atualizar_conta(conta_id):
+    cid = session["cliente_id"]
+    data = request.json or {}
+    nome = (data.get("nome") or "").strip()
+    tipo = data.get("tipo", "corrente")
+    saldo_inicial = float(data.get("saldo_inicial") or 0)
+    if not nome:
+        return jsonify({"erro": "Nome obrigatório"}), 400
+    conn = get_db()
+    conn.execute(
+        "UPDATE contas_bancarias SET nome=%s, tipo=%s, saldo_inicial=%s WHERE id=%s AND cliente_id=%s",
+        (nome, tipo, saldo_inicial, conta_id, cid)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/contas/<int:conta_id>", methods=["DELETE"])
+@login_required
+def deletar_conta(conta_id):
+    cid = session["cliente_id"]
+    conn = get_db()
+    gastos_n = conn.execute(
+        "SELECT COUNT(*) as n FROM gastos WHERE cliente_id=%s AND conta_id=%s", (cid, conta_id)
+    ).fetchone()["n"]
+    rendas_n = conn.execute(
+        "SELECT COUNT(*) as n FROM rendas WHERE cliente_id=%s AND conta_id=%s", (cid, conta_id)
+    ).fetchone()["n"]
+    total_tx = int(gastos_n) + int(rendas_n)
+    if total_tx > 0:
+        conn.close()
+        return jsonify({"erro": f"Esta conta possui {total_tx} transação(ões) vinculada(s). Desvincule as transações antes de remover a conta."}), 400
+    conn.execute("DELETE FROM contas_bancarias WHERE id=%s AND cliente_id=%s", (conta_id, cid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 @app.route("/api/rendas", methods=["POST"])
 @login_required
 def adicionar_renda():
@@ -1754,12 +1906,13 @@ def adicionar_renda():
     valor = float(data.get("valor", 0))
     tipo = data.get("tipo", "extra")
     data_renda = data.get("data", hoje_brasil().isoformat())
+    conta_id = data.get("conta_id") or None
     if not descricao or valor <= 0:
         return jsonify({"erro": "Dados inválidos"}), 400
     conn = get_db()
     conn.execute(
-        "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
-        (cid, descricao, valor, tipo, data_renda, data.get("fonte", "manual"))
+        "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (cid, descricao, valor, tipo, data_renda, data.get("fonte", "manual"), conta_id)
     )
     conn.commit()
     conn.close()

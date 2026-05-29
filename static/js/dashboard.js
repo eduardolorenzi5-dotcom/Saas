@@ -8,11 +8,13 @@ async function addGasto() {
   const val  = document.getElementById('inp-val').value;
   const cat  = document.getElementById('inp-cat').value;
   const data = document.getElementById('inp-data').value;
+  const contaEl = document.getElementById('inp-conta');
+  const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
   if (!desc || !val || parseFloat(val) <= 0) { alert('Preencha descrição e valor.'); return; }
   const res = await fetch('/api/gastos', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ descricao: desc, valor: parseFloat(val), categoria: cat, data })
+    body: JSON.stringify({ descricao: desc, valor: parseFloat(val), categoria: cat, data, conta_id })
   });
   if (res.ok) location.reload();
 }

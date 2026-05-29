@@ -136,6 +136,7 @@
     <a onclick="showTab('visao-geral')" id="tab-btn-visao-geral" class="ativo">Visão Geral</a>
     <a onclick="showTab('visao-geral', 'transacoes')" id="tab-btn-transacoes">Transações</a>
     <a onclick="showTab('visao-geral', 'gerenciar-categorias')" id="tab-btn-categorias">Categorias</a>
+    <a onclick="showTab('contas')" id="tab-btn-contas">🏦 Contas</a>
     <a href="/assinatura">Assinatura</a>
     <a onclick="showTab('minha-conta')" id="tab-btn-minha-conta">Minha Conta</a>
   </div>
@@ -226,6 +227,26 @@
     </div>
   </div>
 
+  <!-- CONTAS BANCÁRIAS (se existirem) -->
+  {% if contas_bancarias %}
+  <div style="margin-bottom:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <span style="font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">🏦 Contas bancárias</span>
+      <a onclick="showTab('contas')" style="font-size:12px;color:#6366f1;cursor:pointer;text-decoration:none;">Gerenciar →</a>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      {% for conta in contas_bancarias %}
+      {% set tipo_icon = '🏦' if conta.tipo == 'corrente' else ('🐷' if conta.tipo == 'poupanca' else ('💳' if conta.tipo == 'carteira' else '📈')) %}
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 20px;min-width:160px;flex:1;">
+        <div style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">{{ tipo_icon }} {{ conta.nome }}</div>
+        <div style="font-size:22px;font-weight:700;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};">R$ {{ "%.2f"|format(conta.saldo) }}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">saldo atual</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- CHARTS -->
   <div class="charts-row">
     <div class="chart-card">
@@ -272,6 +293,16 @@
               {% endfor %}
             </select>
           </div>
+          {% if contas_bancarias %}
+          <div class="form-field"><label>Conta</label>
+            <select id="inp-conta">
+              <option value="">— Sem conta —</option>
+              {% for c in contas_bancarias %}
+              <option value="{{ c.id }}">{{ c.nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
           <div class="form-field"><label>Data</label><input type="date" id="inp-data"/></div>
           <button class="btn-add" onclick="addGasto()">+ Adicionar</button>
         </div>
@@ -396,6 +427,16 @@
           </div>
         </div>
         <div class="form-field"><label>Data</label><input type="date" id="renda-data"/></div>
+        {% if contas_bancarias %}
+        <div class="form-field"><label>Conta (opcional)</label>
+          <select id="renda-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#f9fafb;">
+            <option value="">— Sem conta —</option>
+            {% for c in contas_bancarias %}
+            <option value="{{ c.id }}">{{ c.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
         <button class="btn-add" onclick="addRenda()" style="width:100%;">+ Adicionar receita</button>
       </div>
     </div>
@@ -421,6 +462,77 @@
   </div>
 
 </div><!-- /tab-visao-geral -->
+
+<!-- ===== ABA: CONTAS BANCÁRIAS ===== -->
+<div id="tab-contas" style="display:none;">
+  <div class="dash-period" style="margin-bottom:24px;">
+    <h1>🏦 Contas bancárias</h1>
+  </div>
+
+  <!-- CARDS DAS CONTAS -->
+  <div id="contas-lista" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:28px;">
+    {% for conta in contas_bancarias %}
+    {% set tipo_icon = '🏦' if conta.tipo == 'corrente' else ('🐷' if conta.tipo == 'poupanca' else ('💳' if conta.tipo == 'carteira' else '📈')) %}
+    <div class="card" id="conta-card-{{ conta.id }}" style="position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div>
+          <div class="card-label">{{ tipo_icon }} {{ conta.tipo|capitalize }}</div>
+          <div style="font-size:16px;font-weight:700;color:#1a1a2e;">{{ conta.nome }}</div>
+        </div>
+        <button onclick="confirmarDeletarConta({{ conta.id }}, '{{ conta.nome }}')"
+                style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:18px;padding:0;line-height:1;" title="Remover conta">×</button>
+      </div>
+      <div style="font-size:28px;font-weight:700;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};margin-bottom:8px;">
+        R$ {{ "%.2f"|format(conta.saldo) }}
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px;color:#9ca3af;">
+        <span>▲ R$ {{ "%.2f"|format(conta.total_receitas) }}</span>
+        <span>▼ R$ {{ "%.2f"|format(conta.total_despesas) }}</span>
+      </div>
+      {% if conta.saldo_inicial != 0 %}
+      <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Saldo inicial: R$ {{ "%.2f"|format(conta.saldo_inicial) }}</div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div id="contas-vazio" style="grid-column:1/-1;text-align:center;color:#9ca3af;padding:40px 0;font-size:14px;">
+      Nenhuma conta cadastrada ainda. Adicione uma conta abaixo!
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- FORMULÁRIO NOVA CONTA -->
+  <div class="form-card" style="max-width:560px;">
+    <div class="form-card-title">+ Nova conta bancária</div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-field">
+          <label>Nome da conta</label>
+          <input type="text" id="nova-conta-nome" placeholder="Ex: Nubank, Bradesco, Carteira"/>
+        </div>
+        <div class="form-field">
+          <label>Tipo</label>
+          <select id="nova-conta-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#f9fafb;">
+            <option value="corrente">🏦 Conta Corrente</option>
+            <option value="poupanca">🐷 Poupança</option>
+            <option value="carteira">💳 Carteira / Dinheiro</option>
+            <option value="investimento">📈 Investimentos</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="max-width:260px;">
+        <label>Saldo inicial (R$)</label>
+        <input type="number" id="nova-conta-saldo" placeholder="0,00" step="0.01" min="0"/>
+        <small style="font-size:11px;color:#9ca3af;">Saldo atual da conta no momento do cadastro</small>
+      </div>
+      <button class="btn-add" onclick="adicionarConta()" style="align-self:flex-start;padding:10px 24px;">+ Cadastrar conta</button>
+    </div>
+    <div id="conta-msg" style="font-size:13px;margin-top:10px;color:#ef4444;display:none;"></div>
+  </div>
+
+  <div style="margin-top:24px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:16px 20px;font-size:13px;color:#0369a1;max-width:560px;">
+    💡 <strong>Como funciona:</strong> Ao lançar um gasto ou receita, selecione a conta correspondente. O saldo é calculado automaticamente: <em>saldo inicial + receitas − gastos</em>.
+  </div>
+</div>
 
 <!-- ===== ABA: MINHA CONTA ===== -->
 <div id="tab-minha-conta" style="display:none;">
@@ -564,14 +676,20 @@
 // ===== TAB SWITCHING =====
 function showTab(tab, anchor) {
   // Hide all tabs
-  document.getElementById('tab-visao-geral').style.display = 'none';
-  document.getElementById('tab-minha-conta').style.display = 'none';
+  ['visao-geral','minha-conta','contas'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.style.display = 'none';
+  });
   // Remove ativo from all nav buttons
   document.querySelectorAll('.topbar-nav a').forEach(a => a.classList.remove('ativo'));
   // Show selected tab
-  document.getElementById('tab-' + tab).style.display = 'block';
+  const tabEl = document.getElementById('tab-' + tab);
+  if (tabEl) tabEl.style.display = 'block';
   // Mark active button
-  const btn = document.getElementById('tab-btn-' + (tab === 'visao-geral' && anchor ? (anchor === 'transacoes' ? 'transacoes' : 'categorias') : tab === 'minha-conta' ? 'minha-conta' : 'visao-geral'));
+  const btnId = (tab === 'visao-geral' && anchor)
+    ? (anchor === 'transacoes' ? 'transacoes' : 'categorias')
+    : (tab === 'minha-conta' ? 'minha-conta' : (tab === 'contas' ? 'contas' : 'visao-geral'));
+  const btn = document.getElementById('tab-btn-' + btnId);
   if (btn) btn.classList.add('ativo');
   // Scroll to anchor if provided
   if (anchor) {
@@ -631,13 +749,41 @@ async function addRenda() {
   const val = parseFloat(document.getElementById('renda-val').value);
   const tipo = document.getElementById('renda-tipo').value;
   const data = document.getElementById('renda-data').value || new Date().toISOString().slice(0,10);
+  const contaEl = document.getElementById('renda-conta');
+  const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
   if (!desc || !val || val <= 0) { alert('Preencha descrição e valor.'); return; }
   const r = await fetch('/api/rendas', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({descricao: desc, valor: val, tipo, data, fonte: 'manual'})
+    body: JSON.stringify({descricao: desc, valor: val, tipo, data, fonte: 'manual', conta_id})
   });
   if (r.ok) { location.reload(); }
+}
+
+// CONTAS BANCÁRIAS
+async function adicionarConta() {
+  const nome = document.getElementById('nova-conta-nome').value.trim();
+  const tipo = document.getElementById('nova-conta-tipo').value;
+  const saldo_inicial = parseFloat(document.getElementById('nova-conta-saldo').value) || 0;
+  const msg = document.getElementById('conta-msg');
+  if (!nome) { msg.textContent = 'Digite um nome para a conta.'; msg.style.display='block'; return; }
+  const r = await fetch('/api/contas', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nome, tipo, saldo_inicial})
+  });
+  const data = await r.json();
+  if (!r.ok) { msg.textContent = data.erro || 'Erro ao criar conta.'; msg.style.display='block'; return; }
+  msg.style.display='none';
+  location.reload();
+}
+
+async function confirmarDeletarConta(id, nome) {
+  if (!confirm(`Remover a conta "${nome}"?\nSó é possível remover contas sem transações vinculadas.`)) return;
+  const r = await fetch(`/api/contas/${id}`, {method: 'DELETE'});
+  const data = await r.json();
+  if (!r.ok) { alert(data.erro || 'Erro ao remover conta.'); return; }
+  document.getElementById(`conta-card-${id}`)?.remove();
 }
 
 async function delRenda(id) {
