@@ -1571,7 +1571,10 @@ def dashboard():
     contas_bancarias = []
     for conta in contas_raw:
         c = dict(conta)
-        c["saldo"] = _calcular_saldo_conta(conn, cid, conta["id"], conta["saldo_inicial"])
+        calc = _calcular_saldo_conta(conn, cid, conta["id"], conta["saldo_inicial"])
+        c["saldo"] = calc["saldo"]
+        c["total_receitas"] = calc["total_receitas"]
+        c["total_despesas"] = calc["total_despesas"]
         contas_bancarias.append(c)
     # Últimas transferências
     transferencias_recentes = conn.execute("""
@@ -1833,7 +1836,7 @@ def deletar_categoria(nome):
     return jsonify({"ok": True})
 
 def _calcular_saldo_conta(conn, cliente_id, conta_id, saldo_inicial):
-    """Saldo = inicial + receitas + transferências recebidas - gastos - transferências enviadas."""
+    """Retorna dict com saldo, total_receitas e total_despesas."""
     receitas = float(conn.execute(
         "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s",
         (cliente_id, conta_id)
@@ -1850,7 +1853,8 @@ def _calcular_saldo_conta(conn, cliente_id, conta_id, saldo_inicial):
         "SELECT COALESCE(SUM(valor),0) as t FROM transferencias WHERE cliente_id=%s AND conta_origem_id=%s",
         (cliente_id, conta_id)
     ).fetchone()["t"])
-    return round(float(saldo_inicial) + receitas + entradas - despesas - saidas, 2)
+    saldo = round(float(saldo_inicial) + receitas + entradas - despesas - saidas, 2)
+    return {"saldo": saldo, "total_receitas": round(receitas, 2), "total_despesas": round(despesas, 2)}
 
 @app.route("/api/contas", methods=["GET"])
 @login_required
@@ -1863,7 +1867,10 @@ def listar_contas():
     result = []
     for conta in contas:
         c = dict(conta)
-        c["saldo"] = _calcular_saldo_conta(conn, cid, conta["id"], conta["saldo_inicial"])
+        calc = _calcular_saldo_conta(conn, cid, conta["id"], conta["saldo_inicial"])
+        c["saldo"] = calc["saldo"]
+        c["total_receitas"] = calc["total_receitas"]
+        c["total_despesas"] = calc["total_despesas"]
         result.append(c)
     conn.close()
     return jsonify(result)
