@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   const inp = document.getElementById('inp-data');
   if (inp) inp.valueAsDate = new Date();
+  const txData = document.getElementById('tx-data');
+  if (txData) txData.valueAsDate = new Date();
 });
 
 async function addGasto() {

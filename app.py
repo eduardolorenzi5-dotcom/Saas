@@ -205,6 +205,22 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        # Tabela de transferências entre contas
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transferencias (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                conta_origem_id INTEGER NOT NULL,
+                conta_destino_id INTEGER NOT NULL,
+                valor REAL NOT NULL,
+                descricao TEXT DEFAULT 'Transferência',
+                data TEXT NOT NULL,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                FOREIGN KEY (conta_origem_id) REFERENCES contas_bancarias(id),
+                FOREIGN KEY (conta_destino_id) REFERENCES contas_bancarias(id)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -316,6 +332,19 @@ def init_db():
                 ativo INTEGER DEFAULT 1,
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
+            CREATE TABLE IF NOT EXISTS transferencias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                conta_origem_id INTEGER NOT NULL,
+                conta_destino_id INTEGER NOT NULL,
+                valor REAL NOT NULL,
+                descricao TEXT DEFAULT 'Transferência',
+                data TEXT NOT NULL,
+                criado_em TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                FOREIGN KEY (conta_origem_id) REFERENCES contas_bancarias(id),
+                FOREIGN KEY (conta_destino_id) REFERENCES contas_bancarias(id)
             );
         """)
     # Adiciona colunas extras se não existirem
@@ -803,7 +832,7 @@ def admin_deletar(cliente_id):
     conn = get_db()
     cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     # Remove todas as tabelas filhas antes de deletar o cliente
-    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico", "contas_bancarias"):
+    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico", "transferencias", "contas_bancarias"):
         try:
             conn.execute(f"DELETE FROM {tabela} WHERE cliente_id=%s", (cliente_id,))
         except Exception as e:
@@ -1541,19 +1570,20 @@ def dashboard():
     ).fetchall()
     contas_bancarias = []
     for conta in contas_raw:
-        total_receitas = conn.execute(
-            "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s",
-            (cid, conta["id"])
-        ).fetchone()["t"]
-        total_despesas = conn.execute(
-            "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s",
-            (cid, conta["id"])
-        ).fetchone()["t"]
         c = dict(conta)
-        c["saldo"] = round(float(conta["saldo_inicial"]) + float(total_receitas) - float(total_despesas), 2)
-        c["total_receitas"] = float(total_receitas)
-        c["total_despesas"] = float(total_despesas)
+        c["saldo"] = _calcular_saldo_conta(conn, cid, conta["id"], conta["saldo_inicial"])
         contas_bancarias.append(c)
+    # Últimas transferências
+    transferencias_recentes = conn.execute("""
+        SELECT t.id, t.valor, t.descricao, t.data,
+               o.nome as origem_nome, d.nome as destino_nome
+        FROM transferencias t
+        JOIN contas_bancarias o ON t.conta_origem_id = o.id
+        JOIN contas_bancarias d ON t.conta_destino_id = d.id
+        WHERE t.cliente_id=%s
+        ORDER BY t.data DESC, t.criado_em DESC
+        LIMIT 20
+    """, (cid,)).fetchall()
     conn.close()
     total_renda_mes = sum(float(r["valor"]) for r in rendas_mes)
     renda_fixa_mes = sum(float(r["valor"]) for r in rendas_mes if r["tipo"] == "fixo")
@@ -1609,6 +1639,7 @@ def dashboard():
         trial_dias_restantes=trial_dias_restantes,
         kiwify_url=os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y"),
         contas_bancarias=contas_bancarias,
+        transferencias_recentes=transferencias_recentes,
     )
 
 @app.route("/debug/session")
@@ -1801,6 +1832,26 @@ def deletar_categoria(nome):
     conn.close()
     return jsonify({"ok": True})
 
+def _calcular_saldo_conta(conn, cliente_id, conta_id, saldo_inicial):
+    """Saldo = inicial + receitas + transferências recebidas - gastos - transferências enviadas."""
+    receitas = float(conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s",
+        (cliente_id, conta_id)
+    ).fetchone()["t"])
+    despesas = float(conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s",
+        (cliente_id, conta_id)
+    ).fetchone()["t"])
+    entradas = float(conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM transferencias WHERE cliente_id=%s AND conta_destino_id=%s",
+        (cliente_id, conta_id)
+    ).fetchone()["t"])
+    saidas = float(conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM transferencias WHERE cliente_id=%s AND conta_origem_id=%s",
+        (cliente_id, conta_id)
+    ).fetchone()["t"])
+    return round(float(saldo_inicial) + receitas + entradas - despesas - saidas, 2)
+
 @app.route("/api/contas", methods=["GET"])
 @login_required
 def listar_contas():
@@ -1811,16 +1862,8 @@ def listar_contas():
     ).fetchall()
     result = []
     for conta in contas:
-        receitas = conn.execute(
-            "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s",
-            (cid, conta["id"])
-        ).fetchone()["t"]
-        despesas = conn.execute(
-            "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s",
-            (cid, conta["id"])
-        ).fetchone()["t"]
         c = dict(conta)
-        c["saldo"] = round(float(conta["saldo_inicial"]) + float(receitas) - float(despesas), 2)
+        c["saldo"] = _calcular_saldo_conta(conn, cid, conta["id"], conta["saldo_inicial"])
         result.append(c)
     conn.close()
     return jsonify(result)
@@ -1901,6 +1944,76 @@ def deletar_conta(conta_id):
         conn.close()
         return jsonify({"erro": f"Esta conta possui {total_tx} transação(ões) vinculada(s). Desvincule as transações antes de remover a conta."}), 400
     conn.execute("DELETE FROM contas_bancarias WHERE id=%s AND cliente_id=%s", (conta_id, cid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/transferencias", methods=["GET"])
+@login_required
+def listar_transferencias():
+    cid = session["cliente_id"]
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT t.id, t.valor, t.descricao, t.data, t.criado_em,
+               o.nome as origem_nome, d.nome as destino_nome
+        FROM transferencias t
+        JOIN contas_bancarias o ON t.conta_origem_id = o.id
+        JOIN contas_bancarias d ON t.conta_destino_id = d.id
+        WHERE t.cliente_id=%s
+        ORDER BY t.data DESC, t.criado_em DESC
+        LIMIT 50
+    """, (cid,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/transferencias", methods=["POST"])
+@login_required
+def criar_transferencia():
+    cid = session["cliente_id"]
+    data = request.json or {}
+    origem_id = data.get("conta_origem_id")
+    destino_id = data.get("conta_destino_id")
+    valor = float(data.get("valor") or 0)
+    descricao = (data.get("descricao") or "Transferência").strip()
+    data_tx = data.get("data", hoje_brasil().isoformat())
+    if not origem_id or not destino_id:
+        return jsonify({"erro": "Selecione as contas de origem e destino"}), 400
+    if origem_id == destino_id:
+        return jsonify({"erro": "Origem e destino não podem ser a mesma conta"}), 400
+    if valor <= 0:
+        return jsonify({"erro": "Valor inválido"}), 400
+    conn = get_db()
+    # Verifica se as contas pertencem ao cliente
+    for cid_conta in [origem_id, destino_id]:
+        ok = conn.execute(
+            "SELECT id FROM contas_bancarias WHERE id=%s AND cliente_id=%s AND ativo=TRUE",
+            (cid_conta, cid)
+        ).fetchone()
+        if not ok:
+            conn.close()
+            return jsonify({"erro": "Conta inválida"}), 400
+    if USE_PG:
+        row = conn.execute(
+            "INSERT INTO transferencias (cliente_id, conta_origem_id, conta_destino_id, valor, descricao, data) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+            (cid, origem_id, destino_id, valor, descricao, data_tx)
+        ).fetchone()
+        new_id = row["id"]
+    else:
+        conn.execute(
+            "INSERT INTO transferencias (cliente_id, conta_origem_id, conta_destino_id, valor, descricao, data) VALUES (?,?,?,?,?,?)",
+            (cid, origem_id, destino_id, valor, descricao, data_tx)
+        )
+        new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "id": new_id})
+
+@app.route("/api/transferencias/<int:tx_id>", methods=["DELETE"])
+@login_required
+def deletar_transferencia(tx_id):
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("DELETE FROM transferencias WHERE id=%s AND cliente_id=%s", (tx_id, cid))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
