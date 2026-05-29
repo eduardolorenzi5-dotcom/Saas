@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (inp) inp.valueAsDate = new Date();
   const txData = document.getElementById('tx-data');
   if (txData) txData.valueAsDate = new Date();
+  const parcData = document.getElementById('parc-data');
+  if (parcData) parcData.valueAsDate = new Date();
 });
 
 async function addGasto() {

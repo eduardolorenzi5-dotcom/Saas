@@ -221,6 +221,23 @@ def init_db():
                 FOREIGN KEY (conta_destino_id) REFERENCES contas_bancarias(id)
             )
         """)
+        # Parcelamentos: compras parceladas com débito automático mensal
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS parcelamentos (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor_parcela REAL NOT NULL,
+                num_parcelas INTEGER NOT NULL,
+                parcelas_pagas INTEGER DEFAULT 0,
+                data_primeira TEXT NOT NULL,
+                categoria TEXT DEFAULT 'Outros',
+                conta_id INTEGER,
+                ativo BOOLEAN DEFAULT TRUE,
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            )
+        """)
     else:
         conn._raw.executescript("""
             CREATE TABLE IF NOT EXISTS planos (
@@ -346,6 +363,19 @@ def init_db():
                 FOREIGN KEY (conta_origem_id) REFERENCES contas_bancarias(id),
                 FOREIGN KEY (conta_destino_id) REFERENCES contas_bancarias(id)
             );
+            CREATE TABLE IF NOT EXISTS parcelamentos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cliente_id INTEGER NOT NULL,
+                descricao TEXT NOT NULL,
+                valor_parcela REAL NOT NULL,
+                num_parcelas INTEGER NOT NULL,
+                parcelas_pagas INTEGER DEFAULT 0,
+                data_primeira TEXT NOT NULL,
+                categoria TEXT DEFAULT 'Outros',
+                conta_id INTEGER,
+                ativo INTEGER DEFAULT 1,
+                criado_em TEXT DEFAULT (datetime('now'))
+            );
         """)
     # Adiciona colunas extras se não existirem
     if USE_PG:
@@ -367,6 +397,10 @@ def init_db():
         # Migration: conta bancária vinculada a cada transação
         conn.execute("ALTER TABLE gastos ADD COLUMN IF NOT EXISTS conta_id INTEGER")
         conn.execute("ALTER TABLE rendas ADD COLUMN IF NOT EXISTS conta_id INTEGER")
+        # Migration: débito automático e categoria nas contas mensais
+        conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS auto_debitar BOOLEAN DEFAULT TRUE")
+        conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS conta_id INTEGER")
+        conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Outros'")
         # Limpa dedup de mensagens antigas (> 2 horas) para não acumular
         conn.execute("DELETE FROM webhook_msgs WHERE processado_em < NOW() - INTERVAL '2 hours'")
     else:
@@ -832,7 +866,7 @@ def admin_deletar(cliente_id):
     conn = get_db()
     cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     # Remove todas as tabelas filhas antes de deletar o cliente
-    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico", "transferencias", "contas_bancarias"):
+    for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "rendas", "conversa_historico", "transferencias", "parcelamentos", "contas_mensais", "contas_pagamentos", "contas_bancarias"):
         try:
             conn.execute(f"DELETE FROM {tabela} WHERE cliente_id=%s", (cliente_id,))
         except Exception as e:
@@ -1587,6 +1621,58 @@ def dashboard():
         ORDER BY t.data DESC, t.criado_em DESC
         LIMIT 20
     """, (cid,)).fetchall()
+    # Parcelamentos ativos
+    parcelamentos_raw = conn.execute(
+        "SELECT * FROM parcelamentos WHERE cliente_id=%s ORDER BY criado_em DESC", (cid,)
+    ).fetchall()
+    parcelamentos = []
+    from datetime import date as _date_d, timedelta as _td_d
+    hoje_d = hoje_brasil()
+    for p in parcelamentos_raw:
+        p = dict(p)
+        proxima_num = p["parcelas_pagas"] + 1
+        if p["parcelas_pagas"] < p["num_parcelas"] and p["ativo"]:
+            p["proxima_data"] = calcular_data_parcela(p["data_primeira"], proxima_num).isoformat()
+        else:
+            p["proxima_data"] = None
+        parcelamentos.append(p)
+    # Contas mensais ativas
+    contas_mensais_ativas = conn.execute(
+        "SELECT * FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_vencimento", (cid,)
+    ).fetchall()
+    # Próximos débitos (próximos 30 dias)
+    proximos_debitos = []
+    limite = hoje_d + _td_d(days=30)
+    for cm in contas_mensais_ativas:
+        cm = dict(cm)
+        # Tenta calcular data de vencimento neste mês e no próximo
+        for delta_mes in (0, 1):
+            from datetime import date as _dd
+            import calendar as _cal2
+            m = hoje_d.month + delta_mes
+            y = hoje_d.year + (m - 1) // 12
+            m = ((m - 1) % 12) + 1
+            ultimo = _cal2.monthrange(y, m)[1]
+            dia = min(cm["dia_vencimento"], ultimo)
+            dt = _dd(y, m, dia)
+            if hoje_d <= dt <= limite:
+                proximos_debitos.append({
+                    "tipo": "mensal", "descricao": cm["descricao"],
+                    "valor": float(cm["valor"]) if cm["valor"] else None,
+                    "data": dt.isoformat(), "id": cm["id"]
+                })
+                break
+    for p in parcelamentos:
+        if not p["proxima_data"]:
+            continue
+        dt = _date_d.fromisoformat(p["proxima_data"])
+        if hoje_d <= dt <= limite:
+            proximos_debitos.append({
+                "tipo": "parcela", "descricao": f"{p['descricao']} {p['parcelas_pagas']+1}/{p['num_parcelas']}",
+                "valor": float(p["valor_parcela"]),
+                "data": p["proxima_data"], "id": p["id"]
+            })
+    proximos_debitos.sort(key=lambda x: x["data"])
     conn.close()
     total_renda_mes = sum(float(r["valor"]) for r in rendas_mes)
     renda_fixa_mes = sum(float(r["valor"]) for r in rendas_mes if r["tipo"] == "fixo")
@@ -1643,6 +1729,9 @@ def dashboard():
         kiwify_url=os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y"),
         contas_bancarias=contas_bancarias,
         transferencias_recentes=transferencias_recentes,
+        parcelamentos=parcelamentos,
+        contas_mensais_ativas=contas_mensais_ativas,
+        proximos_debitos=proximos_debitos,
     )
 
 @app.route("/debug/session")
@@ -2621,7 +2710,319 @@ def gerar_relatorio(cliente_id):
 with app.app_context():
     init_db()
 
+# ── PARCELAMENTOS ────────────────────────────────────────────────────────────
+
+@app.route("/api/parcelamentos", methods=["GET"])
+@login_required
+def listar_parcelamentos():
+    cid = session["cliente_id"]
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM parcelamentos WHERE cliente_id=%s ORDER BY criado_em DESC", (cid,)
+    ).fetchall()
+    conn.close()
+    result = []
+    for p in rows:
+        p = dict(p)
+        # Calcula próxima data de vencimento
+        proxima_num = p["parcelas_pagas"] + 1
+        if p["parcelas_pagas"] < p["num_parcelas"] and p["ativo"]:
+            p["proxima_data"] = calcular_data_parcela(p["data_primeira"], proxima_num).isoformat()
+        else:
+            p["proxima_data"] = None
+        result.append(p)
+    return jsonify(result)
+
+@app.route("/api/parcelamentos", methods=["POST"])
+@login_required
+def criar_parcelamento():
+    cid  = session["cliente_id"]
+    data = request.json or {}
+    descricao    = (data.get("descricao") or "").strip()
+    valor_parcela = float(data.get("valor_parcela") or 0)
+    num_parcelas  = int(data.get("num_parcelas") or 0)
+    data_primeira = data.get("data_primeira") or hoje_brasil().isoformat()
+    categoria     = data.get("categoria") or "Outros"
+    conta_id      = data.get("conta_id") or None
+    if not descricao or valor_parcela <= 0 or num_parcelas < 1:
+        return jsonify({"erro": "Dados inválidos. Informe descrição, valor e número de parcelas."}), 400
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO parcelamentos (cliente_id, descricao, valor_parcela, num_parcelas, data_primeira, categoria, conta_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        (cid, descricao, valor_parcela, num_parcelas, data_primeira, categoria, conta_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/parcelamentos/<int:pid>", methods=["DELETE"])
+@login_required
+def cancelar_parcelamento(pid):
+    cid = session["cliente_id"]
+    conn = get_db()
+    p = conn.execute("SELECT * FROM parcelamentos WHERE id=%s AND cliente_id=%s", (pid, cid)).fetchone()
+    if not p:
+        conn.close()
+        return jsonify({"erro": "Não encontrado"}), 404
+    conn.execute("UPDATE parcelamentos SET ativo=FALSE WHERE id=%s", (pid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+# ── CONTAS MENSAIS (API REST) ─────────────────────────────────────────────────
+
+@app.route("/api/contas-mensais", methods=["GET"])
+@login_required
+def listar_contas_mensais_api():
+    cid = session["cliente_id"]
+    mes_str = hoje_brasil().strftime("%Y-%m")
+    conn = get_db()
+    contas = conn.execute(
+        "SELECT * FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_vencimento", (cid,)
+    ).fetchall()
+    pagas_ids = {r["conta_id"] for r in conn.execute(
+        "SELECT conta_id FROM contas_pagamentos WHERE cliente_id=%s AND mes=%s AND conta_id IS NOT NULL",
+        (cid, mes_str)
+    ).fetchall()}
+    conn.close()
+    result = []
+    for c in contas:
+        c = dict(c)
+        c["pago_este_mes"] = c["id"] in pagas_ids
+        result.append(c)
+    return jsonify(result)
+
+@app.route("/api/contas-mensais", methods=["POST"])
+@login_required
+def criar_conta_mensal_api():
+    cid  = session["cliente_id"]
+    data = request.json or {}
+    descricao      = (data.get("descricao") or "").strip()
+    valor          = float(data.get("valor") or 0) or None
+    dia_vencimento = int(data.get("dia_vencimento") or 1)
+    dia_vencimento = max(1, min(31, dia_vencimento))
+    categoria      = data.get("categoria") or "Outros"
+    conta_id       = data.get("conta_id") or None
+    auto_debitar   = bool(data.get("auto_debitar", True))
+    if not descricao:
+        return jsonify({"erro": "Informe a descrição."}), 400
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        (cid, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/contas-mensais/<int:cid_>", methods=["DELETE"])
+@login_required
+def deletar_conta_mensal_api(cid_):
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("UPDATE contas_mensais SET ativo=FALSE WHERE id=%s AND cliente_id=%s", (cid_, cid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 # ── THREAD DE LEMBRETES ──────────────────────────────────────────────────────
+def calcular_data_parcela(data_primeira_str, numero_parcela):
+    """Retorna date da parcela N (1-indexed). Datas subsequentes: mesmo dia, meses seguintes."""
+    import calendar as _cal
+    from datetime import date as _date
+    primeira = _date.fromisoformat(data_primeira_str)
+    if numero_parcela == 1:
+        return primeira
+    total_mes = primeira.month + (numero_parcela - 1)
+    ano = primeira.year + (total_mes - 1) // 12
+    mes = ((total_mes - 1) % 12) + 1
+    ultimo_dia = _cal.monthrange(ano, mes)[1]
+    return _date(ano, mes, min(primeira.day, ultimo_dia))
+
+# Set de datas onde o auto-debit já rodou (evita duplicatas na mesma execução)
+_debitos_auto_datas: set = set()
+
+def _executar_debitos_automaticos(conn, data_atual_str, dia_mes):
+    """Debita automaticamente contas mensais e parcelas cujo vencimento é hoje."""
+    import logging
+    try:
+        from agente.agente import enviar_whatsapp
+    except Exception:
+        enviar_whatsapp = None
+
+    mes_str = data_atual_str[:7]  # YYYY-MM
+    dd_mm_yyyy = f"{data_atual_str[8:10]}/{data_atual_str[5:7]}/{data_atual_str[0:4]}"
+
+    # ── 1. CONTAS MENSAIS com auto_debitar = TRUE e vencimento hoje ──────────
+    try:
+        if USE_PG:
+            contas = conn.execute("""
+                SELECT cm.id, cm.cliente_id, cm.descricao, cm.valor,
+                       cm.conta_id, cm.categoria, c.whatsapp, c.nome as cliente_nome
+                FROM contas_mensais cm
+                JOIN clientes c ON cm.cliente_id = c.id
+                WHERE cm.ativo = TRUE AND cm.auto_debitar = TRUE
+                  AND cm.dia_vencimento = %s AND cm.valor IS NOT NULL
+                  AND c.status = 'ativo'
+            """, (dia_mes,)).fetchall()
+        else:
+            contas = conn.execute("""
+                SELECT cm.id, cm.cliente_id, cm.descricao, cm.valor,
+                       cm.conta_id, cm.categoria, c.whatsapp, c.nome as cliente_nome
+                FROM contas_mensais cm
+                JOIN clientes c ON cm.cliente_id = c.id
+                WHERE cm.ativo = 1 AND cm.auto_debitar = 1
+                  AND cm.dia_vencimento = ? AND cm.valor IS NOT NULL
+                  AND c.status = 'ativo'
+            """, (dia_mes,)).fetchall()
+
+        for cm in contas:
+            try:
+                # Verifica se já foi debitada este mês (contas_pagamentos com fonte='auto')
+                if USE_PG:
+                    ja_debitado = conn.execute(
+                        "SELECT id FROM contas_pagamentos WHERE cliente_id=%s AND conta_id=%s AND mes=%s",
+                        (cm["cliente_id"], cm["id"], mes_str)
+                    ).fetchone()
+                else:
+                    ja_debitado = conn.execute(
+                        "SELECT id FROM contas_pagamentos WHERE cliente_id=? AND conta_id=? AND mes=?",
+                        (cm["cliente_id"], cm["id"], mes_str)
+                    ).fetchone()
+                if ja_debitado:
+                    continue
+
+                categoria = cm["categoria"] or "Outros"
+                # Cria o gasto
+                if USE_PG:
+                    conn.execute(
+                        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (cm["cliente_id"], cm["descricao"], float(cm["valor"]), categoria, data_atual_str, "auto", cm["conta_id"])
+                    )
+                    conn.execute(
+                        "INSERT INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING",
+                        (cm["cliente_id"], cm["id"], cm["descricao"], mes_str)
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (?,?,?,?,?,?,?)",
+                        (cm["cliente_id"], cm["descricao"], float(cm["valor"]), categoria, data_atual_str, "auto", cm["conta_id"])
+                    )
+                    conn.execute(
+                        "INSERT OR IGNORE INTO contas_pagamentos (cliente_id, conta_id, descricao, mes) VALUES (?,?,?,?)",
+                        (cm["cliente_id"], cm["id"], cm["descricao"], mes_str)
+                    )
+                conn.commit()
+                logging.info(f"[AUTO-DEBIT] Conta mensal '{cm['descricao']}' debitada p/ cliente {cm['cliente_id']}")
+
+                if enviar_whatsapp and cm["whatsapp"]:
+                    enviar_whatsapp(cm["whatsapp"],
+                        f"💳 *Débito automático registrado!*\n\n"
+                        f"📋 {cm['descricao']}\n"
+                        f"💲 R$ {float(cm['valor']):.2f}\n"
+                        f"📅 {dd_mm_yyyy}\n\n"
+                        f"_Lançado automaticamente pelo Controla Fácil_ ✅\n"
+                        f"Acesse o dashboard para ver o extrato."
+                    )
+            except Exception as e:
+                logging.error(f"[AUTO-DEBIT] Erro conta_mensal {cm['id']}: {e}")
+                try: conn._raw.rollback()
+                except Exception: pass
+    except Exception as e:
+        logging.error(f"[AUTO-DEBIT] Erro ao buscar contas_mensais: {e}")
+
+    # ── 2. PARCELAMENTOS ─────────────────────────────────────────────────────
+    try:
+        if USE_PG:
+            parc_list = conn.execute("""
+                SELECT p.id, p.cliente_id, p.descricao, p.valor_parcela,
+                       p.num_parcelas, p.parcelas_pagas, p.data_primeira,
+                       p.categoria, p.conta_id, c.whatsapp
+                FROM parcelamentos p
+                JOIN clientes c ON p.cliente_id = c.id
+                WHERE p.ativo = TRUE AND p.parcelas_pagas < p.num_parcelas
+                  AND c.status = 'ativo'
+            """).fetchall()
+        else:
+            parc_list = conn.execute("""
+                SELECT p.id, p.cliente_id, p.descricao, p.valor_parcela,
+                       p.num_parcelas, p.parcelas_pagas, p.data_primeira,
+                       p.categoria, p.conta_id, c.whatsapp
+                FROM parcelamentos p
+                JOIN clientes c ON p.cliente_id = c.id
+                WHERE p.ativo = 1 AND p.parcelas_pagas < p.num_parcelas
+                  AND c.status = 'ativo'
+            """).fetchall()
+
+        from datetime import date as _date
+        hoje_d = _date.fromisoformat(data_atual_str)
+
+        for p in parc_list:
+            try:
+                proxima = p["parcelas_pagas"] + 1
+                data_parcela = calcular_data_parcela(p["data_primeira"], proxima)
+                if data_parcela != hoje_d:
+                    continue
+
+                # Incrementa atomicamente para evitar duplicata
+                if USE_PG:
+                    cur = conn.execute(
+                        "UPDATE parcelamentos SET parcelas_pagas = parcelas_pagas + 1 WHERE id=%s AND parcelas_pagas=%s",
+                        (p["id"], p["parcelas_pagas"])
+                    )
+                else:
+                    cur = conn.execute(
+                        "UPDATE parcelamentos SET parcelas_pagas = parcelas_pagas + 1 WHERE id=? AND parcelas_pagas=?",
+                        (p["id"], p["parcelas_pagas"])
+                    )
+                if cur.rowcount == 0:
+                    continue  # outro processo já registrou
+
+                nova_pagas = proxima
+                if nova_pagas >= p["num_parcelas"]:
+                    if USE_PG:
+                        conn.execute("UPDATE parcelamentos SET ativo=FALSE WHERE id=%s", (p["id"],))
+                    else:
+                        conn.execute("UPDATE parcelamentos SET ativo=0 WHERE id=?", (p["id"],))
+
+                desc_parcela = f"{p['descricao']} {nova_pagas}/{p['num_parcelas']}"
+                categoria = p["categoria"] or "Outros"
+                if USE_PG:
+                    conn.execute(
+                        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (p["cliente_id"], desc_parcela, float(p["valor_parcela"]), categoria, data_atual_str, "auto", p["conta_id"])
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (?,?,?,?,?,?,?)",
+                        (p["cliente_id"], desc_parcela, float(p["valor_parcela"]), categoria, data_atual_str, "auto", p["conta_id"])
+                    )
+                conn.commit()
+                logging.info(f"[AUTO-DEBIT] Parcela {nova_pagas}/{p['num_parcelas']} de '{p['descricao']}' p/ cliente {p['cliente_id']}")
+
+                if enviar_whatsapp and p["whatsapp"]:
+                    restam = p["num_parcelas"] - nova_pagas
+                    if restam == 0:
+                        status_msg = "🎉 *Última parcela quitada! Parabéns!*"
+                    elif restam == 1:
+                        status_msg = f"Falta apenas *1 parcela*."
+                    else:
+                        status_msg = f"Restam *{restam} parcelas*."
+                    enviar_whatsapp(p["whatsapp"],
+                        f"💳 *Parcela debitada automaticamente!*\n\n"
+                        f"🛍️ {p['descricao']}\n"
+                        f"📊 Parcela *{nova_pagas}/{p['num_parcelas']}*\n"
+                        f"💲 R$ {float(p['valor_parcela']):.2f}\n"
+                        f"📅 {dd_mm_yyyy}\n\n"
+                        f"{status_msg}"
+                    )
+            except Exception as e:
+                logging.error(f"[AUTO-DEBIT] Erro parcelamento {p['id']}: {e}")
+                try: conn._raw.rollback()
+                except Exception: pass
+    except Exception as e:
+        logging.error(f"[AUTO-DEBIT] Erro ao buscar parcelamentos: {e}")
+
 def _verificar_lembretes():
     """Roda em background, verifica lembretes a cada minuto e envia via WhatsApp."""
     import time as _time
@@ -2638,6 +3039,16 @@ def _verificar_lembretes():
                 conn = get_db()
                 ph = "%s" if USE_PG else "?"
                 dia_mes_atual = int(agora.strftime("%d"))
+                # ── Débitos automáticos (roda UMA vez por dia) ──────────────
+                if data_atual not in _debitos_auto_datas:
+                    try:
+                        _executar_debitos_automaticos(conn, data_atual, dia_mes_atual)
+                        _debitos_auto_datas.add(data_atual)
+                        if len(_debitos_auto_datas) > 60:
+                            _debitos_auto_datas.clear()
+                    except Exception as _e_da:
+                        logging.error(f"[AUTO-DEBIT] Erro geral: {_e_da}")
+
                 lembretes = conn.execute(f"""
                     SELECT l.id, l.mensagem, l.hora, l.recorrente, l.dia_mes,
                            l.ultimo_envio, c.whatsapp, c.nome

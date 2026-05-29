@@ -279,6 +279,32 @@
   </div>
   {% endif %}
 
+  <!-- PRÓXIMOS DÉBITOS AUTOMÁTICOS -->
+  {% if proximos_debitos %}
+  <div style="margin-bottom:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <span style="font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">⏰ Próximos débitos (30 dias)</span>
+      <a onclick="showTab('contas')" style="font-size:12px;color:#6366f1;cursor:pointer;text-decoration:none;">Ver todos →</a>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      {% for d in proximos_debitos[:5] %}
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 16px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:16px;">{{ '🔄' if d.tipo == 'mensal' else '📦' }}</span>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#1a1a2e;">{{ d.descricao }}</div>
+            <div style="font-size:11px;color:#9ca3af;">{{ d.data[8:10] }}/{{ d.data[5:7] }}/{{ d.data[0:4] }}</div>
+          </div>
+        </div>
+        {% if d.valor %}
+        <span style="font-size:13px;font-weight:700;color:#dc2626;">R$ {{ "%.2f"|format(d.valor) }}</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- CHARTS -->
   <div class="charts-row">
     <div class="chart-card">
@@ -630,6 +656,145 @@
   <div style="margin-top:24px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:16px 20px;font-size:13px;color:#0369a1;max-width:560px;">
     💡 <strong>Como funciona:</strong> Ao lançar um gasto ou receita, selecione a conta correspondente. O saldo é calculado automaticamente: <em>saldo inicial + receitas + transferências recebidas − gastos − transferências enviadas</em>.
   </div>
+
+  <!-- CONTAS MENSAIS (DÉBITOS AUTOMÁTICOS) -->
+  <div style="margin-top:36px;max-width:760px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h2 style="font-size:16px;font-weight:700;color:#1a1a2e;">🔄 Débitos automáticos mensais</h2>
+      <button onclick="document.getElementById('form-nova-conta-mensal').style.display=document.getElementById('form-nova-conta-mensal').style.display==='none'?'block':'none'"
+              style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
+    </div>
+
+    {% if contas_mensais_ativas %}
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+      {% for cm in contas_mensais_ativas %}
+      <div id="cm-{{ cm.id }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#1a1a2e;">{{ cm.descricao }}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Todo dia <strong>{{ cm.dia_vencimento }}</strong> · {{ cm.categoria or 'Outros' }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          {% if cm.valor %}<span style="font-size:15px;font-weight:700;color:#dc2626;">R$ {{ "%.2f"|format(cm.valor) }}</span>{% endif %}
+          <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">AUTO</span>
+          <button onclick="deletarContaMensal({{ cm.id }})" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Remover">×</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="color:#9ca3af;font-size:13px;padding:16px 0;text-align:center;">
+      Nenhum débito automático cadastrado. Clique em "+ Novo" ou diga no WhatsApp:<br>
+      <em>"energia 100 reais todo dia 10"</em>
+    </div>
+    {% endif %}
+
+    <!-- Formulário nova conta mensal -->
+    <div id="form-nova-conta-mensal" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-top:8px;">
+      <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">+ Nova conta mensal</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-field"><label>Descrição</label><input type="text" id="cm-desc" placeholder="Ex: Energia, Aluguel"/></div>
+        <div class="form-field"><label>Valor (R$)</label><input type="number" id="cm-valor" placeholder="100,00" step="0.01" min="0.01"/></div>
+        <div class="form-field"><label>Dia do mês</label><input type="number" id="cm-dia" placeholder="10" min="1" max="31"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="form-field">
+          <label>Categoria</label>
+          <select id="cm-cat" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            {% for c in cats_usuario %}<option value="{{ c.nome }}">{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        {% if contas_bancarias %}
+        <div class="form-field">
+          <label>Conta bancária (opcional)</label>
+          <select id="cm-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="">— Nenhuma —</option>
+            {% for c in contas_bancarias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div id="cm-msg" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
+      <button class="btn-add" onclick="salvarContaMensal()" style="padding:9px 20px;">💾 Salvar débito automático</button>
+    </div>
+  </div>
+
+  <!-- PARCELAMENTOS -->
+  <div style="margin-top:36px;max-width:760px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h2 style="font-size:16px;font-weight:700;color:#1a1a2e;">📦 Parcelamentos</h2>
+      <button onclick="document.getElementById('form-novo-parcelamento').style.display=document.getElementById('form-novo-parcelamento').style.display==='none'?'block':'none'"
+              style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;color:#374151;">+ Novo</button>
+    </div>
+
+    {% if parcelamentos %}
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+      {% for p in parcelamentos %}
+      {% set restam = p.num_parcelas - p.parcelas_pagas %}
+      <div id="parc-{{ p.id }}" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;">{{ p.descricao }}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px;">
+              {{ p.parcelas_pagas }}/{{ p.num_parcelas }} parcelas · R$ {{ "%.2f"|format(p.valor_parcela) }}/mês
+              {% if p.proxima_data %} · próxima: {{ p.proxima_data[8:10] }}/{{ p.proxima_data[5:7] }}/{{ p.proxima_data[0:4] }}{% endif %}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            {% if not p.ativo or p.parcelas_pagas >= p.num_parcelas %}
+              <span style="font-size:10px;background:#dcfce7;color:#16a34a;border-radius:100px;padding:2px 8px;font-weight:600;">QUITADO</span>
+            {% else %}
+              <span style="font-size:10px;background:#fef3c7;color:#d97706;border-radius:100px;padding:2px 8px;font-weight:600;">{{ restam }} restam</span>
+              <button onclick="cancelarParcelamento({{ p.id }}, '{{ p.descricao }}')" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;padding:0;" title="Cancelar parcelas restantes">×</button>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Barra de progresso -->
+        {% if p.num_parcelas > 0 %}
+        <div style="margin-top:10px;background:#f3f4f6;border-radius:100px;height:6px;overflow:hidden;">
+          <div style="width:{{ (p.parcelas_pagas / p.num_parcelas * 100)|round(0) }}%;background:{% if p.parcelas_pagas >= p.num_parcelas %}#059669{% else %}#6366f1{% endif %};height:100%;border-radius:100px;transition:width .3s;"></div>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="color:#9ca3af;font-size:13px;padding:16px 0;text-align:center;">
+      Nenhum parcelamento cadastrado. Diga no WhatsApp:<br>
+      <em>"comprei sapato em 10x de 50 a partir do dia 05/06"</em>
+    </div>
+    {% endif %}
+
+    <!-- Formulário novo parcelamento -->
+    <div id="form-novo-parcelamento" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-top:8px;">
+      <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:14px;">+ Novo parcelamento</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-field"><label>Descrição</label><input type="text" id="parc-desc" placeholder="Ex: Geladeira, Sapato"/></div>
+        <div class="form-field"><label>Valor por parcela (R$)</label><input type="number" id="parc-valor" placeholder="150,00" step="0.01" min="0.01"/></div>
+        <div class="form-field"><label>Nº de parcelas</label><input type="number" id="parc-num" placeholder="10" min="1" max="360"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="form-field"><label>Data da 1ª parcela</label><input type="date" id="parc-data"/></div>
+        <div class="form-field">
+          <label>Categoria</label>
+          <select id="parc-cat" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            {% for c in cats_usuario %}<option value="{{ c.nome }}">{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        {% if contas_bancarias %}
+        <div class="form-field">
+          <label>Conta bancária (opcional)</label>
+          <select id="parc-conta" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#fff;">
+            <option value="">— Nenhuma —</option>
+            {% for c in contas_bancarias %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div id="parc-msg" style="font-size:12px;color:#ef4444;margin-bottom:8px;display:none;"></div>
+      <button class="btn-add" onclick="salvarParcelamento()" style="padding:9px 20px;">💾 Agendar parcelas</button>
+    </div>
+  </div>
+
 </div>
 
 <!-- ===== ABA: MINHA CONTA ===== -->
@@ -994,6 +1159,62 @@ async function deletarTransferencia(id) {
   const r = await fetch(`/api/transferencias/${id}`, {method: 'DELETE'});
   if (r.ok) { document.getElementById(`tx-${id}`)?.remove(); }
   else { const d = await r.json(); alert(d.erro || 'Erro ao estornar.'); }
+}
+
+// DÉBITOS AUTOMÁTICOS (contas mensais)
+async function salvarContaMensal() {
+  const desc  = document.getElementById('cm-desc').value.trim();
+  const valor = parseFloat(document.getElementById('cm-valor').value);
+  const dia   = parseInt(document.getElementById('cm-dia').value);
+  const cat   = document.getElementById('cm-cat')?.value || 'Outros';
+  const contaEl = document.getElementById('cm-conta');
+  const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  const msg = document.getElementById('cm-msg');
+  if (!desc) { msg.textContent='Informe a descrição.'; msg.style.display='block'; return; }
+  if (!valor || valor <= 0) { msg.textContent='Informe um valor válido.'; msg.style.display='block'; return; }
+  if (!dia || dia < 1 || dia > 31) { msg.textContent='Informe o dia do mês (1 a 31).'; msg.style.display='block'; return; }
+  const r = await fetch('/api/contas-mensais', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({descricao: desc, valor, dia_vencimento: dia, categoria: cat, conta_id, auto_debitar: true})
+  });
+  if (r.ok) { location.reload(); }
+  else { const d = await r.json(); msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display='block'; }
+}
+
+async function deletarContaMensal(id) {
+  if (!confirm('Remover este débito automático?')) return;
+  const r = await fetch(`/api/contas-mensais/${id}`, {method: 'DELETE'});
+  if (r.ok) { document.getElementById(`cm-${id}`)?.remove(); }
+}
+
+// PARCELAMENTOS
+async function salvarParcelamento() {
+  const desc  = document.getElementById('parc-desc').value.trim();
+  const valor = parseFloat(document.getElementById('parc-valor').value);
+  const num   = parseInt(document.getElementById('parc-num').value);
+  const data  = document.getElementById('parc-data').value;
+  const cat   = document.getElementById('parc-cat')?.value || 'Outros';
+  const contaEl = document.getElementById('parc-conta');
+  const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
+  const msg = document.getElementById('parc-msg');
+  if (!desc) { msg.textContent='Informe a descrição.'; msg.style.display='block'; return; }
+  if (!valor || valor <= 0) { msg.textContent='Informe o valor por parcela.'; msg.style.display='block'; return; }
+  if (!num || num < 1) { msg.textContent='Informe o número de parcelas.'; msg.style.display='block'; return; }
+  if (!data) { msg.textContent='Informe a data da 1ª parcela.'; msg.style.display='block'; return; }
+  const r = await fetch('/api/parcelamentos', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({descricao: desc, valor_parcela: valor, num_parcelas: num, data_primeira: data, categoria: cat, conta_id})
+  });
+  if (r.ok) { location.reload(); }
+  else { const d = await r.json(); msg.textContent = d.erro || 'Erro ao salvar.'; msg.style.display='block'; }
+}
+
+async function cancelarParcelamento(id, nome) {
+  if (!confirm(`Cancelar as parcelas restantes de "${nome}"?\nAs parcelas já debitadas não serão afetadas.`)) return;
+  const r = await fetch(`/api/parcelamentos/${id}`, {method: 'DELETE'});
+  if (r.ok) { location.reload(); }
 }
 
 // DONUT CHART

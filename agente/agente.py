@@ -570,12 +570,15 @@ Ao receber uma mensagem, identifique se é:
 11. EXCLUIR um lembrete — ex: "exclua esse lembrete", "cancela o lembrete do médico", "excluir lembrete", "remove o lembrete de passear com os cachorros", "apagar lembrete"
 12. LISTAR lembretes ativos — ex: "quais meus lembretes?", "ver lembretes", "meus lembretes ativos"
 13. VER COMPROMISSOS DE HOJE — ex: "meus compromissos hoje", "o que tenho hoje?", "agenda de hoje", "me manda minha agenda", "lembretes de hoje", "o que está agendado hoje?", "quais eventos tenho hoje?"
-14. REGISTRAR conta mensal — ex: "adiciona conta de luz vence dia 10", "todo mês pago aluguel de 1500 no dia 5", "tenho conta do cartão dia 15 de 800 reais", "adicionar conta internet dia 20", "conta a pagar: academia 99 reais dia 1"
-15. LISTAR contas mensais — ex: "minhas contas mensais", "contas a pagar", "quais contas tenho?", "agendamentos de pagamentos mensais", "como estão meus pagamentos mensais?", "contas do mês", "quais são minhas contas fixas?"
-16. EXCLUIR conta mensal — ex: "remover conta da luz", "excluir conta do aluguel", "apagar conta mensal da academia"
-17. MARCAR conta mensal como PAGA — ex: "paguei a conta de luz", "marquei o aluguel como pago", "paguei energia", "já paguei o cartão", "marcar plano de saúde como pago"
-18. MARCAR TODAS as contas vencidas como pagas — ex: "paguei todas as contas vencidas", "todas as contas com advertência foram pagas", "paguei tudo que estava vencido", "essas com advertência estão todas pagas esse mês", "marquei todas como pagas"
-19. Outra mensagem — responda de forma amigável
+14. REGISTRAR conta mensal recorrente (débito automático todo mês) — ex: "toda mês pago energia 100 reais no dia 10", "aluguel 1500 todo dia 5", "internet 80 reais vence dia 15", "cadastra débito automático da academia 99 no dia 1"
+15. PARCELAMENTO — ex: "comprei um sapato em 10x de 50 a partir do dia 5/6", "parcelei a geladeira em 12x de 200 reais a partir de julho dia 10", "agende 6 parcelas de 150 da TV começando dia 01/07", "tenho 8 parcelas de 80 do notebook"
+16. LISTAR parcelamentos — ex: "meus parcelamentos", "minhas parcelas ativas", "o que tenho parcelado?", "parcelas em aberto"
+17. CANCELAR parcelamento — ex: "cancela as parcelas do sapato", "excluir parcelamento da geladeira", "parar débito das parcelas do notebook"
+18. LISTAR contas mensais — ex: "minhas contas mensais", "contas a pagar", "quais contas tenho?", "débitos automáticos cadastrados"
+19. EXCLUIR conta mensal — ex: "remover conta da luz", "excluir débito automático do aluguel", "apagar conta mensal da academia"
+20. MARCAR conta mensal como PAGA — ex: "paguei a conta de luz", "marquei o aluguel como pago", "paguei energia"
+21. MARCAR TODAS as contas vencidas como pagas — ex: "paguei todas as contas vencidas", "marquei todas como pagas"
+22. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(cats_list)}
 (Use SEMPRE uma das categorias listadas acima. Se nenhuma se encaixar, use a última da lista.)
@@ -667,11 +670,29 @@ Se for LISTAR lembretes:
 Se for VER COMPROMISSOS DE HOJE (agenda + lembretes do dia):
 {{"acao": "compromissos_hoje"}}
 
-Se for REGISTRAR conta mensal (extraia descrição, valor opcional e dia do mês):
-{{"acao": "registrar_conta_mensal", "descricao": "Aluguel", "valor": 1500.00, "dia_vencimento": 5}}
-- valor: omita se o usuário não informar
+Se for REGISTRAR conta mensal recorrente com DÉBITO AUTOMÁTICO (ex: energia todo dia 10, aluguel todo dia 5):
+{{"acao": "registrar_conta_mensal", "descricao": "Energia", "valor": 100.00, "dia_vencimento": 10, "categoria": "Moradia"}}
+- valor: obrigatório para débito automático
 - dia_vencimento: número do dia do mês (1 a 31)
-- descricao: nome da conta (ex: "Luz", "Internet", "Cartão Nubank", "Aluguel")
+- categoria: use uma das categorias disponíveis (ex: Moradia, Outros)
+- conta_id: inclua se o usuário mencionar uma conta bancária
+- O sistema vai criar o gasto AUTOMATICAMENTE todo mês nesse dia
+
+Se for PARCELAMENTO (compra parcelada com débito automático mensal):
+{{"acao": "parcelamento", "descricao": "Sapato", "valor_parcela": 50.00, "num_parcelas": 10, "data_primeira": "2026-06-05", "categoria": "Roupas"}}
+- descricao: nome da compra
+- valor_parcela: valor de cada parcela
+- num_parcelas: total de parcelas
+- data_primeira: data da 1ª parcela no formato YYYY-MM-DD (interprete "a partir do dia 05/06" como 2026-06-05)
+- categoria: categoria do gasto
+- conta_id: inclua se o usuário mencionar uma conta bancária
+- O sistema debita automaticamente cada parcela na mesma data dos meses seguintes
+
+Se for LISTAR parcelamentos ativos:
+{{"acao": "listar_parcelamentos"}}
+
+Se for CANCELAR/EXCLUIR parcelamento:
+{{"acao": "cancelar_parcelamento", "descricao": "palavra-chave do parcelamento"}}
 
 Se for LISTAR contas mensais:
 {{"acao": "listar_contas_mensais"}}
@@ -1535,22 +1556,25 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 except: pass
 
         elif acao == "registrar_conta_mensal":
-            descricao = resultado.get("descricao", "").strip() or "Conta"
-            valor = resultado.get("valor")
-            dia = int(resultado.get("dia_vencimento", 1))
-            dia = max(1, min(31, dia))
-            USE_PG_cm = bool(os.environ.get("DATABASE_URL"))
-            conn_cm = get_db()
+            descricao  = resultado.get("descricao", "").strip() or "Conta"
+            valor      = resultado.get("valor")
+            dia        = int(resultado.get("dia_vencimento", 1))
+            dia        = max(1, min(31, dia))
+            categoria  = resultado.get("categoria") or "Outros"
+            conta_id   = resultado.get("conta_id") or None
+            conta_nome = next((c["nome"] for c in contas if c["id"] == conta_id), None) if conta_id else None
+            USE_PG_cm  = bool(os.environ.get("DATABASE_URL"))
+            conn_cm    = get_db()
             try:
                 if USE_PG_cm:
                     conn_cm.execute(
-                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (%s, %s, %s, %s)",
-                        (cliente["id"], descricao, valor, dia)
+                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (cliente["id"], descricao, valor, dia, categoria, conta_id, True)
                     )
                 else:
                     conn_cm.execute(
-                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (?, ?, ?, ?)",
-                        (cliente["id"], descricao, valor, dia)
+                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento, categoria, conta_id, auto_debitar) VALUES (?,?,?,?,?,?,?)",
+                        (cliente["id"], descricao, valor, dia, categoria, conta_id, 1)
                     )
                 conn_cm.commit()
             finally:
@@ -1558,12 +1582,140 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 except: pass
             valor_str = f"R$ {valor:.2f}" if valor else "valor não informado"
             resposta = (
-                f"✅ Conta mensal cadastrada!\n\n"
+                f"✅ Débito automático cadastrado!\n\n"
                 f"📋 *{descricao}*\n"
                 f"💲 Valor: {valor_str}\n"
-                f"📅 Vencimento: todo dia *{dia}* do mês\n\n"
-                f"Envie *minhas contas* para ver todas as suas contas mensais."
+                f"📂 Categoria: {categoria}\n"
+                f"📅 Todo dia *{dia}* do mês\n"
+                + (f"🏦 Conta: {conta_nome}\n" if conta_nome else "")
+                + f"\n💡 O sistema vai lançar esse gasto automaticamente todo mês nessa data e te avisar aqui."
             )
+
+        elif acao == "parcelamento":
+            import calendar as _cal_p
+            descricao     = resultado.get("descricao", "").strip() or "Compra parcelada"
+            valor_parcela = float(resultado.get("valor_parcela") or 0)
+            num_parcelas  = int(resultado.get("num_parcelas") or 0)
+            data_primeira = resultado.get("data_primeira") or hoje_brasil().isoformat()
+            categoria     = resultado.get("categoria") or "Outros"
+            conta_id      = resultado.get("conta_id") or None
+            conta_nome    = next((c["nome"] for c in contas if c["id"] == conta_id), None) if conta_id else None
+            if valor_parcela <= 0 or num_parcelas < 1:
+                resposta = "Não entendi os detalhes do parcelamento. Me diga: nome, valor de cada parcela, número de parcelas e data da 1ª parcela."
+            else:
+                USE_PG_p = bool(os.environ.get("DATABASE_URL"))
+                conn_p   = get_db()
+                try:
+                    conn_p.execute(
+                        "INSERT INTO parcelamentos (cliente_id, descricao, valor_parcela, num_parcelas, data_primeira, categoria, conta_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (cliente["id"], descricao, valor_parcela, num_parcelas, data_primeira, categoria, conta_id)
+                    )
+                    conn_p.commit()
+                finally:
+                    try: conn_p.close()
+                    except: pass
+                total = valor_parcela * num_parcelas
+                # Calcula datas das primeiras parcelas para mostrar
+                from datetime import date as _date_p
+                def _data_p(n):
+                    primeira = _date_p.fromisoformat(data_primeira)
+                    if n == 1: return primeira
+                    mes_t = primeira.month + (n - 1)
+                    ano_t = primeira.year + (mes_t - 1) // 12
+                    mes_t = ((mes_t - 1) % 12) + 1
+                    return _date_p(ano_t, mes_t, min(primeira.day, _cal_p.monthrange(ano_t, mes_t)[1]))
+                linhas_datas = ""
+                for i in range(1, min(4, num_parcelas + 1)):
+                    dt = _data_p(i)
+                    linhas_datas += f"  {i}ª parcela: {dt.strftime('%d/%m/%Y')}\n"
+                if num_parcelas > 3:
+                    linhas_datas += f"  ...\n  {num_parcelas}ª parcela: {_data_p(num_parcelas).strftime('%d/%m/%Y')}\n"
+                resposta = (
+                    f"✅ Parcelamento cadastrado!\n\n"
+                    f"🛍️ *{descricao}*\n"
+                    f"💲 {num_parcelas}x de R$ {valor_parcela:.2f} = R$ {total:.2f}\n"
+                    f"📂 Categoria: {categoria}\n"
+                    + (f"🏦 Conta: {conta_nome}\n" if conta_nome else "")
+                    + f"\n📅 *Vencimentos:*\n{linhas_datas}"
+                    f"\n💡 Cada parcela será lançada automaticamente na data de vencimento com aviso aqui no WhatsApp."
+                )
+
+        elif acao == "listar_parcelamentos":
+            USE_PG_lp = bool(os.environ.get("DATABASE_URL"))
+            conn_lp = get_db()
+            try:
+                if USE_PG_lp:
+                    parcs = conn_lp.execute(
+                        "SELECT id, descricao, valor_parcela, num_parcelas, parcelas_pagas, data_primeira, ativo FROM parcelamentos WHERE cliente_id=%s ORDER BY criado_em DESC",
+                        (cliente["id"],)
+                    ).fetchall()
+                else:
+                    parcs = conn_lp.execute(
+                        "SELECT id, descricao, valor_parcela, num_parcelas, parcelas_pagas, data_primeira, ativo FROM parcelamentos WHERE cliente_id=? ORDER BY criado_em DESC",
+                        (cliente["id"],)
+                    ).fetchall()
+            finally:
+                try: conn_lp.close()
+                except: pass
+            if not parcs:
+                resposta = "Você não tem parcelamentos cadastrados.\n\nPara cadastrar, diga:\n_\"comprei sapato em 10x de 50 a partir do dia 05/06\"_"
+            else:
+                from datetime import date as _date_lp
+                import calendar as _cal_lp
+                def _prox_data(data_primeira, parcelas_pagas, num_parcelas):
+                    proxima = parcelas_pagas + 1
+                    if proxima > num_parcelas: return None
+                    primeira = _date_lp.fromisoformat(data_primeira)
+                    if proxima == 1: return primeira
+                    mes_t = primeira.month + (proxima - 1)
+                    ano_t = primeira.year + (mes_t - 1) // 12
+                    mes_t = ((mes_t - 1) % 12) + 1
+                    return _date_lp(ano_t, mes_t, min(primeira.day, _cal_lp.monthrange(ano_t, mes_t)[1]))
+                linhas = ["📦 *Seus parcelamentos:*\n"]
+                for p in parcs:
+                    pagas = p["parcelas_pagas"]
+                    total_p = p["num_parcelas"]
+                    ativo = p["ativo"]
+                    prox = _prox_data(p["data_primeira"], pagas, total_p)
+                    status = "✅ Quitado" if pagas >= total_p else ("🔴 Cancelado" if not ativo else f"⏳ {pagas}/{total_p} pagas")
+                    prox_str = f" · próxima em {prox.strftime('%d/%m/%Y')}" if prox and ativo else ""
+                    linhas.append(f"🛍️ *{p['descricao']}*\n   {total_p}x R$ {float(p['valor_parcela']):.2f} | {status}{prox_str}")
+                resposta = "\n\n".join(linhas)
+
+        elif acao == "cancelar_parcelamento":
+            desc_c = resultado.get("descricao", "").strip()
+            USE_PG_cp = bool(os.environ.get("DATABASE_URL"))
+            conn_cp = get_db()
+            try:
+                if USE_PG_cp:
+                    p = conn_cp.execute(
+                        "SELECT id, descricao, parcelas_pagas, num_parcelas FROM parcelamentos WHERE cliente_id=%s AND ativo=TRUE AND LOWER(descricao) LIKE LOWER(%s) ORDER BY criado_em DESC LIMIT 1",
+                        (cliente["id"], f"%{desc_c}%")
+                    ).fetchone()
+                    if p:
+                        conn_cp.execute("UPDATE parcelamentos SET ativo=FALSE WHERE id=%s", (p["id"],))
+                        conn_cp.commit()
+                else:
+                    p = conn_cp.execute(
+                        "SELECT id, descricao, parcelas_pagas, num_parcelas FROM parcelamentos WHERE cliente_id=? AND ativo=1 AND LOWER(descricao) LIKE LOWER(?) ORDER BY criado_em DESC LIMIT 1",
+                        (cliente["id"], f"%{desc_c}%")
+                    ).fetchone()
+                    if p:
+                        conn_cp.execute("UPDATE parcelamentos SET ativo=0 WHERE id=?", (p["id"],))
+                        conn_cp.commit()
+            finally:
+                try: conn_cp.close()
+                except: pass
+            if p:
+                restavam = p["num_parcelas"] - p["parcelas_pagas"]
+                resposta = (
+                    f"🚫 Parcelamento cancelado!\n\n"
+                    f"🛍️ *{p['descricao']}*\n"
+                    f"📊 Foram pagas {p['parcelas_pagas']}/{p['num_parcelas']} parcelas\n"
+                    f"⚠️ As {restavam} parcelas restantes foram canceladas e não serão mais debitadas."
+                )
+            else:
+                resposta = f"Não encontrei nenhum parcelamento ativo com '{desc_c}'."
 
         elif acao == "listar_contas_mensais":
             import datetime as _dt
