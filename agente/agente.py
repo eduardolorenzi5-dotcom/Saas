@@ -572,7 +572,8 @@ Ao receber uma mensagem, identifique se é:
 3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
 4. Uma EXCLUSÃO de todos os gastos — ex: "apaga todos os gastos", "zera meus gastos", "limpa o histórico", "apaga todos os gastos do mês"
 4b. Uma LIMPEZA TOTAL (gastos + rendas + saldo) — ex: "apaga tudo", "zera tudo", "limpa tudo", "quero começar do zero", "apaga todas as informações", "reinicia minha conta"
-4. Uma CONSULTA de resumo — ex: "quanto gastei?", "resumo do mês", "quanto ganhei?", "qual meu saldo?", "como estou esse mês?", "quanto tenho de saldo?", "quanto entrou esse mês?", "qual minha renda esse mês?"
+4. Uma CONSULTA de resumo GERAL (sem citar conta específica) — ex: "quanto gastei?", "resumo do mês", "quanto ganhei?", "qual meu saldo?", "como estou esse mês?", "quanto tenho de saldo?", "quanto entrou esse mês?", "qual minha renda esse mês?"
+4c. Uma CONSULTA de resumo de UMA CONTA ESPECÍFICA — ex: "quanto tenho na conta do Nubank?", "resumo do Bradesco", "como está meu Banco do Brasil?", "saldo da conta Itaú", "quanto gastei no Inter esse mês?" → use acao resumo_conta
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
 7. Um pedido de RELATÓRIO PDF — ex: "quero meu relatório", "manda o PDF", "relatório completo", "relatório do mês", "relatório em PDF", "extrato do mês"
@@ -624,8 +625,9 @@ Se for exclusão por descrição (extraia a descrição e opcionalmente o valor)
 Se for consulta de resumo GERAL (sem citar conta específica), responda:
 {{"acao": "resumo"}}
 
-Se for consulta de resumo de UMA conta específica (ex: "resumo da conta Nubank", "como está meu Bradesco", "saldo do Banco do Brasil", "quanto gastei no Inter"):
-{{"acao": "resumo_conta", "conta_nome": "Nubank"}}
+⚠️ IMPORTANTE: Se o usuário mencionar o nome de uma conta bancária junto ao pedido de resumo/saldo/quanto tenho, use OBRIGATORIAMENTE resumo_conta, NÃO resumo.
+Exemplos que devem usar resumo_conta: "quanto tenho na conta do Banco do Brasil?", "resumo do Nubank", "como está meu Bradesco", "saldo da conta Inter", "quanto gastei no Itaú".
+{{"acao": "resumo_conta", "conta_nome": "Banco do Brasil"}}
 - conta_nome: nome ou parte do nome da conta mencionada pelo usuário
 
 Se for pedido de análise financeira:
