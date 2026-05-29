@@ -2806,6 +2806,48 @@ def gerar_relatorio(cliente_id):
     caminho = gerar_pdf(cliente_id, mes)
     return jsonify({"arquivo": caminho})
 
+
+# ── RELATÓRIO POR CONTA ───────────────────────────────────────────────────────
+
+@app.route("/api/contas/<int:conta_id>/relatorio")
+@login_required
+def relatorio_por_conta(conta_id):
+    """
+    Gera e devolve o PDF do relatório filtrado por conta bancária.
+    Query params: mes=YYYY-MM (default: mês atual)
+    Se ?enviar_wpp=1 envia pelo WhatsApp e retorna JSON.
+    """
+    from flask import send_file
+    cid = session["cliente_id"]
+
+    # Verifica que a conta pertence ao cliente
+    conn = get_db()
+    conta = conn.execute(
+        "SELECT * FROM contas WHERE id=%s AND cliente_id=%s", (conta_id, cid)
+    ).fetchone()
+    conn.close()
+    if not conta:
+        return jsonify({"erro": "Conta não encontrada"}), 404
+
+    mes = request.args.get("mes", hoje_brasil().strftime("%Y-%m"))
+    enviar_wpp = request.args.get("enviar_wpp", "0") == "1"
+
+    if enviar_wpp:
+        from relatorio.gerador import gerar_e_enviar_pdf_wpp
+        conn2 = get_db()
+        cliente = conn2.execute(
+            "SELECT whatsapp FROM clientes WHERE id=%s", (cid,)
+        ).fetchone()
+        conn2.close()
+        ok = gerar_e_enviar_pdf_wpp(cid, mes, cliente["whatsapp"] if cliente else "", conta_id=conta_id)
+        return jsonify({"ok": ok, "conta": conta["nome"], "mes": mes})
+
+    from relatorio.gerador import gerar_pdf
+    caminho = gerar_pdf(cid, mes, conta_id=conta_id)
+    return send_file(caminho, as_attachment=True,
+                     download_name=f"relatorio_{conta['nome']}_{mes}.pdf",
+                     mimetype="application/pdf")
+
 with app.app_context():
     init_db()
 

@@ -875,7 +875,14 @@
         <div id="extrato-nome" style="font-size:18px;font-weight:700;color:#1a1a2e;"></div>
         <div id="extrato-saldo-header" style="font-size:13px;color:#6b7280;margin-top:2px;"></div>
       </div>
-      <button onclick="fecharExtrato()" style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;line-height:1;padding:4px;">×</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="btn-relatorio-conta" onclick="gerarRelatorioConta()"
+          title="Baixar relatório PDF desta conta"
+          style="display:flex;align-items:center;gap:5px;background:#6366f1;color:#fff;border:none;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;">
+          📄 Relatório PDF
+        </button>
+        <button onclick="fecharExtrato()" style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;line-height:1;padding:4px;">×</button>
+      </div>
     </div>
     <!-- Resumo -->
     <div id="extrato-resumo" style="display:flex;gap:0;border-bottom:1px solid #f3f4f6;"></div>
@@ -1363,6 +1370,34 @@ async function carregarExtrato() {
     });
   });
   lista.innerHTML = html;
+}
+
+async function gerarRelatorioConta() {
+  if (!_extratoContaId) return;
+  const mes = document.getElementById('extrato-mes-sel').value || new Date().toISOString().slice(0,7);
+  const btn = document.getElementById('btn-relatorio-conta');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '⏳ Gerando...';
+  btn.disabled = true;
+  // Download direto do PDF
+  const url = `/api/contas/${_extratoContaId}/relatorio?mes=${mes}`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Falha ao gerar PDF');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const nomeEl = document.getElementById('extrato-nome');
+    const nomeConta = nomeEl ? nomeEl.textContent.trim().replace(/\s+/g,'_') : 'conta';
+    a.download = `relatorio_${nomeConta}_${mes}.pdf`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch(e) {
+    alert('Erro ao gerar relatório. Tente novamente.');
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
 }
 
 // Fechar modal ao clicar fora

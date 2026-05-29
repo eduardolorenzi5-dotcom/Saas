@@ -614,8 +614,12 @@ Se for pedido de análise financeira:
 Se for pedido de dashboard/gráfico visual:
 {{"acao": "dashboard"}}
 
-Se for pedido de relatório PDF completo:
+Se for pedido de relatório PDF completo (geral, sem filtro por conta):
 {{"acao": "relatorio"}}
+
+Se for pedido de relatório PDF de UMA conta específica (ex: "relatório da conta Bradesco", "extrato em PDF do Nubank"):
+{{"acao": "relatorio_conta", "conta_nome": "Bradesco"}}
+- conta_nome: nome/parte do nome da conta mencionada pelo usuário
 
 Se for pedido para conectar Google Agenda:
 {{"acao": "conectar_agenda"}}
@@ -1157,6 +1161,49 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             except Exception as e:
                 logging.error(f"[PDF] Erro ao gerar relatório: {e}")
                 resposta = "Ocorreu um erro ao gerar o relatório. Tente novamente."
+
+        elif acao == "relatorio_conta":
+            import logging
+            mes_rel = hoje_brasil().strftime("%Y-%m")
+            conta_nome_busca = dados.get("conta_nome", "").strip().lower()
+            # Localiza a conta pelo nome (busca parcial)
+            conn_rc = get_db()
+            contas_rc = conn_rc.execute(
+                "SELECT id, nome FROM contas WHERE cliente_id=%s AND ativo=TRUE ORDER BY nome",
+                (cliente["id"],)
+            ).fetchall()
+            conn_rc.close()
+            conta_achada = None
+            if conta_nome_busca:
+                for c in contas_rc:
+                    if conta_nome_busca in c["nome"].lower() or c["nome"].lower() in conta_nome_busca:
+                        conta_achada = c
+                        break
+            if not conta_achada and contas_rc:
+                # Se não encontrou por nome, tenta correspondência mais flexível
+                for c in contas_rc:
+                    partes = conta_nome_busca.split()
+                    if any(p in c["nome"].lower() for p in partes if len(p) > 2):
+                        conta_achada = c
+                        break
+            if conta_achada:
+                enviar_whatsapp(fone, f"⏳ Gerando relatório da conta *{conta_achada['nome']}*, aguarde um instante...")
+                try:
+                    from relatorio.gerador import gerar_e_enviar_pdf_wpp
+                    ok = gerar_e_enviar_pdf_wpp(
+                        cliente["id"], mes_rel, cliente["whatsapp"],
+                        conta_id=conta_achada["id"]
+                    )
+                    if ok:
+                        resposta = ""
+                    else:
+                        resposta = "Não consegui enviar o PDF. Tente novamente em instantes."
+                except Exception as e:
+                    logging.error(f"[PDF] Erro ao gerar relatório por conta: {e}")
+                    resposta = "Ocorreu um erro ao gerar o relatório. Tente novamente."
+            else:
+                nomes = ", ".join(c["nome"] for c in contas_rc) if contas_rc else "nenhuma"
+                resposta = f"Não encontrei a conta '{dados.get('conta_nome', '')}'. Suas contas: {nomes}."
 
         elif acao == "analise":
             gastos = historico_gastos(cliente["id"])

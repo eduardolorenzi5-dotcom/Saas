@@ -157,7 +157,12 @@ def _hbar_categorias_chart(por_cat, total):
     return buf
 
 
-def gerar_pdf(cliente_id, mes):
+def gerar_pdf(cliente_id, mes, conta_id=None):
+    """
+    Gera PDF do relatório financeiro.
+    - conta_id=None  → relatório geral (todos os gastos do mês)
+    - conta_id=<int> → relatório filtrado por conta bancária
+    """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
@@ -173,25 +178,43 @@ def gerar_pdf(cliente_id, mes):
 
     conn = get_db()
     cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+
+    # Monta filtro de conta
+    conta_nome = None
+    if conta_id:
+        c = conn.execute("SELECT nome FROM contas WHERE id=%s AND cliente_id=%s",
+                         (conta_id, cliente_id)).fetchone()
+        conta_nome = c["nome"] if c else None
+        conta_filtro_sql   = "AND conta_id=%s"
+        conta_filtro_params_g = (cliente_id, f"{mes}%", conta_id)
+        conta_filtro_params_s = (cliente_id, f"{mes}%", conta_id)
+    else:
+        conta_filtro_sql   = ""
+        conta_filtro_params_g = (cliente_id, f"{mes}%")
+        conta_filtro_params_s = (cliente_id, f"{mes}%")
+
     gastos  = conn.execute(
-        "SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s ORDER BY data, categoria",
-        (cliente_id, f"{mes}%")
+        f"SELECT * FROM gastos WHERE cliente_id=%s AND data LIKE %s {conta_filtro_sql} ORDER BY data, categoria",
+        conta_filtro_params_g
     ).fetchall()
     por_cat = conn.execute(
-        "SELECT categoria, SUM(valor) as total, COUNT(*) as qtd FROM gastos "
-        "WHERE cliente_id=%s AND data LIKE %s GROUP BY categoria ORDER BY total DESC",
-        (cliente_id, f"{mes}%")
+        f"SELECT categoria, SUM(valor) as total, COUNT(*) as qtd FROM gastos "
+        f"WHERE cliente_id=%s AND data LIKE %s {conta_filtro_sql} GROUP BY categoria ORDER BY total DESC",
+        conta_filtro_params_g
     ).fetchall()
     total = float(conn.execute(
-        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
-        (cliente_id, f"{mes}%")
+        f"SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s {conta_filtro_sql}",
+        conta_filtro_params_g
     ).fetchone()["t"])
     renda = float(cliente["renda_mensal"]) if cliente.get("renda_mensal") else None
     conn.close()
 
     ano, m_num = int(mes[:4]), int(mes[5:])
     mes_nome = f"{MESES_PT[m_num]} {ano}"
-    nome_arquivo = f"relatorio_{cliente_id}_{mes}.pdf"
+    if conta_id:
+        nome_arquivo = f"relatorio_{cliente_id}_{mes}_conta{conta_id}.pdf"
+    else:
+        nome_arquivo = f"relatorio_{cliente_id}_{mes}.pdf"
     caminho = os.path.join(OUTPUT_DIR, nome_arquivo)
 
     # Estilos
@@ -226,7 +249,10 @@ def gerar_pdf(cliente_id, mes):
         canvas.drawString(22, H - 32, "Controla Fácil")
         canvas.setFont("Helvetica", 9)
         canvas.setFillColor(colors.HexColor("#9ca3af"))
-        canvas.drawString(22, H - 46, f"Relatório Financeiro — {mes_nome}  ·  {cliente['nome']}")
+        _subtitulo = f"Relatório Financeiro — {mes_nome}  ·  {cliente['nome']}"
+        if conta_nome:
+            _subtitulo += f"  ·  Conta: {conta_nome}"
+        canvas.drawString(22, H - 46, _subtitulo)
         # Rodapé
         canvas.setFillColor(colors.HexColor("#f3f4f6"))
         canvas.rect(0, 0, W, 32, fill=1, stroke=0)
@@ -249,8 +275,9 @@ def gerar_pdf(cliente_id, mes):
     usable_w = W - 3.6*cm
 
     # ── CAPA ──────────────────────────────────────────────────────────
+    _titulo_capa = "Relatório por Conta" if conta_nome else "Relatório Financeiro"
     capa_data = [[
-        Paragraph(f"Relatório Financeiro", s_title),
+        Paragraph(_titulo_capa, s_title),
     ]]
     capa_bg = Table(capa_data, colWidths=[usable_w])
     capa_bg.setStyle(TableStyle([
@@ -263,9 +290,12 @@ def gerar_pdf(cliente_id, mes):
     ]))
     story.append(capa_bg)
 
+    _info_right = mes_nome
+    if conta_nome:
+        _info_right = f"{mes_nome}<br/><font size=9 color='#a5b4fc'>Conta: {conta_nome}</font>"
     info_data = [[
         Paragraph(f"<b>{cliente['nome']}</b>", s_client),
-        Paragraph(mes_nome, make_style("mn", fontSize=11, textColor=GREEN, alignment=TA_RIGHT)),
+        Paragraph(_info_right, make_style("mn", fontSize=11, textColor=GREEN, alignment=TA_RIGHT)),
     ]]
     info_tbl = Table(info_data, colWidths=[usable_w*0.6, usable_w*0.4])
     info_tbl.setStyle(TableStyle([
@@ -461,11 +491,11 @@ def gerar_pdf(cliente_id, mes):
     return caminho
 
 
-def gerar_e_enviar_pdf_wpp(cliente_id, mes, whatsapp):
+def gerar_e_enviar_pdf_wpp(cliente_id, mes, whatsapp, conta_id=None):
     """Gera o PDF e envia pelo WhatsApp via Evolution API. Retorna True/False."""
     import base64, requests as _req, logging, os
 
-    caminho = gerar_pdf(cliente_id, mes)
+    caminho = gerar_pdf(cliente_id, mes, conta_id=conta_id)
     ev_url  = os.environ.get("EVOLUTION_URL", "").rstrip("/")
     ev_inst = os.environ.get("EVOLUTION_INSTANCE", "")
     ev_key  = os.environ.get("EVOLUTION_KEY", "")
@@ -480,16 +510,32 @@ def gerar_e_enviar_pdf_wpp(cliente_id, mes, whatsapp):
     ano, m_num = int(mes[:4]), int(mes[5:])
     mes_nome = f"{MESES_PT[m_num]} {ano}"
 
+    # Descobre nome da conta se filtrado
+    conta_label = ""
+    if conta_id:
+        try:
+            from db import get_db as _get_db
+            _conn = _get_db()
+            _c = _conn.execute("SELECT nome FROM contas WHERE id=%s", (conta_id,)).fetchone()
+            _conn.close()
+            if _c:
+                conta_label = f" — {_c['nome']}"
+        except Exception:
+            pass
+
     with open(caminho, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
+
+    caption = f"📊 Seu relatório financeiro{conta_label} de *{mes_nome}* está pronto!"
+    file_name = f"relatorio_{mes_nome}{conta_label}.pdf".replace(" ", "_")
 
     payload = {
         "number": numero,
         "mediatype": "document",
         "mimetype": "application/pdf",
-        "caption": f"📊 Seu relatório financeiro de *{mes_nome}* está pronto!",
+        "caption": caption,
         "media": b64,
-        "fileName": f"relatorio_{mes_nome}.pdf",
+        "fileName": file_name,
     }
     try:
         r = _req.post(
