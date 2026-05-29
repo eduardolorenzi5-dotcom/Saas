@@ -110,35 +110,28 @@ def buscar_cliente_por_fone(fone):
     conn = get_db()
     cliente = None
 
-    # 1. Busca por whatsapp principal
+    # 1+2. Busca por whatsapp principal OU whatsapp2 (Plano Casal) — uma query por variante
     for v in variantes:
         cliente = conn.execute(
-            "SELECT * FROM clientes WHERE whatsapp = %s", (v,)
+            "SELECT * FROM clientes WHERE whatsapp = %s OR whatsapp2 = %s", (v, v)
         ).fetchone()
         if cliente:
+            via = "whatsapp" if cliente.get("whatsapp") == v else "whatsapp2"
+            logging.warning(f"[BUSCA_CLIENTE] encontrado via {via} {v!r}: id={cliente['id']}")
             break
 
-    # 2. Busca por whatsapp2 (Plano Casal — número do cônjuge)
-    if not cliente:
-        for v in variantes:
-            cliente = conn.execute(
-                "SELECT * FROM clientes WHERE whatsapp2 = %s", (v,)
-            ).fetchone()
-            if cliente:
-                logging.warning(f"[BUSCA_CLIENTE] encontrado via whatsapp2 {v!r}: id={cliente['id']}")
-                break
-
-    # 3. Fallback: busca parcial pelo sufixo do número (últimos 8 dígitos)
+    # 3. Fallback: busca parcial pelo sufixo (últimos 8 dígitos) em whatsapp e whatsapp2
     if not cliente and len(digits) >= 8:
         sufixo = digits[-8:]
         cliente = conn.execute(
-            "SELECT * FROM clientes WHERE whatsapp LIKE %s", (f"%{sufixo}",)
+            "SELECT * FROM clientes WHERE whatsapp LIKE %s OR whatsapp2 LIKE %s",
+            (f"%{sufixo}", f"%{sufixo}")
         ).fetchone()
         if cliente:
-            logging.warning(f"[BUSCA_CLIENTE] encontrado via sufixo {sufixo!r}: id={cliente['id']} whatsapp={cliente['whatsapp']!r}")
+            logging.warning(f"[BUSCA_CLIENTE] encontrado via sufixo {sufixo!r}: id={cliente['id']} whatsapp={cliente.get('whatsapp')!r}")
 
     if cliente:
-        logging.warning(f"[BUSCA_CLIENTE] cliente encontrado: id={cliente['id']} whatsapp={cliente['whatsapp']!r}")
+        logging.warning(f"[BUSCA_CLIENTE] cliente encontrado: id={cliente['id']} whatsapp={cliente.get('whatsapp')!r} whatsapp2={cliente.get('whatsapp2')!r}")
     else:
         logging.warning(f"[BUSCA_CLIENTE] cliente NAO encontrado para variantes={variantes}")
 
