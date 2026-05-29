@@ -2043,38 +2043,54 @@ def extrato_conta(conta_id):
         conn.close()
         return jsonify({"erro": "Conta não encontrada"}), 404
 
-    filtro_mes = f" AND data LIKE '{mes}%'" if mes else ""
+    mes_filtro = f"{mes}%" if mes else None
 
-    gastos = conn.execute(
-        f"SELECT id, descricao, valor, categoria, data, fonte FROM gastos WHERE cliente_id=%s AND conta_id=%s{filtro_mes} ORDER BY data DESC, id DESC",
-        (cid, conta_id)
-    ).fetchall()
-
-    rendas = conn.execute(
-        f"SELECT id, descricao, valor, tipo, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s{filtro_mes} ORDER BY data DESC, id DESC",
-        (cid, conta_id)
-    ).fetchall()
-
-    # Transferências de entrada (destino = esta conta)
-    filtro_mes_t = f" AND t.data LIKE '{mes}%'" if mes else ""
-    entradas = conn.execute(
-        f"""SELECT t.id, t.valor, t.descricao, t.data, o.nome as outra_conta
-            FROM transferencias t
-            JOIN contas_bancarias o ON t.conta_origem_id = o.id
-            WHERE t.cliente_id=%s AND t.conta_destino_id=%s{filtro_mes_t}
-            ORDER BY t.data DESC, t.id DESC""",
-        (cid, conta_id)
-    ).fetchall()
-
-    # Transferências de saída (origem = esta conta)
-    saidas = conn.execute(
-        f"""SELECT t.id, t.valor, t.descricao, t.data, d.nome as outra_conta
-            FROM transferencias t
-            JOIN contas_bancarias d ON t.conta_destino_id = d.id
-            WHERE t.cliente_id=%s AND t.conta_origem_id=%s{filtro_mes_t}
-            ORDER BY t.data DESC, t.id DESC""",
-        (cid, conta_id)
-    ).fetchall()
+    if mes_filtro:
+        gastos = conn.execute(
+            "SELECT id, descricao, valor, categoria, data, fonte FROM gastos WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s ORDER BY data DESC, id DESC",
+            (cid, conta_id, mes_filtro)
+        ).fetchall()
+        rendas = conn.execute(
+            "SELECT id, descricao, valor, tipo, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s ORDER BY data DESC, id DESC",
+            (cid, conta_id, mes_filtro)
+        ).fetchall()
+        entradas = conn.execute(
+            """SELECT t.id, t.valor, t.descricao, t.data, o.nome as outra_conta
+               FROM transferencias t JOIN contas_bancarias o ON t.conta_origem_id = o.id
+               WHERE t.cliente_id=%s AND t.conta_destino_id=%s AND t.data LIKE %s
+               ORDER BY t.data DESC, t.id DESC""",
+            (cid, conta_id, mes_filtro)
+        ).fetchall()
+        saidas = conn.execute(
+            """SELECT t.id, t.valor, t.descricao, t.data, d.nome as outra_conta
+               FROM transferencias t JOIN contas_bancarias d ON t.conta_destino_id = d.id
+               WHERE t.cliente_id=%s AND t.conta_origem_id=%s AND t.data LIKE %s
+               ORDER BY t.data DESC, t.id DESC""",
+            (cid, conta_id, mes_filtro)
+        ).fetchall()
+    else:
+        gastos = conn.execute(
+            "SELECT id, descricao, valor, categoria, data, fonte FROM gastos WHERE cliente_id=%s AND conta_id=%s ORDER BY data DESC, id DESC",
+            (cid, conta_id)
+        ).fetchall()
+        rendas = conn.execute(
+            "SELECT id, descricao, valor, tipo, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s ORDER BY data DESC, id DESC",
+            (cid, conta_id)
+        ).fetchall()
+        entradas = conn.execute(
+            """SELECT t.id, t.valor, t.descricao, t.data, o.nome as outra_conta
+               FROM transferencias t JOIN contas_bancarias o ON t.conta_origem_id = o.id
+               WHERE t.cliente_id=%s AND t.conta_destino_id=%s
+               ORDER BY t.data DESC, t.id DESC""",
+            (cid, conta_id)
+        ).fetchall()
+        saidas = conn.execute(
+            """SELECT t.id, t.valor, t.descricao, t.data, d.nome as outra_conta
+               FROM transferencias t JOIN contas_bancarias d ON t.conta_destino_id = d.id
+               WHERE t.cliente_id=%s AND t.conta_origem_id=%s
+               ORDER BY t.data DESC, t.id DESC""",
+            (cid, conta_id)
+        ).fetchall()
 
     calc = _calcular_saldo_conta(conn, cid, conta_id, conta["saldo_inicial"])
     conn.close()
