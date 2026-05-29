@@ -26,6 +26,19 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 CATEGORIAS = ["Alimentação","Transporte","Saúde","Lazer","Moradia","Educação","Roupas","Outros"]
 
+def get_contas_cliente(cliente_id):
+    """Retorna lista de contas bancárias do cliente [{id, nome, tipo}]."""
+    try:
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT id, nome, tipo FROM contas_bancarias WHERE cliente_id=%s AND ativo=TRUE ORDER BY nome",
+            (cliente_id,)
+        ).fetchall()
+        conn.close()
+        return [{"id": r["id"], "nome": r["nome"], "tipo": r["tipo"]} for r in rows]
+    except Exception:
+        return []
+
 def get_categorias_cliente(cliente_id):
     """Retorna lista de categorias personalizadas do cliente, ou padrão."""
     try:
@@ -132,13 +145,13 @@ def buscar_cliente_por_fone(fone):
     conn.close()
     return cliente
 
-def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto):
+def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto, conta_id=None):
     import logging
-    logging.warning(f"[SALVAR_GASTO] cliente_id={cliente_id} descricao={descricao!r} valor={valor} data={data_gasto!r}")
+    logging.warning(f"[SALVAR_GASTO] cliente_id={cliente_id} descricao={descricao!r} valor={valor} data={data_gasto!r} conta_id={conta_id}")
     conn = get_db()
     conn.execute(
-        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
-        (cliente_id, descricao, valor, categoria, data_gasto, "whatsapp")
+        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (cliente_id, descricao, valor, categoria, data_gasto, "whatsapp", conta_id)
     )
     conn.commit()
     conn.close()
@@ -252,19 +265,19 @@ def salvar_renda(cliente_id, valor):
     conn.commit()
     conn.close()
 
-def registrar_entrada_renda(cliente_id, descricao, valor, tipo, data):
+def registrar_entrada_renda(cliente_id, descricao, valor, tipo, data, conta_id=None):
     """Registra uma entrada de renda na tabela rendas."""
     USE_PG = bool(os.environ.get("DATABASE_URL"))
     conn = get_db()
     if USE_PG:
         conn.execute(
-            "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte) VALUES (%s, %s, %s, %s, %s, %s)",
-            (cliente_id, descricao, valor, tipo, data, "whatsapp")
+            "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (cliente_id, descricao, valor, tipo, data, "whatsapp", conta_id)
         )
     else:
         conn.execute(
-            "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte) VALUES (?, ?, ?, ?, ?, ?)",
-            (cliente_id, descricao, valor, tipo, data, "whatsapp")
+            "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (cliente_id, descricao, valor, tipo, data, "whatsapp", conta_id)
         )
     conn.commit()
     conn.close()
@@ -466,9 +479,24 @@ def salvar_historico_conversa(cliente_id, role, conteudo):
         try: conn.close()
         except: pass
 
-def chamar_claude(mensagem, historico=[], categorias=None):
+def chamar_claude(mensagem, historico=[], categorias=None, contas=None):
     """Chama a API do Claude para interpretar a mensagem."""
     cats_list = categorias if categorias else CATEGORIAS
+
+    # Monta bloco de contas bancárias para o prompt
+    if contas:
+        contas_texto = "Contas bancárias do cliente:\n" + "\n".join(
+            f"  - ID {c['id']}: \"{c['nome']}\" ({c['tipo']})" for c in contas
+        )
+        contas_instrucao = (
+            "\n\nSe o usuário mencionar uma conta bancária pelo nome (ex: 'na conta do Nubank', "
+            "'no Bradesco', 'na poupança'), identifique o ID da conta acima e inclua conta_id no JSON. "
+            "Se não mencionar conta, omita conta_id."
+        )
+    else:
+        contas_texto = ""
+        contas_instrucao = ""
+
     system = f"""Você é um assistente financeiro amigável via WhatsApp.
 Seu papel é ajudar o usuário a registrar gastos e consultar o resumo financeiro.
 
@@ -502,9 +530,11 @@ Categorias disponíveis: {', '.join(cats_list)}
 
 Se for um registro de UM gasto, responda APENAS com JSON no formato:
 {{"acao": "registrar", "descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}
+(inclua "conta_id": <ID> se o usuário mencionar uma conta bancária; omita se não mencionar)
 
 Se for um registro de MÚLTIPLOS gastos na mesma mensagem (ex: "gastei 50 no mercado, 30 no uber e 15 no café"), responda com JSON no formato:
 {{"acao": "registrar_multiplos", "gastos": [{{"descricao": "...", "valor": 0.00, "categoria": "...", "data": "YYYY-MM-DD"}}, ...]}}
+(em cada gasto, inclua "conta_id": <ID> se o usuário mencionar uma conta; omita se não mencionar)
 
 Se for exclusão do último gasto:
 {{"acao": "deletar_ultimo"}}
@@ -541,6 +571,7 @@ Se for um agendamento (extraia título, data/hora, duração em minutos e cor op
 
 Se for registro de renda:
 {{"acao": "registrar_renda", "descricao": "...", "valor": 0.00, "tipo": "fixo", "data": "YYYY-MM-DD"}}
+(inclua "conta_id": <ID> se o usuário mencionar uma conta bancária; omita se não mencionar)
 - Use tipo "extra" SOMENTE se o usuário usar explicitamente as palavras "extra", "renda extra" ou "adicional"
 - Em TODOS os outros casos use tipo "fixo" (salário, freela, comissão, bico, venda, qualquer renda)
 - descricao: nome da renda (ex: "Salário", "Freela design", "Comissão de vendas")
@@ -591,6 +622,8 @@ Se for MARCAR TODAS as contas vencidas/com advertência como pagas:
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
+
+{contas_texto}{contas_instrucao}
 
 Data de hoje: {hoje_brasil().isoformat()}
 Responda sempre em português. Seja breve e amigável."""
@@ -857,20 +890,24 @@ def processar_mensagem(fone, mensagem, _cliente=None):
 
     try:
         cats = get_categorias_cliente(cliente["id"])
+        contas = get_contas_cliente(cliente["id"])
         # Carrega histórico da conversa (últimas mensagens das últimas 2 horas)
         historico = buscar_historico_conversa(cliente["id"])
         # Salva a mensagem do usuário no histórico antes de processar
         salvar_historico_conversa(cliente["id"], "user", mensagem)
-        resultado = chamar_claude(mensagem, historico=historico, categorias=cats)
+        resultado = chamar_claude(mensagem, historico=historico, categorias=cats, contas=contas)
         acao = resultado.get("acao")
 
         if acao == "registrar":
+            conta_id = resultado.get("conta_id") or None
+            conta_nome = next((c["nome"] for c in contas if c["id"] == conta_id), None) if conta_id else None
             salvar_gasto(
                 cliente["id"],
                 resultado["descricao"],
                 float(resultado["valor"]),
                 resultado["categoria"],
-                resultado.get("data", hoje_brasil().isoformat())
+                resultado.get("data", hoje_brasil().isoformat()),
+                conta_id=conta_id
             )
             data_gasto = resultado.get("data", hoje_brasil().isoformat())
             resposta = (
@@ -881,6 +918,8 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 f"📂 Categoria: {resultado['categoria']}\n"
                 f"📅 Data: {formatar_data(data_gasto)}"
             )
+            if conta_nome:
+                resposta += f"\n🏦 Conta: {conta_nome}"
 
         elif acao == "registrar_multiplos":
             gastos = resultado.get("gastos", [])
@@ -888,21 +927,27 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             linhas = ["✅ Transações registradas com sucesso!\n"]
             for g in gastos:
                 data_g = g.get("data", hoje_brasil().isoformat())
+                conta_id_g = g.get("conta_id") or None
+                conta_nome_g = next((c["nome"] for c in contas if c["id"] == conta_id_g), None) if conta_id_g else None
                 salvar_gasto(
                     cliente["id"],
                     g["descricao"],
                     float(g["valor"]),
                     g["categoria"],
-                    data_g
+                    data_g,
+                    conta_id=conta_id_g
                 )
                 total += float(g["valor"])
-                linhas.append(
+                linha = (
                     f"🔍 Tipo: Saída\n"
                     f"✏️ Descrição: {g['descricao']}\n"
                     f"💲 Valor: R$ {float(g['valor']):.2f}\n"
                     f"📂 Categoria: {g['categoria']}\n"
                     f"📅 Data: {formatar_data(data_g)}"
                 )
+                if conta_nome_g:
+                    linha += f"\n🏦 Conta: {conta_nome_g}"
+                linhas.append(linha)
             linhas.append(f"\n💰 Total: R$ {total:.2f}")
             resposta = "\n\n".join(linhas)
 
@@ -1035,9 +1080,11 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             descricao = resultado.get("descricao", "Renda").strip() or "Renda"
             tipo = resultado.get("tipo", "extra")
             data_renda = resultado.get("data", hoje_brasil().isoformat())
+            conta_id_renda = resultado.get("conta_id") or None
+            conta_nome_renda = next((c["nome"] for c in contas if c["id"] == conta_id_renda), None) if conta_id_renda else None
             if valor > 0:
                 # Registra entrada na tabela rendas
-                registrar_entrada_renda(cliente["id"], descricao, valor, tipo, data_renda)
+                registrar_entrada_renda(cliente["id"], descricao, valor, tipo, data_renda, conta_id=conta_id_renda)
                 # Se for fixo, também atualiza renda_mensal de referência
                 if tipo == "fixo":
                     salvar_renda(cliente["id"], valor)
@@ -1051,6 +1098,8 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     f"📅 Data: {formatar_data(data_renda)}\n\n"
                     f"Envie *resumo* para ver seu saldo do mês!"
                 )
+                if conta_nome_renda:
+                    resposta += f"\n🏦 Conta: {conta_nome_renda}"
             else:
                 resposta = "Não consegui identificar o valor da renda. Tente: *recebi meu salário de 3000* ou *freela de 500*"
 
