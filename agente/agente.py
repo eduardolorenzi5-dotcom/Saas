@@ -270,6 +270,29 @@ def resumo_mes(cliente_id):
     conn.close()
     return total, [dict(r) for r in por_cat]
 
+def resumo_mes_conta(cliente_id, conta_id):
+    """Resumo financeiro filtrado por conta bancária específica."""
+    mes = hoje_brasil().strftime("%Y-%m")
+    conn = get_db()
+    total_gastos = conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s",
+        (cliente_id, conta_id, f"{mes}%")
+    ).fetchone()["t"]
+    por_cat = conn.execute(
+        "SELECT categoria, SUM(valor) as s FROM gastos WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s GROUP BY categoria ORDER BY s DESC",
+        (cliente_id, conta_id, f"{mes}%")
+    ).fetchall()
+    total_rendas = conn.execute(
+        "SELECT COALESCE(SUM(valor),0) as t FROM rendas WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s",
+        (cliente_id, conta_id, f"{mes}%")
+    ).fetchone()["t"]
+    rendas_rows = conn.execute(
+        "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s ORDER BY tipo, valor DESC",
+        (cliente_id, conta_id, f"{mes}%")
+    ).fetchall()
+    conn.close()
+    return float(total_gastos), [dict(r) for r in por_cat], float(total_rendas), [dict(r) for r in rendas_rows]
+
 def gerar_analise_financeira(gastos):
     if not gastos:
         return "Ainda não tenho gastos suficientes para fazer uma análise. Continue registrando seus gastos!"
@@ -598,8 +621,12 @@ Se for exclusão por descrição (extraia a descrição e opcionalmente o valor)
 {{"acao": "deletar", "descricao": "...", "valor": 0.00}}
 (omita "valor" se não mencionado)
 
-Se for consulta de resumo, responda:
+Se for consulta de resumo GERAL (sem citar conta específica), responda:
 {{"acao": "resumo"}}
+
+Se for consulta de resumo de UMA conta específica (ex: "resumo da conta Nubank", "como está meu Bradesco", "saldo do Banco do Brasil", "quanto gastei no Inter"):
+{{"acao": "resumo_conta", "conta_nome": "Nubank"}}
+- conta_nome: nome ou parte do nome da conta mencionada pelo usuário
 
 Se for pedido de análise financeira:
 {{"acao": "analise"}}
@@ -1270,6 +1297,52 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             for c in por_cat:
                 linhas.append(f"  • {c['categoria']}: R$ {c['s']:.2f}")
             resposta = "\n".join(linhas)
+
+        elif acao == "resumo_conta":
+            # ── Resumo filtrado por conta bancária específica ──────────────
+            conta_nome_busca = (resultado.get("conta_nome") or "").strip()
+            # Busca conta por nome (busca parcial, case-insensitive)
+            conta_achada = None
+            for c in contas:
+                if conta_nome_busca.lower() in c["nome"].lower() or c["nome"].lower() in conta_nome_busca.lower():
+                    conta_achada = c
+                    break
+            if not conta_achada:
+                nomes = ", ".join(c["nome"] for c in contas) if contas else "nenhuma conta cadastrada"
+                resposta = (
+                    f"❌ Não encontrei a conta *{conta_nome_busca}*.\n\n"
+                    f"Suas contas cadastradas: *{nomes}*.\n\n"
+                    f"Tente com o nome exato ou cadastre a conta no dashboard."
+                )
+            else:
+                total_g, por_cat_c, total_r, rendas_c = resumo_mes_conta(cliente["id"], conta_achada["id"])
+                mes_label = mes_ano_pt()
+                linhas = [f"🏦 *Resumo {conta_achada['nome']} — {mes_label}*", ""]
+                if total_r > 0 or total_g > 0:
+                    saldo_c = total_r - total_g
+                    if total_r > 0:
+                        pct_c = (total_g / total_r * 100) if total_r else 0
+                        linhas.append(f"💵 *Entradas: R$ {total_r:.2f}*")
+                        linhas.append(f"💸 Saídas: R$ {total_g:.2f} ({pct_c:.1f}%)")
+                        linhas.append(f"{'✅' if saldo_c >= 0 else '⚠️'} Saldo: R$ {saldo_c:.2f}")
+                    else:
+                        linhas.append(f"💸 *Total de saídas: R$ {total_g:.2f}*")
+                    if por_cat_c:
+                        linhas.append("")
+                        linhas.append("📋 *Por categoria:*")
+                        for c in por_cat_c:
+                            linhas.append(f"  • {c['categoria']}: R$ {c['s']:.2f}")
+                    if rendas_c:
+                        linhas.append("")
+                        linhas.append("💰 *Entradas registradas:*")
+                        for r in rendas_c:
+                            linhas.append(f"  • {r['descricao']}: R$ {float(r['valor']):.2f}")
+                else:
+                    linhas.append(f"Nenhum lançamento registrado nesta conta em {mes_label}.")
+                    linhas.append("")
+                    linhas.append("💡 Ao registrar um gasto, mencione a conta:")
+                    linhas.append(f'_"gastei 50 no mercado pelo {conta_achada["nome"]}"_')
+                resposta = "\n".join(linhas)
 
         elif acao == "registrar_renda":
             valor = float(resultado.get("valor", 0))
