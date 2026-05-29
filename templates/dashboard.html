@@ -1383,19 +1383,16 @@ async function gerarRelatorioConta() {
   const url = `/api/contas/${_extratoContaId}/relatorio?mes=${mes}`;
   try {
     const r = await fetch(url);
-    if (!r.ok) {
-      // Pega o texto bruto do erro para diagnóstico
-      const txt = await r.text();
-      const match = txt.match(/ValueError|TypeError|OperationalError|ProgrammingError|[A-Za-z]+Error[^<]{0,200}/);
-      const msg = match ? match[0] : `HTTP ${r.status}`;
-      throw new Error(msg);
+    const data = await r.json();
+    if (!r.ok || !data.ok) {
+      throw new Error(data.erro || `HTTP ${r.status}`);
     }
-    const blob = await r.blob();
+    // Decodifica base64 e faz download
+    const bytes = Uint8Array.from(atob(data.pdf_b64), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'application/pdf' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    const nomeEl = document.getElementById('extrato-nome');
-    const nomeConta = nomeEl ? nomeEl.textContent.trim().replace(/\s+/g,'_') : 'conta';
-    a.download = `relatorio_${nomeConta}_${mes}.pdf`;
+    a.download = data.filename || 'relatorio.pdf';
     a.click();
     URL.revokeObjectURL(a.href);
   } catch(e) {
