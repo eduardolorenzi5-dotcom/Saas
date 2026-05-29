@@ -1379,13 +1379,15 @@ async function gerarRelatorioConta() {
   const orig = btn.innerHTML;
   btn.innerHTML = '⏳ Gerando...';
   btn.disabled = true;
-  // Download direto do PDF
+  // Abre em nova aba para ver o erro ou baixar o PDF
   const url = `/api/contas/${_extratoContaId}/relatorio?mes=${mes}`;
   try {
     const r = await fetch(url);
     if (!r.ok) {
-      let msg = 'Falha ao gerar PDF';
-      try { const j = await r.json(); msg = j.erro || msg; } catch(_){}
+      // Pega o texto bruto do erro para diagnóstico
+      const txt = await r.text();
+      const match = txt.match(/ValueError|TypeError|OperationalError|ProgrammingError|[A-Za-z]+Error[^<]{0,200}/);
+      const msg = match ? match[0] : `HTTP ${r.status}`;
       throw new Error(msg);
     }
     const blob = await r.blob();
@@ -1397,7 +1399,7 @@ async function gerarRelatorioConta() {
     a.click();
     URL.revokeObjectURL(a.href);
   } catch(e) {
-    alert('Erro ao gerar relatório: ' + e.message);
+    alert('Erro ao gerar relatório:\n' + e.message);
   } finally {
     btn.innerHTML = orig;
     btn.disabled = false;
