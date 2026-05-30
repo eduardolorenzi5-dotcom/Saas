@@ -1919,9 +1919,16 @@ def atualizar_whatsapp2():
     if dup:
         conn.close()
         return redirect(url_for("dashboard") + "?wpp2_erro=ja_cadastrado#minha-conta")
+    cliente = conn.execute("SELECT nome FROM clientes WHERE id=%s", (cid,)).fetchone()
     conn.execute("UPDATE clientes SET whatsapp2=%s WHERE id=%s", (novo, cid))
     conn.commit()
     conn.close()
+    # Envia boas-vindas para o segundo número
+    if cliente:
+        try:
+            enviar_wpp_boas_vindas(novo, cliente["nome"], cid)
+        except Exception as e:
+            logging.warning(f"[WPP] Falha ao enviar boas-vindas para whatsapp2: {e}")
     return redirect(url_for("dashboard") + "?wpp2_ok=1#minha-conta")
 
 @app.route("/assinatura")
