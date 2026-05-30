@@ -400,8 +400,9 @@
               <div class="tx-desc">{{ g.descricao }}</div>
               <div class="tx-meta">{{ g.categoria }} · {{ g.data }}{% if g.fonte == 'whatsapp' %} · via WhatsApp{% endif %}</div>
             </div>
-            <div style="display:flex;align-items:center;">
+            <div style="display:flex;align-items:center;gap:2px;">
               <span class="tx-val">R$ {{ "%.2f"|format(g.valor) }}</span>
+              <button onclick='abrirEditarLancamento({"id":{{ g.id }},"tipo":"gasto","descricao":{{ g.descricao|tojson }},"valor":{{ g.valor }},"data":"{{ g.data }}","categoria":{{ (g.categoria or "Outros")|tojson }}})' style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
               <button class="tx-del" onclick="delGasto({{ g.id }})">×</button>
             </div>
           </div>
@@ -479,8 +480,9 @@
             <div class="tx-desc">{{ '💼' if r.tipo == 'fixo' else '⚡' }} {{ r.descricao }}</div>
             <div class="tx-meta">{{ 'Fixa' if r.tipo == 'fixo' else 'Extra' }} · {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] if r.data else '' }}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:4px;">
+          <div style="display:flex;align-items:center;gap:2px;">
             <span class="tx-val" style="font-size:14px;font-weight:700;color:#059669;white-space:nowrap;">+ R$ {{ "%.2f"|format(r.valor) }}</span>
+            <button onclick='abrirEditarLancamento({"id":{{ r.id }},"tipo":"renda","descricao":{{ r.descricao|tojson }},"valor":{{ r.valor }},"data":"{{ r.data }}","subtipo":"{{ r.tipo }}"})' style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
             <button class="tx-del" onclick="delRenda({{ r.id }})">×</button>
           </div>
         </div>
@@ -1660,7 +1662,9 @@ async function salvarEdicaoLancamento() {
   const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.ok) {
     fecharEditarLancamento();
-    await carregarExtrato(); // recarrega o extrato
+    // Se o extrato está aberto, recarrega ele; senão recarrega a página
+    if (_extratoContaId) await carregarExtrato();
+    else location.reload();
   } else {
     const d = await r.json();
     msg.textContent = d.erro || 'Erro ao salvar.';
@@ -1671,8 +1675,10 @@ async function deletarLancamento(id, tipo) {
   if (!confirm('Excluir este lançamento?')) return;
   const url = tipo === 'gasto' ? `/api/gastos/${id}` : `/api/rendas/${id}`;
   const r = await fetch(url, { method: 'DELETE' });
-  if (r.ok) await carregarExtrato();
-  else alert('Erro ao excluir.');
+  if (r.ok) {
+    if (_extratoContaId) await carregarExtrato();
+    else location.reload();
+  } else alert('Erro ao excluir.');
 }
 // Fecha modal de edição ao clicar no backdrop
 document.getElementById('modal-editar-lancamento').addEventListener('click', function(e) {
