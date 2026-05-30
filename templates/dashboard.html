@@ -1089,6 +1089,52 @@
   </div>
 </div>
 
+<!-- ===== MODAL EDITAR LANÇAMENTO ===== -->
+<div id="modal-editar-lancamento" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h3 id="modal-edit-titulo" style="font-size:16px;font-weight:700;color:#1a1a2e;margin:0;">✏️ Editar lançamento</h3>
+      <button onclick="fecharEditarLancamento()" style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="form-field">
+        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;">Descrição</label>
+        <input type="text" id="edit-lanc-desc" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-size:14px;margin-top:4px;box-sizing:border-box;"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-field">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;">Valor (R$)</label>
+          <input type="text" inputmode="numeric" class="moeda-br" id="edit-lanc-valor" oninput="mascaraMoeda(this)" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-size:14px;margin-top:4px;box-sizing:border-box;"/>
+        </div>
+        <div class="form-field">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;">Data</label>
+          <input type="date" id="edit-lanc-data" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-size:14px;margin-top:4px;box-sizing:border-box;"/>
+        </div>
+      </div>
+      <!-- Categoria (só para gastos) -->
+      <div class="form-field" id="edit-lanc-cat-group">
+        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;">Categoria</label>
+        <select id="edit-lanc-cat" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-size:14px;margin-top:4px;background:#fff;">
+          {% for c in cats_usuario %}<option value="{{ c.nome }}">{{ c.emoji }} {{ c.nome }}</option>{% endfor %}
+        </select>
+      </div>
+      <!-- Tipo (só para rendas) -->
+      <div class="form-field" id="edit-lanc-tipo-group" style="display:none;">
+        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;">Tipo</label>
+        <select id="edit-lanc-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-size:14px;margin-top:4px;background:#fff;">
+          <option value="fixo">Renda fixa</option>
+          <option value="extra">Renda extra</option>
+        </select>
+      </div>
+    </div>
+    <div id="edit-lanc-msg" style="font-size:12px;color:#ef4444;margin-top:10px;display:none;"></div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button onclick="salvarEdicaoLancamento()" style="flex:1;background:#6366f1;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+      <button onclick="fecharEditarLancamento()" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:11px 18px;font-size:14px;cursor:pointer;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== ABA: MINHA CONTA ===== -->
 <div id="tab-minha-conta" style="display:none;">
   <div class="dash-period" style="margin-bottom:24px;">
@@ -1548,18 +1594,91 @@ async function carregarExtrato() {
                  : m.tipo === 'renda' ? (m.subtipo === 'fixo' ? 'Renda fixa' : 'Renda extra')
                  : (m.outra_conta ? (m.tipo === 'transferencia_entrada' ? `De: ${m.outra_conta}` : `Para: ${m.outra_conta}`) : '');
       const autoTag = m.fonte === 'auto' ? ' <span style="font-size:9px;background:#dcfce7;color:#16a34a;border-radius:4px;padding:1px 5px;font-weight:600;">AUTO</span>' : '';
+      const podeEditar = (m.tipo === 'gasto' || m.tipo === 'renda');
+      const editBtns = podeEditar ? `
+        <button onclick='abrirEditarLancamento(${JSON.stringify(m)})' title="Editar"
+          style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">✏️</button>
+        <button onclick="deletarLancamento(${m.id},'${m.tipo}')" title="Excluir"
+          style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:18px;padding:0 2px;line-height:1;">×</button>` : '';
       html += `<div class="extrato-item">
         <div class="extrato-icon ${classeIcon[m.tipo]}">${icones[m.tipo]}</div>
         <div class="extrato-desc">
           <div class="extrato-desc-nome">${m.descricao}${autoTag}</div>
           <div class="extrato-desc-meta">${tipoLabel[m.tipo]}${meta ? ' · ' + meta : ''}</div>
         </div>
-        <div class="extrato-valor ${classeValor[m.tipo]}">${sinal[m.tipo]}R$ ${parseFloat(m.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div class="extrato-valor ${classeValor[m.tipo]}">${sinal[m.tipo]}R$ ${parseFloat(m.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+          ${editBtns}
+        </div>
       </div>`;
     });
   });
   lista.innerHTML = html;
 }
+
+// ── EDITAR / DELETAR LANÇAMENTO (extrato) ────────────────────────────────────
+let _editLancamento = null; // { id, tipo, descricao, valor, data, categoria, subtipo }
+
+function abrirEditarLancamento(m) {
+  _editLancamento = m;
+  const isGasto = m.tipo === 'gasto';
+  document.getElementById('modal-edit-titulo').textContent = isGasto ? '✏️ Editar saída' : '✏️ Editar entrada';
+  document.getElementById('edit-lanc-desc').value  = m.descricao || '';
+  document.getElementById('edit-lanc-valor').value = formatarMoeda(parseFloat(m.valor));
+  document.getElementById('edit-lanc-data').value  = m.data || '';
+  // Categoria vs Tipo
+  document.getElementById('edit-lanc-cat-group').style.display  = isGasto ? 'block' : 'none';
+  document.getElementById('edit-lanc-tipo-group').style.display = isGasto ? 'none'  : 'block';
+  if (isGasto) {
+    const catSel = document.getElementById('edit-lanc-cat');
+    Array.from(catSel.options).forEach(o => { o.selected = o.value === m.categoria; });
+  } else {
+    const tipoSel = document.getElementById('edit-lanc-tipo');
+    Array.from(tipoSel.options).forEach(o => { o.selected = o.value === (m.subtipo || 'fixo'); });
+  }
+  document.getElementById('edit-lanc-msg').style.display = 'none';
+  document.getElementById('modal-editar-lancamento').style.display = 'flex';
+}
+function fecharEditarLancamento() {
+  document.getElementById('modal-editar-lancamento').style.display = 'none';
+  _editLancamento = null;
+}
+async function salvarEdicaoLancamento() {
+  if (!_editLancamento) return;
+  const desc  = document.getElementById('edit-lanc-desc').value.trim();
+  const valor = parseMoeda(document.getElementById('edit-lanc-valor').value);
+  const data  = document.getElementById('edit-lanc-data').value;
+  const msg   = document.getElementById('edit-lanc-msg');
+  if (!desc)           { msg.textContent='Informe a descrição.'; msg.style.display='block'; return; }
+  if (!valor || valor <= 0) { msg.textContent='Informe um valor válido.'; msg.style.display='block'; return; }
+  if (!data)           { msg.textContent='Informe a data.'; msg.style.display='block'; return; }
+  const isGasto = _editLancamento.tipo === 'gasto';
+  const body = isGasto
+    ? { descricao: desc, valor, data, categoria: document.getElementById('edit-lanc-cat').value }
+    : { descricao: desc, valor, data, tipo: document.getElementById('edit-lanc-tipo').value };
+  const url = isGasto ? `/api/gastos/${_editLancamento.id}` : `/api/rendas/${_editLancamento.id}`;
+  const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (r.ok) {
+    fecharEditarLancamento();
+    await carregarExtrato(); // recarrega o extrato
+  } else {
+    const d = await r.json();
+    msg.textContent = d.erro || 'Erro ao salvar.';
+    msg.style.display = 'block';
+  }
+}
+async function deletarLancamento(id, tipo) {
+  if (!confirm('Excluir este lançamento?')) return;
+  const url = tipo === 'gasto' ? `/api/gastos/${id}` : `/api/rendas/${id}`;
+  const r = await fetch(url, { method: 'DELETE' });
+  if (r.ok) await carregarExtrato();
+  else alert('Erro ao excluir.');
+}
+// Fecha modal de edição ao clicar no backdrop
+document.getElementById('modal-editar-lancamento').addEventListener('click', function(e) {
+  if (e.target === this) fecharEditarLancamento();
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function gerarRelatorioConta() {
   if (!_extratoContaId) return;
