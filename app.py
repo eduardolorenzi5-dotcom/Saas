@@ -138,6 +138,18 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS tipos_renda (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                nome TEXT NOT NULL,
+                emoji TEXT DEFAULT '💰',
+                base TEXT DEFAULT 'fixo',
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                UNIQUE (cliente_id, nome)
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS rendas (
                 id SERIAL PRIMARY KEY,
                 cliente_id INTEGER NOT NULL,
@@ -427,6 +439,20 @@ def init_db():
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
             )
         """)
+        # Migration: tipos de renda personalizados
+        conn.execute("ALTER TABLE rendas ADD COLUMN IF NOT EXISTS tipo_renda TEXT")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tipos_renda (
+                id SERIAL PRIMARY KEY,
+                cliente_id INTEGER NOT NULL,
+                nome TEXT NOT NULL,
+                emoji TEXT DEFAULT '💰',
+                base TEXT DEFAULT 'fixo',
+                criado_em TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                UNIQUE (cliente_id, nome)
+            )
+        """)
         # Migration: prazo em meses para contas mensais e rendas recorrentes
         conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS total_meses INTEGER")
         conn.execute("ALTER TABLE contas_mensais ADD COLUMN IF NOT EXISTS meses_executados INTEGER DEFAULT 0")
@@ -501,6 +527,30 @@ def init_db():
     except Exception as e:
         import logging as _log; _log.warning(f"[CATS] migração: {e}")
 
+    # Migração: popula tipos de renda padrão para clientes que ainda não têm nenhum
+    try:
+        clientes_sem_tipo = conn.execute(
+            "SELECT id FROM clientes WHERE id NOT IN (SELECT DISTINCT cliente_id FROM tipos_renda)"
+        ).fetchall()
+        for c in clientes_sem_tipo:
+            for nome, emoji, base in TIPOS_RENDA_PADRAO:
+                try:
+                    if USE_PG:
+                        conn.execute(
+                            "INSERT INTO tipos_renda (cliente_id, nome, emoji, base) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                            (c["id"], nome, emoji, base)
+                        )
+                    else:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO tipos_renda (cliente_id, nome, emoji, base) VALUES (?, ?, ?, ?)",
+                            (c["id"], nome, emoji, base)
+                        )
+                except Exception:
+                    pass
+        conn.commit()
+    except Exception as e:
+        import logging as _log; _log.warning(f"[TIPOS_RENDA] migração: {e}")
+
     # Remove planos antigos que não têm clientes vinculados e garante só o Controla Fácil
     descricao_plano = "Controle de gastos via WhatsApp com IA + dashboard + relatórios"
     if USE_PG:
@@ -536,6 +586,37 @@ CATS_PADRAO = [
     ("Lazer","🎉"), ("Moradia","🏠"), ("Educação","📚"),
     ("Roupas","👕"), ("Outros","📦")
 ]
+
+TIPOS_RENDA_PADRAO = [
+    # (nome, emoji, base)
+    ("Salário",          "💼", "fixo"),
+    ("Aluguel recebido", "🏠", "fixo"),
+    ("Aposentadoria",    "👴", "fixo"),
+    ("Pensão",           "👨‍👩‍👧", "fixo"),
+    ("Freela",           "💻", "extra"),
+    ("Comissão",         "🤝", "extra"),
+    ("Investimento",     "📈", "extra"),
+    ("Bônus",            "🎯", "extra"),
+    ("Presente",         "🎁", "extra"),
+    ("Outros",           "💰", "extra"),
+]
+
+def _popular_tipos_renda_padrao(conn, cliente_id):
+    """Insere tipos de renda padrão para um novo cliente."""
+    for nome, emoji, base in TIPOS_RENDA_PADRAO:
+        try:
+            if USE_PG:
+                conn.execute(
+                    "INSERT INTO tipos_renda (cliente_id, nome, emoji, base) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                    (cliente_id, nome, emoji, base)
+                )
+            else:
+                conn.execute(
+                    "INSERT OR IGNORE INTO tipos_renda (cliente_id, nome, emoji, base) VALUES (?, ?, ?, ?)",
+                    (cliente_id, nome, emoji, base)
+                )
+        except Exception:
+            pass
 
 def _popular_categorias_padrao(conn, cliente_id):
     """Insere categorias padrão para um novo cliente."""
@@ -930,6 +1011,7 @@ def admin_criar_conta():
         novo = conn.execute("SELECT id FROM clientes WHERE email=%s", (email,)).fetchone()
         if novo:
             _popular_categorias_padrao(conn, novo["id"])
+            _popular_tipos_renda_padrao(conn, novo["id"])
         conn.commit()
     except Exception as e:
         conn.close()
@@ -1625,7 +1707,7 @@ def dashboard():
         "SELECT nome, emoji FROM categorias WHERE cliente_id=%s ORDER BY nome", (cid,)
     ).fetchall()
     rendas_mes = conn.execute(
-        "SELECT id, descricao, valor, tipo, data FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
+        "SELECT id, descricao, valor, tipo, tipo_renda, data FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY data DESC",
         (cid, f"{mes}%")
     ).fetchall()
     # Contas bancárias com saldo calculado (receitas - despesas + saldo inicial)
@@ -1709,6 +1791,10 @@ def dashboard():
     rendas_recorrentes_ativas = conn.execute(
         "SELECT * FROM rendas_recorrentes WHERE cliente_id=%s AND ativo=TRUE ORDER BY dia_credito", (cid,)
     ).fetchall()
+    # Tipos de renda customizados
+    tipos_renda = conn.execute(
+        "SELECT * FROM tipos_renda WHERE cliente_id=%s ORDER BY base, nome", (cid,)
+    ).fetchall()
     conn.close()
     total_renda_mes = sum(float(r["valor"]) for r in rendas_mes)
     renda_fixa_mes = sum(float(r["valor"]) for r in rendas_mes if r["tipo"] == "fixo")
@@ -1769,6 +1855,7 @@ def dashboard():
         contas_mensais_ativas=contas_mensais_ativas,
         proximos_debitos=proximos_debitos,
         rendas_recorrentes_ativas=rendas_recorrentes_ativas,
+        tipos_renda=tipos_renda,
     )
 
 @app.route("/debug/session")
@@ -1984,6 +2071,58 @@ def deletar_categoria(nome):
     conn.close()
     return jsonify({"ok": True})
 
+@app.route("/api/tipos-renda", methods=["GET"])
+@login_required
+def listar_tipos_renda():
+    cid = session["cliente_id"]
+    conn = get_db()
+    tipos = conn.execute(
+        "SELECT * FROM tipos_renda WHERE cliente_id=%s ORDER BY base, nome", (cid,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(t) for t in tipos])
+
+@app.route("/api/tipos-renda", methods=["POST"])
+@login_required
+def criar_tipo_renda():
+    cid = session["cliente_id"]
+    data = request.json or {}
+    nome  = (data.get("nome") or "").strip()
+    emoji = (data.get("emoji") or "💰").strip()
+    base  = data.get("base", "extra")
+    if not nome:
+        return jsonify({"erro": "Nome obrigatório"}), 400
+    if base not in ("fixo", "extra"):
+        base = "extra"
+    conn = get_db()
+    try:
+        if USE_PG:
+            conn.execute(
+                "INSERT INTO tipos_renda (cliente_id, nome, emoji, base) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                (cid, nome, emoji, base)
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO tipos_renda (cliente_id, nome, emoji, base) VALUES (?, ?, ?, ?)",
+                (cid, nome, emoji, base)
+            )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        return jsonify({"erro": str(e)}), 500
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/tipos-renda/<int:tid>", methods=["DELETE"])
+@login_required
+def deletar_tipo_renda(tid):
+    cid = session["cliente_id"]
+    conn = get_db()
+    conn.execute("DELETE FROM tipos_renda WHERE id=%s AND cliente_id=%s", (tid, cid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
 def _calcular_saldo_conta(conn, cliente_id, conta_id, saldo_inicial):
     """Retorna dict com saldo, total_receitas e total_despesas."""
     receitas = float(conn.execute(
@@ -2088,7 +2227,7 @@ def extrato_conta(conta_id):
             (cid, conta_id, mes_filtro)
         ).fetchall()
         rendas = conn.execute(
-            "SELECT id, descricao, valor, tipo, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s ORDER BY data DESC, id DESC",
+            "SELECT id, descricao, valor, tipo, tipo_renda, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s AND data LIKE %s ORDER BY data DESC, id DESC",
             (cid, conta_id, mes_filtro)
         ).fetchall()
         entradas = conn.execute(
@@ -2111,7 +2250,7 @@ def extrato_conta(conta_id):
             (cid, conta_id)
         ).fetchall()
         rendas = conn.execute(
-            "SELECT id, descricao, valor, tipo, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s ORDER BY data DESC, id DESC",
+            "SELECT id, descricao, valor, tipo, tipo_renda, data, fonte FROM rendas WHERE cliente_id=%s AND conta_id=%s ORDER BY data DESC, id DESC",
             (cid, conta_id)
         ).fetchall()
         entradas = conn.execute(
@@ -2141,7 +2280,7 @@ def extrato_conta(conta_id):
     for r in rendas:
         movs.append({"id": r["id"], "tipo": "renda", "descricao": r["descricao"],
                      "valor": float(r["valor"]), "data": r["data"],
-                     "subtipo": r["tipo"], "fonte": r["fonte"]})
+                     "subtipo": r["tipo"], "tipo_renda": r["tipo_renda"], "fonte": r["fonte"]})
     for e in entradas:
         movs.append({"id": e["id"], "tipo": "transferencia_entrada",
                      "descricao": e["descricao"] or f"Transferência de {e['outra_conta']}",
@@ -2278,17 +2417,25 @@ def deletar_transferencia(tx_id):
 def adicionar_renda():
     cid = session["cliente_id"]
     data = request.json or {}
-    descricao = (data.get("descricao") or "").strip()
-    valor = float(data.get("valor", 0))
-    tipo = data.get("tipo", "extra")
+    descricao  = (data.get("descricao") or "").strip()
+    valor      = float(data.get("valor", 0))
+    tipo_renda = (data.get("tipo_renda") or "").strip() or None
     data_renda = data.get("data", hoje_brasil().isoformat())
-    conta_id = data.get("conta_id") or None
+    conta_id   = data.get("conta_id") or None
     if not descricao or valor <= 0:
         return jsonify({"erro": "Dados inválidos"}), 400
+    # Determina tipo (fixo/extra) a partir do tipo_renda escolhido, ou usa o campo tipo diretamente
+    tipo = data.get("tipo", "extra")
     conn = get_db()
+    if tipo_renda:
+        tr = conn.execute(
+            "SELECT base FROM tipos_renda WHERE cliente_id=%s AND nome=%s", (cid, tipo_renda)
+        ).fetchone()
+        if tr:
+            tipo = tr["base"]
     conn.execute(
-        "INSERT INTO rendas (cliente_id, descricao, valor, tipo, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-        (cid, descricao, valor, tipo, data_renda, data.get("fonte", "manual"), conta_id)
+        "INSERT INTO rendas (cliente_id, descricao, valor, tipo, tipo_renda, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (cid, descricao, valor, tipo, tipo_renda, data_renda, data.get("fonte", "manual"), conta_id)
     )
     conn.commit()
     conn.close()
@@ -2315,14 +2462,22 @@ def editar_renda(rid):
     if not renda:
         conn.close()
         return jsonify({"erro": "Renda não encontrada"}), 404
-    descricao = data.get("descricao", renda["descricao"])
-    valor     = float(data["valor"]) if "valor" in data else float(renda["valor"])
-    tipo      = data.get("tipo", renda["tipo"])
-    data_r    = data.get("data", renda["data"])
-    conta_id  = data.get("conta_id", renda["conta_id"]) if "conta_id" in data else renda["conta_id"]
+    descricao  = data.get("descricao", renda["descricao"])
+    valor      = float(data["valor"]) if "valor" in data else float(renda["valor"])
+    tipo       = data.get("tipo", renda["tipo"])
+    data_r     = data.get("data", renda["data"])
+    conta_id   = data.get("conta_id", renda["conta_id"]) if "conta_id" in data else renda["conta_id"]
+    tipo_renda = data.get("tipo_renda", renda.get("tipo_renda")) if "tipo_renda" in data else renda.get("tipo_renda")
+    # Se escolheu um tipo_renda, atualiza tipo (fixo/extra) a partir da tabela
+    if "tipo_renda" in data and data["tipo_renda"]:
+        tr = conn.execute(
+            "SELECT base FROM tipos_renda WHERE cliente_id=%s AND nome=%s", (cid, data["tipo_renda"])
+        ).fetchone()
+        if tr:
+            tipo = tr["base"]
     conn.execute(
-        "UPDATE rendas SET descricao=%s, valor=%s, tipo=%s, data=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
-        (descricao, valor, tipo, data_r, conta_id, rid, cid)
+        "UPDATE rendas SET descricao=%s, valor=%s, tipo=%s, tipo_renda=%s, data=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",
+        (descricao, valor, tipo, tipo_renda, data_r, conta_id, rid, cid)
     )
     conn.commit()
     conn.close()

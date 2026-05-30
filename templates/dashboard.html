@@ -478,11 +478,11 @@
         <div class="tx-item" id="renda-{{ r.id }}">
           <div>
             <div class="tx-desc">{{ '💼' if r.tipo == 'fixo' else '⚡' }} {{ r.descricao }}</div>
-            <div class="tx-meta">{{ 'Fixa' if r.tipo == 'fixo' else 'Extra' }} · {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] if r.data else '' }}</div>
+            <div class="tx-meta">{% if r.tipo_renda %}{{ r.tipo_renda }}{% else %}{{ 'Fixa' if r.tipo == 'fixo' else 'Extra' }}{% endif %} · {{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[0:4] if r.data else '' }}</div>
           </div>
           <div style="display:flex;align-items:center;gap:2px;">
             <span class="tx-val" style="font-size:14px;font-weight:700;color:#059669;white-space:nowrap;">+ R$ {{ "%.2f"|format(r.valor) }}</span>
-            <button onclick='abrirEditarLancamento({"id":{{ r.id }},"tipo":"renda","descricao":{{ r.descricao|tojson }},"valor":{{ r.valor }},"data":"{{ r.data }}","subtipo":"{{ r.tipo }}"})' style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
+            <button onclick='abrirEditarLancamento({"id":{{ r.id }},"tipo":"renda","descricao":{{ r.descricao|tojson }},"valor":{{ r.valor }},"data":"{{ r.data }}","subtipo":"{{ r.tipo }}","tipo_renda":{{ (r.tipo_renda or "")|tojson }}})' style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;" title="Editar">✏️</button>
             <button class="tx-del" onclick="delRenda({{ r.id }})">×</button>
           </div>
         </div>
@@ -501,10 +501,11 @@
         <div class="form-field"><label>Descrição</label><input type="text" id="renda-desc" placeholder="Ex: Salário, Freela, Comissão"/></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div class="form-field"><label>Valor (R$)</label><input type="text" inputmode="numeric" class="moeda-br" id="renda-val" placeholder="0,00" oninput="mascaraMoeda(this)"/></div>
-          <div class="form-field"><label>Tipo</label>
-            <select id="renda-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#f9fafb;">
-              <option value="fixo">💼 Renda Fixa</option>
-              <option value="extra">⚡ Renda Extra</option>
+          <div class="form-field"><label>Tipo de Receita</label>
+            <select id="renda-tipo-renda" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;background:#f9fafb;">
+              {% for t in tipos_renda %}
+              <option value="{{ t.nome }}" data-base="{{ t.base }}">{{ t.emoji }} {{ t.nome }}</option>
+              {% endfor %}
             </select>
           </div>
         </div>
@@ -541,6 +542,31 @@
       <button class="btn-add" onclick="adicionarCategoria()" style="padding:8px 18px;">+ Adicionar</button>
     </div>
     <div id="cat-msg" style="font-size:12px;margin-top:8px;color:#ef4444;display:none;"></div>
+  </div>
+
+  <!-- GERENCIAR TIPOS DE RENDA -->
+  <div class="form-card" style="margin-top:24px;" id="gerenciar-tipos-renda">
+    <div class="form-card-title">💰 Meus tipos de receita</div>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 14px;">Crie tipos personalizados para classificar suas receitas (ex: Freelance, Aluguel, Bônus etc.)</p>
+    <div id="tipos-renda-lista" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      {% for t in tipos_renda %}
+      <div id="tipo-renda-chip-{{ t.id }}" style="display:inline-flex;align-items:center;gap:6px;background:{% if t.base == 'fixo' %}#eff6ff{% else %}#f5f3ff{% endif %};border:1px solid {% if t.base == 'fixo' %}#bfdbfe{% else %}#ddd6fe{% endif %};border-radius:100px;padding:5px 12px;font-size:13px;">
+        <span>{{ t.emoji }} {{ t.nome }}</span>
+        <span style="font-size:10px;color:#9ca3af;">({{ 'fixa' if t.base == 'fixo' else 'extra' }})</span>
+        <button onclick="deletarTipoRenda({{ t.id }})" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:0;line-height:1;" title="Remover">×</button>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="novo-tipo-renda-emoji" placeholder="💰" style="width:52px;border:1px solid #e5e7eb;border-radius:8px;padding:7px 8px;font-size:18px;text-align:center;" maxlength="2"/>
+      <input type="text" id="novo-tipo-renda-nome" placeholder="Nome do tipo" style="border:1px solid #e5e7eb;border-radius:8px;padding:7px 12px;font-size:13px;width:180px;" maxlength="40"/>
+      <select id="novo-tipo-renda-base" style="border:1px solid #e5e7eb;border-radius:8px;padding:7px 10px;font-size:13px;background:#f9fafb;">
+        <option value="fixo">💼 Renda Fixa</option>
+        <option value="extra">⚡ Renda Extra</option>
+      </select>
+      <button class="btn-add" onclick="adicionarTipoRenda()" style="padding:8px 18px;">+ Adicionar</button>
+    </div>
+    <div id="tipo-renda-msg" style="font-size:12px;margin-top:8px;color:#ef4444;display:none;"></div>
   </div>
 
 </div><!-- /tab-visao-geral -->
@@ -1122,10 +1148,11 @@
       </div>
       <!-- Tipo (só para rendas) -->
       <div class="form-field" id="edit-lanc-tipo-group" style="display:none;">
-        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;">Tipo</label>
-        <select id="edit-lanc-tipo" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-size:14px;margin-top:4px;background:#fff;">
-          <option value="fixo">Renda fixa</option>
-          <option value="extra">Renda extra</option>
+        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;">Tipo de Receita</label>
+        <select id="edit-lanc-tipo-renda" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-size:14px;margin-top:4px;background:#fff;">
+          {% for t in tipos_renda %}
+          <option value="{{ t.nome }}" data-base="{{ t.base }}">{{ t.emoji }} {{ t.nome }}</option>
+          {% endfor %}
         </select>
       </div>
     </div>
@@ -1359,7 +1386,8 @@ if (labels.length > 0) {
 async function addRenda() {
   const desc = document.getElementById('renda-desc').value.trim();
   const val = parseMoeda(document.getElementById('renda-val').value);
-  const tipo = document.getElementById('renda-tipo').value;
+  const tipoRendaEl = document.getElementById('renda-tipo-renda');
+  const tipo_renda = tipoRendaEl ? tipoRendaEl.value : '';
   const data = document.getElementById('renda-data').value || new Date().toISOString().slice(0,10);
   const contaEl = document.getElementById('renda-conta');
   const conta_id = contaEl ? (parseInt(contaEl.value) || null) : null;
@@ -1367,9 +1395,41 @@ async function addRenda() {
   const r = await fetch('/api/rendas', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({descricao: desc, valor: val, tipo, data, fonte: 'manual', conta_id})
+    body: JSON.stringify({descricao: desc, valor: val, tipo_renda, data, fonte: 'manual', conta_id})
   });
   if (r.ok) { location.reload(); }
+}
+
+// TIPOS DE RENDA
+async function adicionarTipoRenda() {
+  const emoji = document.getElementById('novo-tipo-renda-emoji').value.trim() || '💰';
+  const nome  = document.getElementById('novo-tipo-renda-nome').value.trim();
+  const base  = document.getElementById('novo-tipo-renda-base').value;
+  const msg   = document.getElementById('tipo-renda-msg');
+  if (!nome) { msg.textContent='Digite um nome.'; msg.style.display='block'; return; }
+  msg.style.display = 'none';
+  const r = await fetch('/api/tipos-renda', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nome, emoji, base})
+  });
+  if (r.ok) {
+    location.reload();
+  } else {
+    const d = await r.json();
+    msg.textContent = d.erro || 'Erro ao adicionar.';
+    msg.style.display = 'block';
+  }
+}
+async function deletarTipoRenda(id) {
+  if (!confirm('Remover este tipo de receita?')) return;
+  const r = await fetch(`/api/tipos-renda/${id}`, {method:'DELETE'});
+  if (r.ok) {
+    const chip = document.getElementById(`tipo-renda-chip-${id}`);
+    if (chip) chip.remove();
+  } else {
+    alert('Erro ao remover.');
+  }
 }
 
 // CONTAS BANCÁRIAS
@@ -1593,7 +1653,7 @@ async function carregarExtrato() {
     html += `<div style="padding:8px 24px 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;background:#f9fafb;border-bottom:1px solid #f3f4f6;">${d2} ${mesesPT[parseInt(mo)-1]} ${y}</div>`;
     porData[data].forEach(m => {
       const meta = m.tipo === 'gasto' ? m.categoria
-                 : m.tipo === 'renda' ? (m.subtipo === 'fixo' ? 'Renda fixa' : 'Renda extra')
+                 : m.tipo === 'renda' ? (m.tipo_renda || (m.subtipo === 'fixo' ? 'Renda fixa' : 'Renda extra'))
                  : (m.outra_conta ? (m.tipo === 'transferencia_entrada' ? `De: ${m.outra_conta}` : `Para: ${m.outra_conta}`) : '');
       const autoTag = m.fonte === 'auto' ? ' <span style="font-size:9px;background:#dcfce7;color:#16a34a;border-radius:4px;padding:1px 5px;font-weight:600;">AUTO</span>' : '';
       const podeEditar = (m.tipo === 'gasto' || m.tipo === 'renda');
@@ -1635,8 +1695,22 @@ function abrirEditarLancamento(m) {
     const catSel = document.getElementById('edit-lanc-cat');
     Array.from(catSel.options).forEach(o => { o.selected = o.value === m.categoria; });
   } else {
-    const tipoSel = document.getElementById('edit-lanc-tipo');
-    Array.from(tipoSel.options).forEach(o => { o.selected = o.value === (m.subtipo || 'fixo'); });
+    const tipoRendaSel = document.getElementById('edit-lanc-tipo-renda');
+    if (tipoRendaSel) {
+      // Tenta selecionar pelo tipo_renda (nome), senão seleciona pelo base (fixo/extra)
+      const match = m.tipo_renda || '';
+      let found = false;
+      Array.from(tipoRendaSel.options).forEach(o => {
+        if (o.value === match) { o.selected = true; found = true; }
+        else o.selected = false;
+      });
+      if (!found) {
+        // fallback: seleciona pelo base (fixo/extra)
+        Array.from(tipoRendaSel.options).forEach(o => {
+          o.selected = (o.dataset.base === (m.subtipo || 'extra'));
+        });
+      }
+    }
   }
   document.getElementById('edit-lanc-msg').style.display = 'none';
   document.getElementById('modal-editar-lancamento').style.display = 'flex';
@@ -1655,9 +1729,13 @@ async function salvarEdicaoLancamento() {
   if (!valor || valor <= 0) { msg.textContent='Informe um valor válido.'; msg.style.display='block'; return; }
   if (!data)           { msg.textContent='Informe a data.'; msg.style.display='block'; return; }
   const isGasto = _editLancamento.tipo === 'gasto';
-  const body = isGasto
-    ? { descricao: desc, valor, data, categoria: document.getElementById('edit-lanc-cat').value }
-    : { descricao: desc, valor, data, tipo: document.getElementById('edit-lanc-tipo').value };
+  let body;
+  if (isGasto) {
+    body = { descricao: desc, valor, data, categoria: document.getElementById('edit-lanc-cat').value };
+  } else {
+    const tipoRendaSel = document.getElementById('edit-lanc-tipo-renda');
+    body = { descricao: desc, valor, data, tipo_renda: tipoRendaSel ? tipoRendaSel.value : '' };
+  }
   const url = isGasto ? `/api/gastos/${_editLancamento.id}` : `/api/rendas/${_editLancamento.id}`;
   const r = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.ok) {
