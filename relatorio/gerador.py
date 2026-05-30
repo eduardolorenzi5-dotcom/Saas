@@ -36,8 +36,12 @@ def _donut_chart(por_cat, total):
     import matplotlib.patches as mpatches
     import numpy as np
 
-    labels = [c["categoria"] for c in por_cat]
-    values = [float(c["total"]) for c in por_cat]
+    # Filtra apenas valores positivos — matplotlib não aceita negativos/zero em pie
+    dados = [(c["categoria"], float(c["total"])) for c in por_cat if float(c["total"]) > 0]
+    if not dados:
+        return None
+    labels = [d[0] for d in dados]
+    values = [d[1] for d in dados]
     colors = CHART_COLORS[:len(labels)]
 
     fig, ax = plt.subplots(figsize=(7, 4.5), facecolor="white")
@@ -125,8 +129,12 @@ def _hbar_categorias_chart(por_cat, total):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    labels = [c["categoria"] for c in por_cat][:8]
-    values = [float(c["total"]) for c in por_cat][:8]
+    # Filtra apenas valores positivos para evitar barras negativas no gráfico
+    dados = [(c["categoria"], float(c["total"])) for c in por_cat if float(c["total"]) > 0][:8]
+    if not dados:
+        return None
+    labels = [d[0] for d in dados]
+    values = [d[1] for d in dados]
     colors = CHART_COLORS[:len(labels)]
 
     labels_rev = labels[::-1]
@@ -366,13 +374,13 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
 
     # ── GRÁFICO DONUT ─────────────────────────────────────────────────
     if por_cat:
-        story.append(Paragraph("Gastos por categoria", s_section))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e7eb"), spaceAfter=8))
-
         donut_buf = _donut_chart(por_cat, total)
-        img_donut = Image(donut_buf, width=usable_w, height=usable_w * 0.48)
-        story.append(img_donut)
-        story.append(Spacer(1, 0.4*cm))
+        if donut_buf:
+            story.append(Paragraph("Gastos por categoria", s_section))
+            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e7eb"), spaceAfter=8))
+            img_donut = Image(donut_buf, width=usable_w, height=usable_w * 0.48)
+            story.append(img_donut)
+            story.append(Spacer(1, 0.4*cm))
 
     # ── GRÁFICO DE BARRAS DIÁRIO ──────────────────────────────────────
     if gastos:
@@ -386,14 +394,14 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
 
     # ── RANKING CATEGORIAS ────────────────────────────────────────────
     if len(por_cat) > 1:
-        story.append(Paragraph("Ranking de categorias", s_section))
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e7eb"), spaceAfter=8))
-
         hbar_buf = _hbar_categorias_chart(por_cat, total)
-        h_ratio = max(2.5, len(por_cat) * 0.55) / 7
-        img_hbar = Image(hbar_buf, width=usable_w, height=usable_w * h_ratio)
-        story.append(img_hbar)
-        story.append(Spacer(1, 0.4*cm))
+        if hbar_buf:
+            story.append(Paragraph("Ranking de categorias", s_section))
+            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e7eb"), spaceAfter=8))
+            h_ratio = max(2.5, len(por_cat) * 0.55) / 7
+            img_hbar = Image(hbar_buf, width=usable_w, height=usable_w * h_ratio)
+            story.append(img_hbar)
+            story.append(Spacer(1, 0.4*cm))
 
     # ── BARRA DE ORÇAMENTO ────────────────────────────────────────────
     if renda and total > 0:
