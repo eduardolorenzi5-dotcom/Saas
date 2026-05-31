@@ -10,16 +10,17 @@ from db import get_db
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "relatorios")
 
-BRAND_DARK   = "#1a1a2e"
-BRAND_GREEN  = "#1D9E75"
-BRAND_PURPLE = "#6366f1"
-BRAND_LIGHT  = "#f5f6fa"
-BRAND_GRAY   = "#6b7280"
+BRAND_DARK    = "#15172b"
+BRAND_GREEN   = "#16a34a"
+BRAND_PRIMARY = "#16a34a"   # cor primária da marca (verde, igual ao dashboard)
+BRAND_LIGHT   = "#f5f6fa"
+BRAND_GRAY    = "#6b7280"
 
+# Paleta do gráfico: começa no verde da marca e segue com cores bem contrastantes
 CHART_COLORS = [
-    "#6366f1", "#1D9E75", "#f59e0b", "#ef4444",
-    "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6",
-    "#f97316", "#84cc16",
+    "#16a34a", "#f59e0b", "#0ea5e9", "#ef4444",
+    "#8b5cf6", "#14b8a6", "#ec4899", "#f97316",
+    "#84cc16", "#64748b",
 ]
 
 MESES_PT = {
@@ -95,7 +96,7 @@ def _bar_diario_chart(gastos, mes):
     valores = [gastos_por_dia.get(d, 0) for d in dias]
 
     fig, ax = plt.subplots(figsize=(9, 3), facecolor="white")
-    bars = ax.bar(dias, valores, color=BRAND_PURPLE, alpha=0.85, width=0.7, zorder=3)
+    bars = ax.bar(dias, valores, color=BRAND_PRIMARY, alpha=0.85, width=0.7, zorder=3)
 
     # Destaca barras com valores
     for bar, val in zip(bars, valores):
@@ -229,7 +230,7 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
     W, H = A4
     DARK  = colors.HexColor(BRAND_DARK)
     GREEN = colors.HexColor(BRAND_GREEN)
-    PURP  = colors.HexColor(BRAND_PURPLE)
+    PURP  = colors.HexColor(BRAND_PRIMARY)
     LIGHT = colors.HexColor(BRAND_LIGHT)
     GRAY  = colors.HexColor(BRAND_GRAY)
 
@@ -238,7 +239,7 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
         return ParagraphStyle(name, parent=base, **kw)
 
     s_title    = make_style("title",    fontSize=22, textColor=colors.white, fontName="Helvetica-Bold", leading=26)
-    s_subtitle = make_style("subtitle", fontSize=11, textColor=colors.HexColor("#a5b4fc"), leading=14)
+    s_subtitle = make_style("subtitle", fontSize=11, textColor=colors.HexColor("#86efac"), leading=14)
     s_client   = make_style("client",   fontSize=13, textColor=colors.white, leading=16)
     s_section  = make_style("section",  fontSize=13, textColor=DARK, fontName="Helvetica-Bold", spaceBefore=12, spaceAfter=6)
     s_body     = make_style("body",     fontSize=9,  textColor=GRAY, leading=13)
@@ -300,7 +301,7 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
 
     _info_right = mes_nome
     if conta_nome:
-        _info_right = f"{mes_nome}<br/><font size=9 color='#a5b4fc'>Conta: {conta_nome}</font>"
+        _info_right = f"{mes_nome}<br/><font size=9 color='#86efac'>Conta: {conta_nome}</font>"
     info_data = [[
         Paragraph(f"<b>{cliente['nome']}</b>", s_client),
         Paragraph(_info_right, make_style("mn", fontSize=11, textColor=GREEN, alignment=TA_RIGHT)),
@@ -318,46 +319,50 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
     story.append(Spacer(1, 0.4*cm))
 
     # ── CARDS DE RESUMO ───────────────────────────────────────────────
-    def make_card(label, value, sub="", color=BRAND_DARK, bg="#ffffff", border=BRAND_PURPLE):
+    def make_card(label, value, sub="", color=BRAND_DARK, bg="#ffffff", border=BRAND_PRIMARY, value_size=16):
         c_label = make_style(f"cl_{label}", fontSize=8, textColor=colors.HexColor("#9ca3af"),
-                             fontName="Helvetica-Bold", leading=10)
-        c_val   = make_style(f"cv_{label}", fontSize=17, textColor=colors.HexColor(color),
-                             fontName="Helvetica-Bold", leading=20)
-        c_sub   = make_style(f"cs_{label}", fontSize=8, textColor=GRAY, leading=11)
+                             fontName="Helvetica-Bold", leading=11)
+        c_val   = make_style(f"cv_{label}", fontSize=value_size, textColor=colors.HexColor(color),
+                             fontName="Helvetica-Bold", leading=value_size + 3)
+        c_sub   = make_style(f"cs_{label}", fontSize=7.5, textColor=GRAY, leading=10)
         inner = [
             [Paragraph(label.upper(), c_label)],
             [Paragraph(value, c_val)],
-            [Paragraph(sub, c_sub)],
+            [Paragraph(sub or "&nbsp;", c_sub)],
         ]
         t = Table(inner, colWidths=[(usable_w - 0.5*cm) / 4 - 0.4*cm])
         t.setStyle(TableStyle([
             ("BACKGROUND",     (0,0), (-1,-1), colors.HexColor(bg)),
-            ("LEFTPADDING",    (0,0), (-1,-1), 10),
-            ("RIGHTPADDING",   (0,0), (-1,-1), 10),
-            ("TOPPADDING",     (0,0), (0,0), 10),
-            ("BOTTOMPADDING",  (0,0), (-1,-1), 10),
-            ("LINEBELOW",      (0,0), (-1,0), 2.5, colors.HexColor(border)),
+            ("LEFTPADDING",    (0,0), (-1,-1), 11),
+            ("RIGHTPADDING",   (0,0), (-1,-1), 11),
+            ("TOPPADDING",     (0,0), (0,0), 12),
+            ("TOPPADDING",     (0,1), (-1,-1), 4),
+            ("BOTTOMPADDING",  (0,0), (-1,-2), 2),
+            ("BOTTOMPADDING",  (0,-1), (-1,-1), 12),
+            ("LINEBELOW",      (0,0), (-1,0), 3, colors.HexColor(border)),
+            ("BOX",            (0,0), (-1,-1), 0.6, colors.HexColor("#e8eaf0")),
+            ("ROUNDEDCORNERS", (0,0), (-1,-1), [7,7,7,7]),
         ]))
         return t
 
     fmt = lambda v: f"R$ {v:,.2f}".replace(",","X").replace(".",",").replace("X",".")
     pct = lambda: f"{total/renda*100:.0f}% da renda" if renda else ""
 
-    card_total = make_card("Total gasto", fmt(total), f"{len(gastos)} transações", BRAND_DARK, "#ffffff", BRAND_PURPLE)
+    card_total = make_card("Total gasto", fmt(total), f"{len(gastos)} transações", "#dc2626", "#ffffff", "#dc2626")
     if renda:
-        card_renda  = make_card("Renda mensal", fmt(renda), "cadastrada", BRAND_GREEN, "#ffffff", BRAND_GREEN)
+        card_renda  = make_card("Renda mensal", fmt(renda), "cadastrada no sistema", BRAND_GREEN, "#ffffff", BRAND_GREEN)
         saldo = renda - total
         card_saldo  = make_card("Saldo disponível", fmt(saldo),
-                                f"{'✓ dentro' if saldo >= 0 else '⚠ acima'} do orçamento",
+                                f"{'dentro' if saldo >= 0 else 'acima'} do orçamento",
                                 BRAND_GREEN if saldo >= 0 else "#dc2626", "#ffffff",
                                 BRAND_GREEN if saldo >= 0 else "#dc2626")
     else:
-        card_renda  = make_card("Renda mensal", "Não cadastrada", "envie 'meu salário é X'", BRAND_GRAY, "#f9fafb", BRAND_GRAY)
-        card_saldo  = make_card("Categorias", str(len(por_cat)), "diferentes este mês", BRAND_PURPLE, "#ffffff", BRAND_PURPLE)
+        card_renda  = make_card("Renda mensal", "Não cadastrada", "envie 'meu salário é X'", BRAND_GRAY, "#f9fafb", BRAND_GRAY, value_size=12)
+        card_saldo  = make_card("Categorias", str(len(por_cat)), "diferentes este mês", BRAND_PRIMARY, "#ffffff", BRAND_PRIMARY)
 
-    top_cat = por_cat[0]["categoria"] if por_cat else "—"
+    top_cat = (por_cat[0]["categoria"] if por_cat else "—")[:18]
     top_val = fmt(float(por_cat[0]["total"])) if por_cat else ""
-    card_top = make_card("Maior categoria", top_cat, top_val, BRAND_PURPLE, "#ffffff", BRAND_PURPLE)
+    card_top = make_card("Maior categoria", top_cat, top_val, BRAND_PRIMARY, "#ffffff", BRAND_PRIMARY, value_size=13)
 
     cards_row = Table([[card_total, card_renda, card_saldo, card_top]],
                       colWidths=[(usable_w - 0.45*cm) / 4] * 4,
