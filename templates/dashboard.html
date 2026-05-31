@@ -15,14 +15,14 @@
       --faint: #9ca3af;
       --line: #eceef4;
       --line-soft: #f3f4f6;
-      --brand: #6366f1;
-      --brand-dark: #4f46e5;
-      --brand-soft: #eef0ff;
+      --brand: #16a34a;
+      --brand-dark: #15803d;
+      --brand-soft: #e7f6ec;
       --green: #059669;
       --green-soft: #e8f7f0;
       --red: #dc2626;
       --red-soft: #fdecec;
-      --blue: #2563eb;
+      --blue: #16a34a;
       --navy: #15172b;
       --sidebar-w: 248px;
       --radius: 18px;
@@ -54,10 +54,10 @@
     }
     .sidebar-nav a .nav-ico { font-size: 17px; width: 20px; text-align: center; flex-shrink: 0; }
     .sidebar-nav a:hover { color: #fff; background: rgba(255,255,255,.07); }
-    .sidebar-nav a.ativo { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-dark)); box-shadow: 0 6px 18px rgba(99,102,241,.4); }
+    .sidebar-nav a.ativo { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-dark)); box-shadow: 0 6px 18px rgba(22,163,74,.4); }
     .sidebar-foot { margin-top: auto; padding-top: 16px; }
     .sidebar-user { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.05); }
-    .sidebar-user .avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), #818cf8); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+    .sidebar-user .avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), #4ade80); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0; }
     .sidebar-user .su-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sidebar-user .su-link { font-size: 11px; color: rgba(255,255,255,.5); text-decoration: none; }
     .sidebar-user .su-link:hover { color: #fff; }
@@ -142,8 +142,8 @@
     .form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
     .form-field label { font-size: 11px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .4px; }
     .form-field input, .form-field select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; color: var(--ink); background: #f9fafc; outline: none; transition: border-color .15s, background .15s, box-shadow .15s; }
-    .form-field input:focus, .form-field select:focus { border-color: var(--brand); background: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
-    .btn-add { background: linear-gradient(135deg, var(--brand), var(--brand-dark)); color: #fff; border: none; border-radius: 10px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: filter .15s, transform .1s; box-shadow: 0 6px 16px rgba(99,102,241,.28); }
+    .form-field input:focus, .form-field select:focus { border-color: var(--brand); background: #fff; box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+    .btn-add { background: linear-gradient(135deg, var(--brand), var(--brand-dark)); color: #fff; border: none; border-radius: 10px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: filter .15s, transform .1s; box-shadow: 0 6px 16px rgba(22,163,74,.28); }
     .btn-add:hover { filter: brightness(1.07); }
     .btn-add:active { transform: translateY(1px); }
     .btn-clear { background: var(--red-soft); color: var(--red); border: none; border-radius: 9px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -190,7 +190,7 @@
       }
       .bottom-nav a .bn-icon { font-size: 20px; line-height: 1; }
       .bottom-nav a.ativo, .bottom-nav a:hover { color: #fff; }
-      .bottom-nav a.ativo .bn-icon { filter: drop-shadow(0 0 6px rgba(99,102,241,.9)); }
+      .bottom-nav a.ativo .bn-icon { filter: drop-shadow(0 0 6px rgba(22,163,74,.9)); }
     }
     @media(max-width:600px) {
       .topbar { padding: 12px 14px; }
@@ -235,7 +235,7 @@
     .extrato-valor { font-size:14px;font-weight:700;white-space:nowrap; }
     .extrato-valor.saida { color:#dc2626; }
     .extrato-valor.entrada { color:#059669; }
-    .extrato-valor.transf-in { color:#6366f1; }
+    .extrato-valor.transf-in { color:#16a34a; }
     .extrato-valor.transf-out { color:#8b5cf6; }
     @media(max-width:600px) {
       #modal-extrato > div { max-height:96vh;border-radius:16px 16px 0 0;position:fixed;bottom:0;left:0;right:0;max-width:100%; }
@@ -324,7 +324,7 @@
   <div class="wpp-bar">
     📱 Seu assistente está ativo no WhatsApp <strong style="margin:0 4px;">{{ cliente.whatsapp or 'não vinculado' }}</strong>. Envie mensagens como <em style="margin-left:4px;">"gastei 50 no mercado"</em> para registrar.
     {% if cliente.whatsapp %}
-    <a onclick="showTab('minha-conta');document.getElementById('wpp-edit-form').style.display='flex';" style="color:#6366f1;font-size:12px;margin-left:10px;text-decoration:none;white-space:nowrap;cursor:pointer;">✏️ Número errado?</a>
+    <a onclick="showTab('minha-conta');document.getElementById('wpp-edit-form').style.display='flex';" style="color:#16a34a;font-size:12px;margin-left:10px;text-decoration:none;white-space:nowrap;cursor:pointer;">✏️ Número errado?</a>
     {% endif %}
   </div>
 
@@ -520,7 +520,7 @@
         <span>Por categoria</span>
         <small>{{ mes_nome }}</small>
       </div>
-      {% set cores = ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6'] %}
+      {% set cores = ['#16a34a','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6'] %}
       {% if por_cat %}
         {% for c in por_cat %}
         <div class="cat-item">
@@ -571,7 +571,7 @@
           </div>
           <div style="flex:1;padding:12px 22px;text-align:center;">
             <div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">⚡ Renda Extra</div>
-            <div style="font-size:18px;font-weight:700;color:#6366f1;margin-top:4px;">R$ {{ "%.2f"|format(renda_extra_mes) }}</div>
+            <div style="font-size:18px;font-weight:700;color:#16a34a;margin-top:4px;">R$ {{ "%.2f"|format(renda_extra_mes) }}</div>
           </div>
         </div>
         {% endif %}
@@ -707,7 +707,7 @@
             <span>▼ R$ {{ "%.2f"|format(conta.total_despesas) }}</span>
           </div>
           <button onclick="abrirExtrato({{ conta.id }}, '{{ conta.nome }}')"
-                  style="background:none;border:none;color:#6366f1;font-size:11px;cursor:pointer;padding:0;font-weight:600;">Ver extrato →</button>
+                  style="background:none;border:none;color:#16a34a;font-size:11px;cursor:pointer;padding:0;font-weight:600;">Ver extrato →</button>
         </div>
         {% if conta.saldo_inicial != 0 %}
         <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Saldo inicial: R$ {{ "%.2f"|format(conta.saldo_inicial) }}</div>
@@ -843,7 +843,7 @@
         <div class="tx-meta">{{ t.origem_nome }} → {{ t.destino_nome }} · {{ t.data[8:10] }}/{{ t.data[5:7] }}/{{ t.data[0:4] }}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:14px;font-weight:700;color:#6366f1;">R$ {{ "%.2f"|format(t.valor) }}</span>
+        <span style="font-size:14px;font-weight:700;color:#16a34a;">R$ {{ "%.2f"|format(t.valor) }}</span>
         <button class="tx-del" onclick="deletarTransferencia({{ t.id }})">×</button>
       </div>
     </div>
@@ -963,7 +963,7 @@
             {% endif %}
           </div>
           <div style="display:flex;gap:8px;">
-            <button onclick="salvarEdicaoCM({{ cm.id }})" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+            <button onclick="salvarEdicaoCM({{ cm.id }})" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">💾 Salvar</button>
             <button onclick="fecharEditarCM({{ cm.id }})" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;">Cancelar</button>
           </div>
         </div>
@@ -1138,7 +1138,7 @@
         <!-- Barra de progresso -->
         {% if p.num_parcelas > 0 %}
         <div style="margin-top:10px;background:#f3f4f6;border-radius:100px;height:6px;overflow:hidden;">
-          <div style="width:{{ (p.parcelas_pagas / p.num_parcelas * 100)|round(0) }}%;background:{% if p.parcelas_pagas >= p.num_parcelas %}#059669{% else %}#6366f1{% endif %};height:100%;border-radius:100px;transition:width .3s;"></div>
+          <div style="width:{{ (p.parcelas_pagas / p.num_parcelas * 100)|round(0) }}%;background:{% if p.parcelas_pagas >= p.num_parcelas %}#059669{% else %}#16a34a{% endif %};height:100%;border-radius:100px;transition:width .3s;"></div>
         </div>
         {% endif %}
       </div>
@@ -1196,7 +1196,7 @@
       <div style="display:flex;align-items:center;gap:8px;">
         <button id="btn-relatorio-conta" onclick="gerarRelatorioConta()"
           title="Baixar relatório PDF desta conta"
-          style="display:flex;align-items:center;gap:5px;background:#6366f1;color:#fff;border:none;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;">
+          style="display:flex;align-items:center;gap:5px;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;">
           📄 Relatório PDF
         </button>
         <button onclick="fecharExtrato()" style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;line-height:1;padding:4px;">×</button>
@@ -1259,7 +1259,7 @@
     </div>
     <div id="edit-lanc-msg" style="font-size:12px;color:#ef4444;margin-top:10px;display:none;"></div>
     <div style="display:flex;gap:8px;margin-top:20px;">
-      <button onclick="salvarEdicaoLancamento()" style="flex:1;background:#6366f1;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+      <button onclick="salvarEdicaoLancamento()" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;">💾 Salvar</button>
       <button onclick="fecharEditarLancamento()" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:11px 18px;font-size:14px;cursor:pointer;">Cancelar</button>
     </div>
   </div>
@@ -1326,7 +1326,7 @@
           <div style="display:flex;align-items:center;gap:8px;">
             <strong id="wpp-display">{{ cliente.whatsapp or 'não vinculado' }}</strong>
             <button onclick="var f=document.getElementById('wpp-edit-form');f.style.display=f.style.display==='none'?'flex':'none';"
-                    style="background:#f3f4f6;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:#6366f1;font-weight:600;">
+                    style="background:#f3f4f6;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:#16a34a;font-weight:600;">
               ✏️ Editar
             </button>
           </div>
@@ -1337,7 +1337,7 @@
                  value="{{ cliente.whatsapp or '' }}"
                  style="border:1px solid #d1d5db;border-radius:8px;padding:9px 14px;font-size:14px;flex:1;min-width:200px;outline:none;"/>
           <button type="submit"
-                  style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                  style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer;font-weight:600;white-space:nowrap;">
             Salvar número
           </button>
           <p style="font-size:12px;color:#9ca3af;width:100%;margin:0;">
@@ -1360,7 +1360,7 @@
             <span style="color:#9ca3af;font-size:13px;">não vinculado</span>
             {% endif %}
             <button onclick="var f=document.getElementById('wpp2-edit-form');f.style.display=f.style.display==='none'?'flex':'none';"
-                    style="background:#f3f4f6;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:#6366f1;font-weight:600;">
+                    style="background:#f3f4f6;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;color:#16a34a;font-weight:600;">
               {% if cliente.whatsapp2 %}✏️ Editar{% else %}➕ Adicionar{% endif %}
             </button>
           </div>
@@ -1377,7 +1377,7 @@
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button type="submit" name="acao" value="salvar"
-                    style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                    style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer;font-weight:600;white-space:nowrap;">
               Salvar
             </button>
             {% if cliente.whatsapp2 %}
@@ -1452,7 +1452,7 @@ function showTab(tab, anchor) {
   }
 })();
 
-const CORES = ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6'];
+const CORES = ['#16a34a','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6'];
 
 // LINE CHART
 const labels = {{ labels_dias|safe }};
@@ -1465,11 +1465,11 @@ if (labels.length > 0) {
       datasets: [{
         label: 'Gasto acumulado',
         data: serie,
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99,102,241,.08)',
+        borderColor: '#16a34a',
+        backgroundColor: 'rgba(22,163,74,.08)',
         borderWidth: 2.5,
         pointRadius: 3,
-        pointBackgroundColor: '#6366f1',
+        pointBackgroundColor: '#16a34a',
         fill: true,
         tension: 0.4
       }]
