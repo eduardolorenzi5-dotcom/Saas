@@ -3047,6 +3047,34 @@ def relatorio_por_conta(conta_id):
         logging.error(f"[RELATORIO_CONTA] Erro: {e}\n{traceback.format_exc()}")
         return jsonify({"erro": str(e), "trace": traceback.format_exc()}), 500
 
+
+@app.route("/api/relatorio/mes")
+@login_required
+def relatorio_mes():
+    """
+    Gera e devolve o PDF do relatório geral (todas as contas) de um mês.
+    Query params: mes=YYYY-MM (default: mês atual)
+    """
+    import logging, traceback, base64
+    try:
+        cid = session["cliente_id"]
+        mes = request.args.get("mes", hoje_brasil().strftime("%Y-%m"))
+
+        from relatorio.gerador import gerar_pdf
+        caminho = gerar_pdf(cid, mes)
+
+        with open(caminho, "rb") as f:
+            pdf_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        return jsonify({
+            "ok": True,
+            "pdf_b64": pdf_b64,
+            "filename": f"relatorio_{mes}.pdf"
+        })
+    except Exception as e:
+        logging.error(f"[RELATORIO_MES] Erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"erro": str(e), "trace": traceback.format_exc()}), 500
+
 with app.app_context():
     init_db()
 

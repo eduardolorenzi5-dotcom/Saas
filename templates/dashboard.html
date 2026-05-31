@@ -310,10 +310,13 @@
   <!-- PERIOD HEADER -->
   <div class="dash-period">
     <h1>Visão Geral</h1>
-    <div class="mes-nav">
-      <a href="/dashboard?mes={{ mes_ant }}" title="Mês anterior">&#8249;</a>
-      <span class="mes-label">📅 {{ mes_nome }}</span>
-      <a href="/dashboard?mes={{ mes_prox }}" title="Próximo mês" class="{{ 'disabled' if is_mes_atual else '' }}">&#8250;</a>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div class="mes-nav">
+        <a href="/dashboard?mes={{ mes_ant }}" title="Mês anterior">&#8249;</a>
+        <span class="mes-label">📅 {{ mes_nome }}</span>
+        <a href="/dashboard?mes={{ mes_prox }}" title="Próximo mês" class="{{ 'disabled' if is_mes_atual else '' }}">&#8250;</a>
+      </div>
+      <button id="btn-relatorio-mes" onclick="gerarRelatorioMes('{{ mes }}')" class="btn-add" title="Baixar relatório PDF de {{ mes_nome }}">📄 Relatório do mês</button>
     </div>
   </div>
 
@@ -1880,6 +1883,34 @@ async function gerarRelatorioConta() {
       throw new Error(data.erro || `HTTP ${r.status}`);
     }
     // Decodifica base64 e faz download
+    const bytes = Uint8Array.from(atob(data.pdf_b64), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = data.filename || 'relatorio.pdf';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch(e) {
+    alert('Erro ao gerar relatório:\n' + e.message);
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
+}
+
+// RELATÓRIO GERAL DO MÊS (todas as contas)
+async function gerarRelatorioMes(mes) {
+  mes = mes || new Date().toISOString().slice(0,7);
+  const btn = document.getElementById('btn-relatorio-mes');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '⏳ Gerando...';
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/relatorio/mes?mes=${mes}`);
+    const data = await r.json();
+    if (!r.ok || !data.ok) {
+      throw new Error(data.erro || `HTTP ${r.status}`);
+    }
     const bytes = Uint8Array.from(atob(data.pdf_b64), c => c.charCodeAt(0));
     const blob = new Blob([bytes], { type: 'application/pdf' });
     const a = document.createElement('a');
