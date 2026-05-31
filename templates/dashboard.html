@@ -7,108 +7,176 @@
   <title>Dashboard — Controla Fácil</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
+    :root {
+      --bg: #f4f5fb;
+      --surface: #ffffff;
+      --ink: #16182d;
+      --muted: #6b7280;
+      --faint: #9ca3af;
+      --line: #eceef4;
+      --line-soft: #f3f4f6;
+      --brand: #6366f1;
+      --brand-dark: #4f46e5;
+      --brand-soft: #eef0ff;
+      --green: #059669;
+      --green-soft: #e8f7f0;
+      --red: #dc2626;
+      --red-soft: #fdecec;
+      --blue: #2563eb;
+      --navy: #15172b;
+      --sidebar-w: 248px;
+      --radius: 18px;
+      --radius-sm: 12px;
+      --shadow: 0 1px 2px rgba(16,18,45,.04), 0 6px 22px rgba(16,18,45,.05);
+      --shadow-hover: 0 4px 10px rgba(16,18,45,.06), 0 14px 40px rgba(16,18,45,.08);
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f6fa; color: #1a1a2e; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
 
-    /* TOPBAR */
-    .topbar { background: #1a1a2e; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 58px; position: sticky; top: 0; z-index: 100; }
-    .topbar-logo { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
-    .topbar-nav { display: flex; gap: 4px; }
-    .topbar-nav a { color: rgba(255,255,255,.65); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 8px; transition: all .15s; cursor: pointer; }
-    .topbar-nav a:hover, .topbar-nav a.ativo { color: #fff; background: rgba(255,255,255,.12); }
-    .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255,255,255,.7); }
-    .topbar-right a { color: rgba(255,255,255,.5); text-decoration: none; font-size: 12px; }
-    .topbar-right a:hover { color: #fff; }
+    /* ===== APP SHELL ===== */
+    .app-shell { display: flex; min-height: 100vh; }
 
-    /* LAYOUT */
-    .dash-wrap { max-width: 1140px; margin: 0 auto; padding: 28px 20px 48px; }
+    /* ===== SIDEBAR (desktop) ===== */
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
+      background: var(--navy); color: #fff; display: flex; flex-direction: column;
+      padding: 22px 16px; z-index: 120; overflow-y: auto;
+    }
+    .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 4px 10px 22px; }
+    .sidebar-logo .logo-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--brand), #818cf8); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .sidebar-logo .logo-text { font-size: 16px; font-weight: 700; letter-spacing: -.3px; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 3px; }
+    .sidebar-nav .nav-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.35); padding: 16px 14px 8px; }
+    .sidebar-nav a {
+      display: flex; align-items: center; gap: 12px; cursor: pointer;
+      color: rgba(255,255,255,.62); text-decoration: none; font-size: 14px; font-weight: 500;
+      padding: 10px 14px; border-radius: 11px; transition: all .15s; position: relative;
+    }
+    .sidebar-nav a .nav-ico { font-size: 17px; width: 20px; text-align: center; flex-shrink: 0; }
+    .sidebar-nav a:hover { color: #fff; background: rgba(255,255,255,.07); }
+    .sidebar-nav a.ativo { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-dark)); box-shadow: 0 6px 18px rgba(99,102,241,.4); }
+    .sidebar-foot { margin-top: auto; padding-top: 16px; }
+    .sidebar-user { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.05); }
+    .sidebar-user .avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), #818cf8); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+    .sidebar-user .su-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-user .su-link { font-size: 11px; color: rgba(255,255,255,.5); text-decoration: none; }
+    .sidebar-user .su-link:hover { color: #fff; }
 
-    /* HEADER */
-    .dash-period { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-    .dash-period h1 { font-size: 20px; font-weight: 700; }
-    .period-badge { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 14px; font-size: 13px; color: #555; }
-    .mes-nav { display: flex; align-items: center; gap: 8px; }
-    .mes-nav a { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; background: #fff; border: 1px solid #e5e7eb; color: #555; font-size: 16px; text-decoration: none; transition: background .15s; }
-    .mes-nav a:hover { background: #f3f4f6; }
-    .mes-nav a.disabled { opacity: .35; pointer-events: none; }
-    .mes-nav .mes-label { font-size: 14px; font-weight: 600; color: #1a1a1a; min-width: 130px; text-align: center; }
+    /* ===== MAIN AREA ===== */
+    .main-area { flex: 1; margin-left: var(--sidebar-w); min-width: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 32px; }
+    .topbar-hello h2 { font-size: 20px; font-weight: 700; letter-spacing: -.4px; }
+    .topbar-hello p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .topbar-right { display: flex; align-items: center; gap: 14px; }
+    .topbar-mlogo { display: none; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
+    .topbar-mlogo .logo-mark { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--brand), #818cf8); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .topbar-right .tb-logout { font-size: 13px; color: var(--muted); text-decoration: none; font-weight: 500; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+    .topbar-right .tb-logout:hover { color: var(--ink); border-color: #dcdfe8; }
+
+    /* ===== LAYOUT ===== */
+    .dash-wrap { max-width: 1240px; margin: 0 auto; padding: 8px 32px 56px; }
+
+    /* HEADER / PERIOD */
+    .dash-period { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+    .dash-period h1 { font-size: 22px; font-weight: 700; letter-spacing: -.4px; }
+    .period-badge { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 14px; font-size: 13px; color: var(--muted); }
+    .mes-nav { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 5px; box-shadow: var(--shadow); }
+    .mes-nav a { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: transparent; color: var(--muted); font-size: 16px; text-decoration: none; transition: background .15s; }
+    .mes-nav a:hover { background: var(--line-soft); color: var(--ink); }
+    .mes-nav a.disabled { opacity: .3; pointer-events: none; }
+    .mes-nav .mes-label { font-size: 14px; font-weight: 600; color: var(--ink); min-width: 140px; text-align: center; }
+
+    /* SECTION HEADING (entre blocos) */
+    .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .sec-head .sec-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .sec-head .sec-link { font-size: 12px; color: var(--brand); cursor: pointer; text-decoration: none; font-weight: 600; }
+    .sec-head .sec-link:hover { color: var(--brand-dark); }
 
     /* CARDS ROW */
-    .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-    .card { background: #fff; border-radius: 14px; padding: 20px 22px; border: 1px solid #e5e7eb; }
-    .card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; margin-bottom: 8px; }
-    .card-val { font-size: 26px; font-weight: 700; color: #1a1a2e; line-height: 1; }
-    .card-sub { font-size: 12px; color: #9ca3af; margin-top: 6px; }
-    .card-green .card-val { color: #059669; }
-    .card-red .card-val { color: #dc2626; }
-    .card-blue .card-val { color: #2563eb; }
+    .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 26px; }
+    .card { background: var(--surface); border-radius: var(--radius); padding: 20px 22px; border: 1px solid var(--line); box-shadow: var(--shadow); transition: box-shadow .18s, transform .18s; }
+    .card:hover { box-shadow: var(--shadow-hover); }
+    .card-ico { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 14px; background: var(--brand-soft); }
+    .card-ico.ico-red { background: var(--red-soft); } .card-ico.ico-green { background: var(--green-soft); } .card-ico.ico-blue { background: #e7effe; } .card-ico.ico-purple { background: var(--brand-soft); }
+    .card-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 7px; }
+    .card-val { font-size: 27px; font-weight: 800; color: var(--ink); line-height: 1.05; letter-spacing: -.5px; }
+    .card-sub { font-size: 12px; color: var(--faint); margin-top: 8px; }
+    .card-green .card-val { color: var(--green); }
+    .card-red .card-val { color: var(--red); }
+    .card-blue .card-val { color: var(--blue); }
 
     /* CHARTS ROW */
-    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px; }
-    .chart-card { background: #fff; border-radius: 14px; padding: 22px; border: 1px solid #e5e7eb; }
-    .chart-title { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 18px; }
+    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 26px; }
+    .chart-card { background: var(--surface); border-radius: var(--radius); padding: 22px 24px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .chart-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 18px; }
 
     /* BOTTOM ROW */
     .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .list-card { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; overflow: hidden; }
-    .list-card-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px 14px; border-bottom: 1px solid #f3f4f6; }
-    .list-card-header span { font-size: 14px; font-weight: 700; }
-    .list-card-header small { font-size: 12px; color: #9ca3af; }
+    .list-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; box-shadow: var(--shadow); }
+    .list-card-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px 14px; border-bottom: 1px solid var(--line-soft); }
+    .list-card-header span { font-size: 15px; font-weight: 700; }
+    .list-card-header small { font-size: 12px; color: var(--faint); }
 
     /* TRANSACTION LIST */
-    .tx-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 22px; border-bottom: 1px solid #f9fafb; }
+    .tx-item { display: flex; justify-content: space-between; align-items: center; padding: 13px 22px; border-bottom: 1px solid var(--line-soft); transition: background .12s; }
     .tx-item:last-child { border-bottom: none; }
-    .tx-desc { font-size: 13px; font-weight: 500; }
-    .tx-meta { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-    .tx-val { font-size: 14px; font-weight: 700; color: #dc2626; }
+    .tx-item:hover { background: #fafbff; }
+    .tx-desc { font-size: 14px; font-weight: 600; }
+    .tx-meta { font-size: 12px; color: var(--faint); margin-top: 2px; }
+    .tx-val { font-size: 15px; font-weight: 700; color: var(--red); }
     .tx-del { background: none; border: none; color: #d1d5db; cursor: pointer; font-size: 16px; margin-left: 10px; }
-    .tx-del:hover { color: #ef4444; }
+    .tx-del:hover { color: var(--red); }
 
     /* CATEGORY LIST */
-    .cat-item { display: flex; align-items: center; justify-content: space-between; padding: 11px 22px; border-bottom: 1px solid #f9fafb; }
+    .cat-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; border-bottom: 1px solid var(--line-soft); }
     .cat-item:last-child { border-bottom: none; }
     .cat-left { display: flex; align-items: center; gap: 10px; }
-    .cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .cat-name { font-size: 13px; font-weight: 500; }
-    .cat-pct { font-size: 11px; color: #9ca3af; }
-    .cat-val { font-size: 13px; font-weight: 700; color: #1a1a2e; }
+    .cat-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+    .cat-name { font-size: 14px; font-weight: 600; }
+    .cat-pct { font-size: 12px; color: var(--faint); }
+    .cat-val { font-size: 14px; font-weight: 700; color: var(--ink); }
 
-    /* ADD FORM */
-    .form-card { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; padding: 20px 22px; margin-bottom: 24px; }
-    .form-card-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
-    .form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
-    .form-field label { font-size: 11px; font-weight: 600; color: #6b7280; display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
-    .form-field input, .form-field select { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #1a1a2e; background: #f9fafb; outline: none; }
-    .form-field input:focus, .form-field select:focus { border-color: #6366f1; background: #fff; }
-    .btn-add { background: #1a1a2e; color: #fff; border: none; border-radius: 8px; padding: 9px 20px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .btn-add:hover { background: #2d2d4e; }
-    .btn-clear { background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
-    .btn-clear:hover { background: #fecaca; }
+    /* FORM */
+    .form-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--line); padding: 22px 24px; margin-bottom: 24px; box-shadow: var(--shadow); }
+    .form-card-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+    .form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
+    .form-field label { font-size: 11px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .4px; }
+    .form-field input, .form-field select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; color: var(--ink); background: #f9fafc; outline: none; transition: border-color .15s, background .15s, box-shadow .15s; }
+    .form-field input:focus, .form-field select:focus { border-color: var(--brand); background: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+    .btn-add { background: linear-gradient(135deg, var(--brand), var(--brand-dark)); color: #fff; border: none; border-radius: 10px; padding: 10px 22px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: filter .15s, transform .1s; box-shadow: 0 6px 16px rgba(99,102,241,.28); }
+    .btn-add:hover { filter: brightness(1.07); }
+    .btn-add:active { transform: translateY(1px); }
+    .btn-clear { background: var(--red-soft); color: var(--red); border: none; border-radius: 9px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .btn-clear:hover { background: #fbd5d5; }
 
     /* WPP INFO */
-    .wpp-bar { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: #065f46; margin-bottom: 20px; }
+    .wpp-bar { background: linear-gradient(120deg, #e8f7f0, #eaf6ff); border: 1px solid #c7ecdc; border-radius: 14px; padding: 14px 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: #065f46; margin-bottom: 24px; }
 
     /* PROGRESS BAR */
     .progress-wrap { margin-top: 12px; }
-    .progress-bar { background: #f3f4f6; border-radius: 100px; height: 6px; overflow: hidden; margin-top: 6px; }
+    .progress-bar { background: var(--line-soft); border-radius: 100px; height: 7px; overflow: hidden; margin-top: 6px; }
     .progress-fill { height: 100%; border-radius: 100px; transition: width .4s; }
 
-    /* BOTTOM NAV — mobile only */
+    /* ===== BOTTOM NAV — mobile only ===== */
     .bottom-nav { display: none; }
-    @media(max-width:900px) {
+    @media(max-width:980px) {
+      :root { --sidebar-w: 0px; }
+      .sidebar { display: none; }
+      .main-area { margin-left: 0; }
+      .topbar { padding: 14px 18px; }
+      .topbar-mlogo { display: flex; }
+      .topbar-hello { display: none; }
+      .dash-wrap { padding: 4px 18px 88px; }
       .cards-row { grid-template-columns: repeat(2,1fr); }
       .charts-row, .bottom-row { grid-template-columns: 1fr; }
       #rendas-section { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr 1fr; }
-      .topbar-nav { display: none; }
-      /* Espaço para a bottom nav não cobrir conteúdo */
-      .dash-wrap { padding-bottom: 80px; }
       .bottom-nav {
         display: flex;
         position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-        background: #1a1a2e;
-        border-top: 1px solid rgba(255,255,255,.1);
-        padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+        background: rgba(21,23,43,.96); backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(255,255,255,.08);
+        padding: 9px 0 max(9px, env(safe-area-inset-bottom));
         justify-content: space-around;
         align-items: center;
       }
@@ -122,28 +190,28 @@
       }
       .bottom-nav a .bn-icon { font-size: 20px; line-height: 1; }
       .bottom-nav a.ativo, .bottom-nav a:hover { color: #fff; }
-      .bottom-nav a.ativo .bn-icon { filter: drop-shadow(0 0 6px rgba(99,102,241,.8)); }
+      .bottom-nav a.ativo .bn-icon { filter: drop-shadow(0 0 6px rgba(99,102,241,.9)); }
     }
     @media(max-width:600px) {
-      .topbar { padding: 0 16px; }
-      .topbar-right span { display: none; }
-      .dash-wrap { padding: 16px 12px 80px; }
-      .dash-period h1 { font-size: 16px; }
-      .wpp-bar { flex-wrap: wrap; font-size: 12px; gap: 4px; padding: 10px 14px; }
-      .card { padding: 14px 12px; }
-      .card-val { font-size: 18px; }
-      .card-label { font-size: 10px; }
+      .topbar { padding: 12px 14px; }
+      .dash-wrap { padding: 4px 12px 88px; }
+      .dash-period h1 { font-size: 18px; }
+      .wpp-bar { flex-wrap: wrap; font-size: 12px; gap: 4px; padding: 12px 14px; }
+      .card { padding: 16px 14px; }
+      .card-ico { width: 36px; height: 36px; font-size: 17px; margin-bottom: 10px; }
+      .card-val { font-size: 20px; }
+      .card-label { font-size: 11px; }
       .card-sub { font-size: 11px; }
       #rendas-section { grid-template-columns: 1fr !important; }
       .list-card-header { flex-wrap: nowrap; gap: 8px; }
       .list-card-header span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
       .list-card-header small { white-space: nowrap; flex-shrink: 0; }
-      .tx-item { padding: 10px 14px; flex-wrap: nowrap; gap: 8px; }
+      .tx-item { padding: 11px 14px; flex-wrap: nowrap; gap: 8px; }
       .tx-item > div:first-child { min-width: 0; flex: 1; }
       .tx-item > div:last-child { flex-shrink: 0; }
-      .tx-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
-      .tx-meta { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .tx-val { font-size: 13px !important; }
+      .tx-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+      .tx-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tx-val { font-size: 14px !important; }
       .bottom-nav a { font-size: 9px; min-width: 44px; }
       .bottom-nav a .bn-icon { font-size: 18px; }
     }
@@ -177,21 +245,45 @@
 </head>
 <body>
 
-<nav class="topbar">
-  <div class="topbar-logo">Controla Fácil</div>
-  <div class="topbar-nav">
-    <a onclick="showTab('visao-geral')" id="tab-btn-visao-geral" class="ativo">Visão Geral</a>
-    <a onclick="showTab('visao-geral', 'transacoes')" id="tab-btn-transacoes">Transações</a>
-    <a onclick="showTab('visao-geral', 'gerenciar-categorias')" id="tab-btn-categorias">Categorias</a>
-    <a onclick="showTab('contas')" id="tab-btn-contas">🏦 Contas</a>
-    <a href="/assinatura">Assinatura</a>
-    <a onclick="showTab('minha-conta')" id="tab-btn-minha-conta">Minha Conta</a>
-  </div>
-  <div class="topbar-right">
-    <span>{{ session.cliente_nome }}</span>
-    <a href="/logout">Sair</a>
-  </div>
-</nav>
+<div class="app-shell">
+
+  <!-- ===== SIDEBAR (desktop) ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-mark">💸</span>
+      <span class="logo-text">Controla Fácil</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a onclick="showTab('visao-geral')" id="tab-btn-visao-geral" class="ativo"><span class="nav-ico">📊</span> Visão Geral</a>
+      <a onclick="showTab('visao-geral', 'transacoes')" id="tab-btn-transacoes"><span class="nav-ico">💳</span> Transações</a>
+      <a onclick="showTab('visao-geral', 'gerenciar-categorias')" id="tab-btn-categorias"><span class="nav-ico">🏷️</span> Categorias</a>
+      <a onclick="showTab('contas')" id="tab-btn-contas"><span class="nav-ico">🏦</span> Contas</a>
+      <a href="/assinatura"><span class="nav-ico">⭐</span> Assinatura</a>
+      <a onclick="showTab('minha-conta')" id="tab-btn-minha-conta"><span class="nav-ico">👤</span> Minha Conta</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="sidebar-user">
+        <div class="avatar">{{ (session.cliente_nome or 'U')[:1]|upper }}</div>
+        <div style="min-width:0;flex:1;">
+          <div class="su-name">{{ session.cliente_nome }}</div>
+          <a href="/logout" class="su-link">Sair da conta</a>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-mlogo"><span class="logo-mark">💸</span> Controla Fácil</div>
+      <div class="topbar-hello">
+        <h2>Olá, {{ session.cliente_nome }}! 👋</h2>
+        <p>Aqui está o resumo da sua vida financeira.</p>
+      </div>
+      <div class="topbar-right">
+        <a href="/logout" class="tb-logout">Sair</a>
+      </div>
+    </header>
 
 <div class="dash-wrap">
 
@@ -236,12 +328,14 @@
   <!-- STAT CARDS -->
   <div class="cards-row">
     <div class="card card-red">
+      <div class="card-ico ico-red">📉</div>
       <div class="card-label">Total gasto</div>
       <div class="card-val">R$ {{ "%.2f"|format(total) }}</div>
       <div class="card-sub">{{ gastos|length }} transações</div>
     </div>
     {% if renda %}
     <div class="card card-green">
+      <div class="card-ico ico-green">📈</div>
       <div class="card-label">Renda mensal</div>
       <div class="card-val">R$ {{ "%.2f"|format(renda) }}</div>
       {% if total_renda_mes == 0 and cliente.renda_mensal %}
@@ -254,23 +348,27 @@
       {% endif %}
     </div>
     <div class="card {{ 'card-green' if saldo >= 0 else 'card-red' }}">
+      <div class="card-ico {{ 'ico-green' if saldo >= 0 else 'ico-red' }}">👛</div>
       <div class="card-label">Saldo disponível</div>
       <div class="card-val">R$ {{ "%.2f"|format(saldo) }}</div>
       <div class="card-sub">{{ "%.0f"|format(total/renda*100) }}% da renda gasta</div>
     </div>
     {% else %}
     <div class="card">
+      <div class="card-ico ico-green">📈</div>
       <div class="card-label">Renda mensal</div>
       <div class="card-val" style="font-size:15px;color:#9ca3af;">Não cadastrada</div>
       <div class="card-sub">Envie "meu salário é 3000" no WhatsApp</div>
     </div>
     <div class="card card-blue">
+      <div class="card-ico ico-blue">🗂️</div>
       <div class="card-label">Categorias</div>
       <div class="card-val">{{ por_cat|length }}</div>
       <div class="card-sub">este mês</div>
     </div>
     {% endif %}
     <div class="card card-blue">
+      <div class="card-ico ico-purple">🏆</div>
       <div class="card-label">Maior categoria</div>
       {% if por_cat %}
       <div class="card-val" style="font-size:16px;">{{ por_cat[0].categoria }}</div>
@@ -283,18 +381,18 @@
 
   <!-- CONTAS BANCÁRIAS (se existirem) -->
   {% if contas_bancarias %}
-  <div style="margin-bottom:24px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <span style="font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">🏦 Contas bancárias</span>
-      <a onclick="showTab('contas')" style="font-size:12px;color:#6366f1;cursor:pointer;text-decoration:none;">Gerenciar →</a>
+  <div style="margin-bottom:26px;">
+    <div class="sec-head">
+      <span class="sec-title">🏦 Contas bancárias</span>
+      <a onclick="showTab('contas')" class="sec-link">Gerenciar →</a>
     </div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;">
       {% for conta in contas_bancarias %}
       {% set tipo_icon = '🏦' if conta.tipo == 'corrente' else ('🐷' if conta.tipo == 'poupanca' else ('💳' if conta.tipo == 'carteira' else '📈')) %}
-      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 20px;min-width:160px;flex:1;">
-        <div style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">{{ tipo_icon }} {{ conta.nome }}</div>
-        <div style="font-size:22px;font-weight:700;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};">R$ {{ "%.2f"|format(conta.saldo) }}</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">saldo atual</div>
+      <div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px 20px;min-width:170px;flex:1;box-shadow:var(--shadow);">
+        <div style="font-size:12px;font-weight:600;color:var(--faint);margin-bottom:6px;">{{ tipo_icon }} {{ conta.nome }}</div>
+        <div style="font-size:23px;font-weight:800;letter-spacing:-.4px;color:{{ '#059669' if conta.saldo >= 0 else '#dc2626' }};">R$ {{ "%.2f"|format(conta.saldo) }}</div>
+        <div style="font-size:11px;color:var(--faint);margin-top:4px;">saldo atual</div>
       </div>
       {% endfor %}
     </div>
@@ -303,23 +401,23 @@
 
   <!-- PRÓXIMOS DÉBITOS AUTOMÁTICOS -->
   {% if proximos_debitos %}
-  <div style="margin-bottom:24px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <span style="font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">⏰ Próximos débitos (30 dias)</span>
-      <a onclick="showTab('contas')" style="font-size:12px;color:#6366f1;cursor:pointer;text-decoration:none;">Ver todos →</a>
+  <div style="margin-bottom:26px;">
+    <div class="sec-head">
+      <span class="sec-title">⏰ Próximos débitos (30 dias)</span>
+      <a onclick="showTab('contas')" class="sec-link">Ver todos →</a>
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
+    <div style="display:flex;flex-direction:column;gap:8px;">
       {% for d in proximos_debitos[:5] %}
-      <div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 16px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:16px;">{{ '🔄' if d.tipo == 'mensal' else '📦' }}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 18px;box-shadow:var(--shadow);">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="width:38px;height:38px;border-radius:11px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">{{ '🔄' if d.tipo == 'mensal' else '📦' }}</span>
           <div>
-            <div style="font-size:13px;font-weight:600;color:#1a1a2e;">{{ d.descricao }}</div>
-            <div style="font-size:11px;color:#9ca3af;">{{ d.data[8:10] }}/{{ d.data[5:7] }}/{{ d.data[0:4] }}</div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink);">{{ d.descricao }}</div>
+            <div style="font-size:12px;color:var(--faint);">{{ d.data[8:10] }}/{{ d.data[5:7] }}/{{ d.data[0:4] }}</div>
           </div>
         </div>
         {% if d.valor %}
-        <span style="font-size:13px;font-weight:700;color:#dc2626;">R$ {{ "%.2f"|format(d.valor) }}</span>
+        <span style="font-size:14px;font-weight:700;color:#dc2626;">R$ {{ "%.2f"|format(d.valor) }}</span>
         {% endif %}
       </div>
       {% endfor %}
@@ -1299,7 +1397,9 @@
   </div>
 </div><!-- /tab-minha-conta -->
 
-</div>
+</div><!-- /dash-wrap -->
+  </div><!-- /main-area -->
+</div><!-- /app-shell -->
 
 <script src="/static/js/dashboard.js"></script>
 <script>
@@ -1310,12 +1410,12 @@ function showTab(tab, anchor) {
     const el = document.getElementById('tab-' + t);
     if (el) el.style.display = 'none';
   });
-  // Remove ativo from all nav buttons (topbar + bottom nav)
-  document.querySelectorAll('.topbar-nav a, .bottom-nav a').forEach(a => a.classList.remove('ativo'));
+  // Remove ativo from all nav buttons (sidebar + bottom nav)
+  document.querySelectorAll('.sidebar-nav a, .bottom-nav a').forEach(a => a.classList.remove('ativo'));
   // Show selected tab
   const tabEl = document.getElementById('tab-' + tab);
   if (tabEl) tabEl.style.display = 'block';
-  // Mark active — topbar
+  // Mark active — sidebar
   const btnId = (tab === 'visao-geral' && anchor)
     ? (anchor === 'transacoes' ? 'transacoes' : 'categorias')
     : (tab === 'minha-conta' ? 'minha-conta' : (tab === 'contas' ? 'contas' : 'visao-geral'));
