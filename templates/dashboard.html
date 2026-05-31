@@ -43,7 +43,7 @@
       padding: 22px 16px; z-index: 120; overflow-y: auto;
     }
     .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 4px 10px 22px; }
-    .sidebar-logo .logo-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--brand), #818cf8); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .sidebar-logo .logo-mark { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
     .sidebar-logo .logo-text { font-size: 16px; font-weight: 700; letter-spacing: -.3px; }
     .sidebar-nav { display: flex; flex-direction: column; gap: 3px; }
     .sidebar-nav .nav-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.35); padding: 16px 14px 8px; }
@@ -69,7 +69,7 @@
     .topbar-hello p { font-size: 13px; color: var(--muted); margin-top: 2px; }
     .topbar-right { display: flex; align-items: center; gap: 14px; }
     .topbar-mlogo { display: none; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
-    .topbar-mlogo .logo-mark { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--brand), #818cf8); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .topbar-mlogo .logo-mark { width: 30px; height: 30px; object-fit: contain; }
     .topbar-right .tb-logout { font-size: 13px; color: var(--muted); text-decoration: none; font-weight: 500; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
     .topbar-right .tb-logout:hover { color: var(--ink); border-color: #dcdfe8; }
 
@@ -250,7 +250,7 @@
   <!-- ===== SIDEBAR (desktop) ===== -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <span class="logo-mark">💸</span>
+      <img src="/static/logo-icon.png" alt="Controla Fácil" class="logo-mark"/>
       <span class="logo-text">Controla Fácil</span>
     </div>
     <nav class="sidebar-nav">
@@ -275,7 +275,7 @@
   <!-- ===== MAIN ===== -->
   <div class="main-area">
     <header class="topbar">
-      <div class="topbar-mlogo"><span class="logo-mark">💸</span> Controla Fácil</div>
+      <div class="topbar-mlogo"><img src="/static/logo-icon.png" alt="Controla Fácil" class="logo-mark"/> Controla Fácil</div>
       <div class="topbar-hello">
         <h2>Olá, {{ session.cliente_nome }}! 👋</h2>
         <p>Aqui está o resumo da sua vida financeira.</p>
