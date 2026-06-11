@@ -1,0 +1,7 @@
+[settings]
+# Desativa a verificação de atestações do GitHub ao instalar o Python.
+# O mise baixa o binário pré-compilado normalmente, mas a verificação
+# de attestation depende de um endpoint do GitHub que estava instável
+# (incidente AWS/GitHub) e derrubava o build. O download em si continua
+# íntegro (checksum é validado).
+python.github_attestations = false
