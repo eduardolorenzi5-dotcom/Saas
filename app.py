@@ -698,6 +698,29 @@ def enviar_wpp_boas_vindas(whatsapp, nome, cliente_id=None):
         logging.error(f"[WPP] Falha ao enviar boas-vindas para {numero}: {e}")
 
 
+def _notificar_admin(texto):
+    """Avisa o admin pelo WhatsApp (Evolution). No-op se ADMIN_WHATSAPP não estiver definido."""
+    import urllib.request, json as _json
+    numero = "".join(c for c in os.environ.get("ADMIN_WHATSAPP", "") if c.isdigit())
+    url = os.environ.get("EVOLUTION_URL", "").rstrip("/")
+    instance = os.environ.get("EVOLUTION_INSTANCE", "")
+    key = os.environ.get("EVOLUTION_KEY", "")
+    if not (numero and url and instance and key):
+        return
+    payload = _json.dumps({"number": numero, "text": texto}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{url}/message/sendText/{instance}",
+        data=payload,
+        headers={"apikey": key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            logging.info(f"[ADMIN] Aviso enviado — status {resp.status}")
+    except Exception as e:
+        logging.error(f"[ADMIN] Falha ao avisar admin: {e}")
+
+
 def _brevo_post(payload_dict):
     import urllib.request, json as _json
     api_key = os.environ.get("BREVO_API_KEY", "")
@@ -921,7 +944,7 @@ def admin_painel():
 @admin_required
 def admin_ativar(cliente_id):
     conn = get_db()
-    cliente = conn.execute("SELECT nome, email, whatsapp, status FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    cliente = conn.execute("SELECT id, nome, email, whatsapp, status FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL, ultimo_aviso_trial=NULL WHERE id=%s", (cliente_id,))
     conn.commit()
     conn.close()
@@ -1587,11 +1610,23 @@ def webhook_kiwify():
                 logging.error(f"[META CAPI] Erro ao enviar Purchase: {e}")
 
         elif evento in ("subscription_canceled", "subscription.canceled"):
-            # Assinatura cancelada — desativa conta
+            # Assinatura cancelada/suspensa no Kiwify — bloqueia acesso mas mantém recuperável.
+            # 'pendente' (e não 'cancelado') porque o gatilho costuma ser falha de cobrança,
+            # que volta sozinho num próximo pagamento aprovado.
             if cliente:
-                conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cliente["id"],))
+                conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (cliente["id"],))
                 conn.commit()
-                logging.warning(f"[KIWIFY] Cliente {email} CANCELADO")
+                logging.warning(f"[KIWIFY] Cliente {email} SUSPENSO (subscription_canceled) — status=pendente")
+                try:
+                    _notificar_admin(
+                        f"⚠️ *Assinatura suspensa pelo Kiwify*\n\n"
+                        f"Cliente: {cliente['nome']}\n"
+                        f"E-mail: {email}\n"
+                        f"Conta marcada como *pendente* (acesso bloqueado, dados preservados).\n"
+                        f"Verifique se foi falha de cobrança ou cancelamento real."
+                    )
+                except Exception as e:
+                    logging.error(f"[KIWIFY] Falha ao avisar admin: {e}")
 
         elif evento in ("subscription_renewed", "subscription.renewed"):
             # Renovação — mantém ativo
