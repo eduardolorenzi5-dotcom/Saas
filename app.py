@@ -2851,11 +2851,90 @@ def _extrair_imagem_b64_evolution(payload):
     b64 = _buscar_midia_evolution(msg_id, remote_jid)
     return b64, caption
 
+def _webhook_meta(payload, processar_mensagem, processar_imagem, processar_audio):
+    """
+    Processa o webhook no formato da Meta Cloud API.
+    Reaproveita processar_mensagem/imagem/audio (que já enviam a resposta
+    internamente via wpp_provider). Mídia da Meta vem como URL autenticada,
+    então baixamos e convertemos para base64 antes do pipeline existente.
+    """
+    import base64 as _b64
+    from agente.wpp_provider import parse_webhook, download_media_meta
+    try:
+        parsed = parse_webhook(payload)
+        if not parsed:
+            # Eventos sem mensagem (status de entrega/leitura) caem aqui
+            return jsonify({"status": "ignorado"}), 200
+
+        fone = parsed.get("fone")
+        if not fone:
+            return jsonify({"status": "ignorado"}), 200
+
+        # Dedup atômico por message ID — a Meta também reentrega
+        msg_id = parsed.get("msg_id")
+        if msg_id and not _dedup_ok(msg_id):
+            logging.warning(f"[DEDUP-META] Mensagem duplicada ignorada: msg_id={msg_id}")
+            return jsonify({"status": "ignorado"}), 200
+
+        tipo = parsed.get("tipo")
+
+        if tipo == "audio":
+            media_url = parsed.get("media_url", "")
+            if media_url:
+                def _bg_audio(f, url):
+                    try:
+                        raw = download_media_meta(url)
+                        if raw:
+                            processar_audio(f, _b64.b64encode(raw).decode("utf-8"), "audio/ogg")
+                    except Exception as e:
+                        logging.error(f"[META-AUDIO-BG] Erro: {e}")
+                _threading.Thread(target=_bg_audio, args=(fone, media_url), daemon=True).start()
+            return jsonify({"status": "processando"}), 200
+
+        if tipo == "image":
+            media_url = parsed.get("media_url", "")
+            caption = parsed.get("caption", "")
+            if media_url:
+                def _bg_img(f, url, cap):
+                    try:
+                        raw = download_media_meta(url)
+                        if raw:
+                            processar_imagem(f, _b64.b64encode(raw).decode("utf-8"), cap)
+                    except Exception as e:
+                        logging.error(f"[META-IMG-BG] Erro: {e}")
+                _threading.Thread(target=_bg_img, args=(fone, media_url, caption), daemon=True).start()
+            return jsonify({"status": "processando"}), 200
+
+        # Texto
+        texto = parsed.get("texto", "")
+        if not texto:
+            return jsonify({"status": "ignorado"}), 200
+        processar_mensagem(fone, texto)  # já envia a resposta internamente
+        return jsonify({"status": "ok"}), 200
+
+    except Exception as e:
+        logging.error(f"[WEBHOOK-META] Erro: {e}")
+        return jsonify({"status": "erro"}), 200
+
+
+@app.route("/webhook/whatsapp", methods=["GET"])
+def webhook_whatsapp_verify():
+    """Verificação do webhook da Meta Cloud API (challenge handshake)."""
+    from agente.wpp_provider import verify_meta_webhook
+    response, status = verify_meta_webhook(request.args)
+    return response, status
+
+
 @app.route("/webhook/whatsapp", methods=["POST"])
 def webhook_whatsapp():
     from agente.agente import processar_mensagem, processar_imagem, processar_audio
     payload = request.json
     logging.warning(f"WEBHOOK PAYLOAD: {payload}")
+
+    # ── Provedor Meta (Cloud API): payload em formato próprio ──────────────────
+    from agente.wpp_provider import provedor_ativo
+    if provedor_ativo() == "meta":
+        return _webhook_meta(payload, processar_mensagem, processar_imagem, processar_audio)
 
     # ── Filtra eventos irrelevantes da Evolution API ──────────────────────────
     # Só processa messages.upsert (nova mensagem). Ignora update, read, chats, etc.

@@ -245,6 +245,88 @@ def _meta_send_image_id(fone: str, media_id: str, caption: str) -> bool:
         return False
 
 
+# ── Envio de template (obrigatório fora da janela de 24h na Meta) ─────────────
+
+def send_template(fone: str, template_name: str, lang: str = "pt_BR",
+                  body_params: list | None = None,
+                  header_image_url: str = "",
+                  button_url_param: str = "") -> bool:
+    """
+    Envia uma mensagem de template aprovado.
+
+    Na Meta Cloud API, mensagens iniciadas pelo negócio (lembretes, débitos,
+    avisos de trial) fora da janela de 24h SÓ podem ser enviadas via template.
+
+    body_params      — lista de strings para as variáveis {{1}}, {{2}}... do corpo
+    header_image_url — URL pública da imagem do cabeçalho (templates com header de imagem)
+    button_url_param — parâmetro dinâmico de botão de URL (quando o botão tem variável)
+
+    Na Evolution não existe template — retorna False (o chamador deve usar send_text).
+    """
+    fone = _limpar_fone(fone)
+    if not fone:
+        return False
+
+    if WPP_PROVIDER == "meta":
+        return _meta_send_template(fone, template_name, lang, body_params,
+                                   header_image_url, button_url_param)
+    else:
+        return False
+
+
+def _meta_send_template(fone: str, template_name: str, lang: str,
+                        body_params: list | None, header_image_url: str,
+                        button_url_param: str) -> bool:
+    if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:
+        logging.error("[WPP-META] WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID não configurado p/ template")
+        return False
+
+    components = []
+    if header_image_url:
+        components.append({
+            "type": "header",
+            "parameters": [{"type": "image", "image": {"link": header_image_url}}],
+        })
+    if body_params:
+        components.append({
+            "type": "body",
+            "parameters": [{"type": "text", "text": str(p)} for p in body_params],
+        })
+    if button_url_param:
+        components.append({
+            "type": "button",
+            "sub_type": "url",
+            "index": "0",
+            "parameters": [{"type": "text", "text": str(button_url_param)}],
+        })
+
+    template = {"name": template_name, "language": {"code": lang}}
+    if components:
+        template["components"] = components
+
+    try:
+        r = requests.post(
+            META_API_URL,
+            headers={
+                "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "messaging_product": "whatsapp",
+                "to": fone,
+                "type": "template",
+                "template": template,
+            },
+            timeout=15,
+        )
+        if r.status_code >= 300:
+            logging.error(f"[WPP-META] Erro send_template '{template_name}' {r.status_code}: {r.text}")
+        return r.status_code < 300
+    except Exception as e:
+        logging.error(f"[WPP-META] Erro send_template: {e}")
+        return False
+
+
 # ── Parser de webhook ─────────────────────────────────────────────────────────
 
 def parse_webhook(payload: dict) -> dict | None:
