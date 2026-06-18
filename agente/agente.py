@@ -624,7 +624,7 @@ Ao receber uma mensagem, identifique se é:
 9b. EXCLUIR renda — ex: "excluir minha renda extra", "apagar renda de freela", "remover renda do mês", "excluir informações de renda", "deletar renda extra", "apaga minha renda"
 9c. EDITAR gasto — ex: "corrige o uber para 45", "muda o mercado de 80 para 65", "a categoria do almoço é Alimentação", "o gasto do posto foi 120 não 90", "arruma o valor do netflix", "edita o lançamento do mercado"
 9d. EDITAR renda — ex: "corrige meu salário para 3500", "o freela foi 800 não 600", "muda a descrição da renda para Comissão"
-10. Um LEMBRETE — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista"
+10. Um LEMBRETE (um ou VÁRIOS na mesma mensagem) — ex: "me lembre de passear com os cachorros às 14h", "lembrete: reunião às 9h", "todo dia às 8h me lembre de tomar remédio", "lembrete amanhã às 10h: dentista", "lembrete pagar financiamento dia 19/6, plano de saúde dia 27/6 e energia dia 01/07"
 11. EXCLUIR um lembrete — ex: "exclua esse lembrete", "cancela o lembrete do médico", "excluir lembrete", "remove o lembrete de passear com os cachorros", "apagar lembrete"
 12. LISTAR lembretes ativos — ex: "quais meus lembretes?", "ver lembretes", "meus lembretes ativos"
 13. VER COMPROMISSOS DE HOJE — ex: "meus compromissos hoje", "o que tenho hoje?", "agenda de hoje", "me manda minha agenda", "lembretes de hoje", "o que está agendado hoje?", "quais eventos tenho hoje?"
@@ -726,6 +726,15 @@ Se for um LEMBRETE (extraia mensagem, hora no formato HH:MM, data se mencionada,
 - Hora sempre no formato HH:MM (ex: 14:00, 09:30, 08:00)
 - Se o usuário não informar hora, use 09:00 como padrão
 
+Se a mensagem contiver VÁRIOS lembretes de uma vez (ex: "lembrete pagar financiamento dia 19/6, plano de saúde dia 27/6 e energia dia 01/07"), use lembrete_multiplo com TODOS eles:
+{{"acao": "lembrete_multiplo", "lembretes": [
+  {{"mensagem": "pagamento do financiamento apartamento", "hora": "09:00", "data": "2026-06-19", "recorrente": false}},
+  {{"mensagem": "pagamento plano de saúde", "hora": "09:00", "data": "2026-06-27", "recorrente": false}}
+]}}
+- Cada item do array segue exatamente as MESMAS regras do lembrete único (mensagem, hora, data OU dia_mes, recorrente)
+- NUNCA descarte lembretes: inclua TODOS os que o usuário citou na mensagem
+- Interprete datas como "19/6" → "2026-06-19" e "01/07" → "2026-07-01" usando a data de hoje como referência de ano
+
 Se for EXCLUIR lembrete (inclui "exclua esse lembrete", "cancela lembrete", "apagar lembrete", "excluir"):
 {{"acao": "deletar_lembrete", "descricao": "palavra-chave do lembrete ou vazio se não informado"}}
 - Se o usuário não mencionar qual lembrete (ex: "exclua esse lembrete"), deixe descricao como string vazia ""
@@ -806,7 +815,7 @@ Responda sempre em português. Seja breve e amigável."""
     messages = list(historico) + [{"role": "user", "content": mensagem}]
     body = {
         "model": "claude-sonnet-4-6",
-        "max_tokens": 500,
+        "max_tokens": 1024,
         "system": system,
         "messages": messages
     }
@@ -1045,6 +1054,110 @@ def processar_imagem(fone, imagem_b64, caption=""):
         salvar_historico_conversa(cliente["id"], "assistant", resposta)
     enviar_whatsapp(fone, resposta)
     return resposta
+
+def _criar_lembrete(cliente_id, mensagem_lem, hora_lem, data_lem, recorrente, dia_mes):
+    """Cria um único lembrete no banco e devolve o texto de confirmação.
+
+    Centraliza a lógica usada tanto pela ação 'lembrete' (um só) quanto
+    pela 'lembrete_multiplo' (vários numa mesma mensagem). Retorna None
+    se a mensagem do lembrete estiver vazia.
+    """
+    USE_PG = bool(os.environ.get("DATABASE_URL"))
+    import datetime as _datetime
+    mensagem_lem = (mensagem_lem or "").strip()
+    hora_lem = (hora_lem or "09:00").strip()
+
+    if not mensagem_lem:
+        return None
+
+    # Garante hora no formato HH:MM
+    if len(hora_lem) == 4 and ":" not in hora_lem:
+        hora_lem = hora_lem[:2] + ":" + hora_lem[2:]
+    # Só define data pontual se não for recorrente diário nem mensal
+    if not data_lem and not recorrente and not dia_mes:
+        data_lem = hoje_brasil().isoformat()
+    conn_lem = get_db()
+    ph = "%s" if USE_PG else "?"
+    # Remove lembretes ativos idênticos (mesma mensagem + hora) antes de criar
+    if USE_PG:
+        conn_lem.execute(
+            "UPDATE lembretes SET ativo=FALSE WHERE cliente_id=%s AND mensagem ILIKE %s AND hora=%s AND ativo=TRUE",
+            (cliente_id, mensagem_lem, hora_lem)
+        )
+    else:
+        conn_lem.execute(
+            "UPDATE lembretes SET ativo=0 WHERE cliente_id=? AND LOWER(mensagem)=LOWER(?) AND hora=? AND ativo=1",
+            (cliente_id, mensagem_lem, hora_lem)
+        )
+    conn_lem.execute(
+        f"INSERT INTO lembretes (cliente_id, mensagem, hora, data, recorrente, dia_mes) VALUES ({ph},{ph},{ph},{ph},{ph},{ph})",
+        (cliente_id, mensagem_lem, hora_lem,
+         data_lem if not recorrente and not dia_mes else None,
+         recorrente, dia_mes)
+    )
+    conn_lem.commit()
+    conn_lem.close()
+
+    # ── Auto-cadastra como conta mensal quando tem dia_mes ─────────
+    # Lembrete com dia fixo do mês = conta recorrente → registra automaticamente
+    if dia_mes:
+        try:
+            import re as _re
+            # Extrai valor do texto do lembrete (ex: "pagar R$ 447,00 seguro")
+            _valor_match = _re.search(r'R\$\s*([\d.,]+)', mensagem_lem)
+            _valor_conta = None
+            if _valor_match:
+                _valor_conta = float(_valor_match.group(1).replace(".", "").replace(",", "."))
+            # Extrai descrição: remove "pagar", "R$ xxx", "todo dia X" do texto
+            _desc = _re.sub(r'(pagar|todo\s*dia\s*\d+|R\$\s*[\d.,]+)', '', mensagem_lem, flags=_re.IGNORECASE).strip()
+            _desc = _re.sub(r'\s+', ' ', _desc).strip(" ,-")
+            if not _desc:
+                _desc = mensagem_lem[:40].strip()
+            # Verifica se já existe conta com descrição similar
+            conn_conta = get_db()
+            if USE_PG:
+                _existe = conn_conta.execute(
+                    "SELECT id FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE AND LOWER(descricao) LIKE %s",
+                    (cliente_id, f"%{_desc[:15].lower()}%")
+                ).fetchone()
+                if not _existe:
+                    conn_conta.execute(
+                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (%s, %s, %s, %s)",
+                        (cliente_id, _desc, _valor_conta, dia_mes)
+                    )
+            else:
+                _existe = conn_conta.execute(
+                    "SELECT id FROM contas_mensais WHERE cliente_id=? AND ativo=1 AND LOWER(descricao) LIKE ?",
+                    (cliente_id, f"%{_desc[:15].lower()}%")
+                ).fetchone()
+                if not _existe:
+                    conn_conta.execute(
+                        "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (?, ?, ?, ?)",
+                        (cliente_id, _desc, _valor_conta, dia_mes)
+                    )
+            conn_conta.commit()
+            conn_conta.close()
+        except Exception as _e_conta:
+            import logging; logging.warning(f"[AUTO-CONTA] Erro ao criar conta mensal: {_e_conta}")
+    # ─────────────────────────────────────────────────────────────
+
+    if dia_mes:
+        return (
+            f"⏰ Lembrete mensal criado!\n"
+            f"Todo dia *{dia_mes}* às *{hora_lem}* vou te lembrar de:\n\n"
+            f"_{mensagem_lem}_\n\n"
+            f"Você só precisou cadastrar uma vez — eu lembro todo mês automaticamente! 🗓️\n"
+            f"Para excluir, responda: *excluir lembrete*"
+        )
+    elif recorrente:
+        return f"⏰ Lembrete criado!\nTodo dia às *{hora_lem}* vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
+    else:
+        try:
+            data_fmt = _datetime.date.fromisoformat(data_lem).strftime("%d/%m/%Y")
+        except Exception:
+            data_fmt = data_lem
+        return f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
+
 
 def processar_mensagem(fone, mensagem, _cliente=None):
     """Função principal chamada pelo webhook."""
@@ -1455,104 +1568,35 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     resposta = "Não consegui criar o evento na agenda. Tente novamente."
 
         elif acao == "lembrete":
-            USE_PG = bool(os.environ.get("DATABASE_URL"))
-            import datetime as _datetime
-            mensagem_lem = resultado.get("mensagem", "").strip()
-            hora_lem = (resultado.get("hora") or "09:00").strip()
-            data_lem = resultado.get("data")
-            recorrente = resultado.get("recorrente", False)
-            dia_mes = resultado.get("dia_mes")  # int ou None — lembrete mensal
-
-            if not mensagem_lem:
+            resposta = _criar_lembrete(
+                cliente["id"],
+                resultado.get("mensagem", ""),
+                resultado.get("hora"),
+                resultado.get("data"),
+                resultado.get("recorrente", False),
+                resultado.get("dia_mes"),
+            )
+            if not resposta:
                 resposta = "Não entendi o lembrete. Tente: *me lembre de todo dia 10 pagar a conta de energia*"
-            else:
-                # Garante hora no formato HH:MM
-                if len(hora_lem) == 4 and ":" not in hora_lem:
-                    hora_lem = hora_lem[:2] + ":" + hora_lem[2:]
-                # Só define data pontual se não for recorrente diário nem mensal
-                if not data_lem and not recorrente and not dia_mes:
-                    data_lem = hoje_brasil().isoformat()
-                conn_lem = get_db()
-                ph = "%s" if USE_PG else "?"
-                # Remove lembretes ativos idênticos (mesma mensagem + hora) antes de criar
-                if USE_PG:
-                    conn_lem.execute(
-                        "UPDATE lembretes SET ativo=FALSE WHERE cliente_id=%s AND mensagem ILIKE %s AND hora=%s AND ativo=TRUE",
-                        (cliente["id"], mensagem_lem, hora_lem)
-                    )
-                else:
-                    conn_lem.execute(
-                        "UPDATE lembretes SET ativo=0 WHERE cliente_id=? AND LOWER(mensagem)=LOWER(?) AND hora=? AND ativo=1",
-                        (cliente["id"], mensagem_lem, hora_lem)
-                    )
-                conn_lem.execute(
-                    f"INSERT INTO lembretes (cliente_id, mensagem, hora, data, recorrente, dia_mes) VALUES ({ph},{ph},{ph},{ph},{ph},{ph})",
-                    (cliente["id"], mensagem_lem, hora_lem,
-                     data_lem if not recorrente and not dia_mes else None,
-                     recorrente, dia_mes)
+
+        elif acao == "lembrete_multiplo":
+            lembretes_in = resultado.get("lembretes", [])
+            confirmacoes = []
+            for lem in lembretes_in:
+                r = _criar_lembrete(
+                    cliente["id"],
+                    lem.get("mensagem", ""),
+                    lem.get("hora"),
+                    lem.get("data"),
+                    lem.get("recorrente", False),
+                    lem.get("dia_mes"),
                 )
-                conn_lem.commit()
-                conn_lem.close()
-
-                # ── Auto-cadastra como conta mensal quando tem dia_mes ─────────
-                # Lembrete com dia fixo do mês = conta recorrente → registra automaticamente
-                if dia_mes:
-                    try:
-                        import re as _re
-                        # Extrai valor do texto do lembrete (ex: "pagar R$ 447,00 seguro")
-                        _valor_match = _re.search(r'R\$\s*([\d.,]+)', mensagem_lem)
-                        _valor_conta = None
-                        if _valor_match:
-                            _valor_conta = float(_valor_match.group(1).replace(".", "").replace(",", "."))
-                        # Extrai descrição: remove "pagar", "R$ xxx", "todo dia X" do texto
-                        _desc = _re.sub(r'(pagar|todo\s*dia\s*\d+|R\$\s*[\d.,]+)', '', mensagem_lem, flags=_re.IGNORECASE).strip()
-                        _desc = _re.sub(r'\s+', ' ', _desc).strip(" ,-")
-                        if not _desc:
-                            _desc = mensagem_lem[:40].strip()
-                        # Verifica se já existe conta com descrição similar
-                        conn_conta = get_db()
-                        if USE_PG:
-                            _existe = conn_conta.execute(
-                                "SELECT id FROM contas_mensais WHERE cliente_id=%s AND ativo=TRUE AND LOWER(descricao) LIKE %s",
-                                (cliente["id"], f"%{_desc[:15].lower()}%")
-                            ).fetchone()
-                            if not _existe:
-                                conn_conta.execute(
-                                    "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (%s, %s, %s, %s)",
-                                    (cliente["id"], _desc, _valor_conta, dia_mes)
-                                )
-                        else:
-                            _existe = conn_conta.execute(
-                                "SELECT id FROM contas_mensais WHERE cliente_id=? AND ativo=1 AND LOWER(descricao) LIKE ?",
-                                (cliente["id"], f"%{_desc[:15].lower()}%")
-                            ).fetchone()
-                            if not _existe:
-                                conn_conta.execute(
-                                    "INSERT INTO contas_mensais (cliente_id, descricao, valor, dia_vencimento) VALUES (?, ?, ?, ?)",
-                                    (cliente["id"], _desc, _valor_conta, dia_mes)
-                                )
-                        conn_conta.commit()
-                        conn_conta.close()
-                    except Exception as _e_conta:
-                        import logging; logging.warning(f"[AUTO-CONTA] Erro ao criar conta mensal: {_e_conta}")
-                # ─────────────────────────────────────────────────────────────
-
-                if dia_mes:
-                    resposta = (
-                        f"⏰ Lembrete mensal criado!\n"
-                        f"Todo dia *{dia_mes}* às *{hora_lem}* vou te lembrar de:\n\n"
-                        f"_{mensagem_lem}_\n\n"
-                        f"Você só precisou cadastrar uma vez — eu lembro todo mês automaticamente! 🗓️\n"
-                        f"Para excluir, responda: *excluir lembrete*"
-                    )
-                elif recorrente:
-                    resposta = f"⏰ Lembrete criado!\nTodo dia às *{hora_lem}* vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
-                else:
-                    try:
-                        data_fmt = _datetime.date.fromisoformat(data_lem).strftime("%d/%m/%Y")
-                    except Exception:
-                        data_fmt = data_lem
-                    resposta = f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
+                if r:
+                    confirmacoes.append(r)
+            if not confirmacoes:
+                resposta = "Não entendi os lembretes. Tente: *me lembre de pagar a conta de energia dia 10 e o aluguel dia 5*"
+            else:
+                resposta = f"✅ {len(confirmacoes)} lembretes criados!\n\n" + "\n\n".join(confirmacoes)
 
         elif acao == "deletar_renda":
             USE_PG = bool(os.environ.get("DATABASE_URL"))
