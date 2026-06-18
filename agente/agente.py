@@ -619,7 +619,7 @@ Ao receber uma mensagem, identifique se é:
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
 7. Um pedido de RELATÓRIO PDF — ex: "quero meu relatório", "manda o PDF", "relatório completo", "relatório do mês", "relatório em PDF", "extrato do mês"
 7. Um pedido para CONECTAR Google Agenda — ex: "quero conectar minha agenda", "conectar google agenda", "ativar agenda"
-8. Um AGENDAMENTO no Google Agenda — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas"
+8. Um AGENDAMENTO no Google Agenda (um ou VÁRIOS na mesma mensagem) — ex: "médico amanhã às 14h", "reunião sexta às 10h", "dentista dia 10 às 15 horas", "agenda reunião com João amanhã 10h e almoço com Ana sexta 12h"
 9. Um REGISTRO de renda — ex: "recebi meu salário de 3000", "caiu meu salário", "recebi um freela de 500", "entrou 200 de renda extra", "ganho 3000 por mês", "meu salário é 5000"
 9b. EXCLUIR renda — ex: "excluir minha renda extra", "apagar renda de freela", "remover renda do mês", "excluir informações de renda", "deletar renda extra", "apaga minha renda"
 9c. EDITAR gasto — ex: "corrige o uber para 45", "muda o mercado de 80 para 65", "a categoria do almoço é Alimentação", "o gasto do posto foi 120 não 90", "arruma o valor do netflix", "edita o lançamento do mercado"
@@ -690,6 +690,14 @@ Se for pedido para conectar Google Agenda:
 Se for um agendamento (extraia título, data/hora, duração em minutos e cor opcional):
 {{"acao": "agendar", "titulo": "...", "data_hora": "YYYY-MM-DDTHH:MM:00", "duracao_min": 60, "cor": "vermelho"}}
 (use 60 minutos como padrão se não informado. Interprete datas relativas como "amanhã", "sexta", "dia 10" com base em hoje. Omita "cor" se não mencionada. Cores possíveis: vermelho, laranja, amarelo, verde, azul, azul-escuro, roxo, rosa, cinza.)
+
+Se a mensagem contiver VÁRIOS agendamentos de uma vez (ex: "agenda reunião com João amanhã 10h e almoço com Ana sexta 12h"), use agendar_multiplo com TODOS eles:
+{{"acao": "agendar_multiplo", "eventos": [
+  {{"titulo": "Reunião com João", "data_hora": "2026-06-19T10:00:00", "duracao_min": 60}},
+  {{"titulo": "Almoço com Ana", "data_hora": "2026-06-20T12:00:00", "duracao_min": 60}}
+]}}
+- Cada item do array segue exatamente as MESMAS regras do agendamento único (titulo, data_hora, duracao_min, cor opcional)
+- NUNCA descarte agendamentos: inclua TODOS os que o usuário citou na mensagem
 
 Se for registro de renda:
 {{"acao": "registrar_renda", "descricao": "...", "valor": 0.00, "tipo": "fixo", "data": "YYYY-MM-DD"}}
@@ -1159,6 +1167,27 @@ def _criar_lembrete(cliente_id, mensagem_lem, hora_lem, data_lem, recorrente, di
         return f"⏰ Lembrete criado!\nÀs *{hora_lem}* de {data_fmt} vou te lembrar de:\n\n_{mensagem_lem}_\n\nPara excluir, responda: *excluir lembrete*"
 
 
+def _agendar_evento(cliente_id, titulo, data_hora, duracao=60, cor=None):
+    """Cria um único evento no Google Agenda e devolve o texto de confirmação.
+
+    Centraliza a lógica usada tanto pela ação 'agendar' (um só) quanto pela
+    'agendar_multiplo' (vários numa mesma mensagem). Propaga exceções para
+    quem chama tratar (ex.: contar falhas no lote).
+    """
+    from datetime import datetime as _dt
+    titulo = titulo or "Compromisso"
+    duracao = int(duracao or 60)
+    criar_evento_agenda(cliente_id, titulo, data_hora, duracao, cor)
+    dt_fmt = _dt.fromisoformat(data_hora)
+    cor_emoji = {"vermelho":"🔴","laranja":"🟠","amarelo":"🟡","verde":"🟢","azul":"🔵","roxo":"🟣","rosa":"🩷","cinza":"⚫"}.get((cor or "").lower(), "")
+    return (
+        f"📌 {titulo}\n"
+        f"📅 {dt_fmt.strftime('%d/%m/%Y')} às {dt_fmt.strftime('%H:%M')}\n"
+        f"⏱️ Duração: {duracao} min"
+        + (f"\n🎨 Cor: {cor_emoji} {cor.capitalize()}" if cor else "")
+    )
+
+
 def processar_mensagem(fone, mensagem, _cliente=None):
     """Função principal chamada pelo webhook."""
     cliente = _cliente or buscar_cliente_por_fone(fone)
@@ -1546,26 +1575,51 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     f"Após conectar, envie o agendamento novamente. 😊"
                 )
             else:
-                titulo = resultado.get("titulo", "Compromisso")
-                data_hora = resultado.get("data_hora", "")
-                duracao = int(resultado.get("duracao_min", 60))
-                cor = resultado.get("cor")
                 try:
-                    link_evento = criar_evento_agenda(cliente["id"], titulo, data_hora, duracao, cor)
-                    from datetime import datetime as _dt
-                    dt_fmt = _dt.fromisoformat(data_hora)
-                    cor_emoji = {"vermelho":"🔴","laranja":"🟠","amarelo":"🟡","verde":"🟢","azul":"🔵","roxo":"🟣","rosa":"🩷","cinza":"⚫"}.get((cor or "").lower(), "")
-                    resposta = (
-                        f"✅ Agendado no Google Agenda!\n"
-                        f"📌 {titulo}\n"
-                        f"📅 {dt_fmt.strftime('%d/%m/%Y')} às {dt_fmt.strftime('%H:%M')}\n"
-                        f"⏱️ Duração: {duracao} min"
-                        + (f"\n🎨 Cor: {cor_emoji} {cor.capitalize()}" if cor else "")
+                    confirmacao = _agendar_evento(
+                        cliente["id"],
+                        resultado.get("titulo", "Compromisso"),
+                        resultado.get("data_hora", ""),
+                        resultado.get("duracao_min", 60),
+                        resultado.get("cor"),
                     )
+                    resposta = "✅ Agendado no Google Agenda!\n" + confirmacao
                 except Exception as e:
                     import logging, traceback
                     logging.error(f"Erro ao criar evento: {e}\n{traceback.format_exc()}")
                     resposta = "Não consegui criar o evento na agenda. Tente novamente."
+
+        elif acao == "agendar_multiplo":
+            if not verificar_agenda_conectada(cliente["id"]):
+                link = gerar_link_agenda(cliente["id"])
+                resposta = (
+                    f"📅 Sua agenda ainda não está conectada. Clique no link abaixo para autorizar:\n\n"
+                    f"{link}\n\n"
+                    f"Após conectar, envie os agendamentos novamente. 😊"
+                )
+            else:
+                eventos_in = resultado.get("eventos", [])
+                confirmacoes = []
+                falhas = 0
+                for ev in eventos_in:
+                    try:
+                        confirmacoes.append(_agendar_evento(
+                            cliente["id"],
+                            ev.get("titulo", "Compromisso"),
+                            ev.get("data_hora", ""),
+                            ev.get("duracao_min", 60),
+                            ev.get("cor"),
+                        ))
+                    except Exception as e:
+                        falhas += 1
+                        import logging, traceback
+                        logging.error(f"Erro ao criar evento (lote): {e}\n{traceback.format_exc()}")
+                if not confirmacoes:
+                    resposta = "Não consegui criar os eventos na agenda. Tente novamente."
+                else:
+                    resposta = f"✅ {len(confirmacoes)} compromissos agendados no Google Agenda!\n\n" + "\n\n".join(confirmacoes)
+                    if falhas:
+                        resposta += f"\n\n⚠️ {falhas} não pude agendar — tente reenviar esse(s)."
 
         elif acao == "lembrete":
             resposta = _criar_lembrete(
