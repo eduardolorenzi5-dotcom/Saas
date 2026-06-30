@@ -2000,6 +2000,7 @@ def cancelar_assinatura():
 @app.route("/api/gastos", methods=["POST"])
 @login_required
 def adicionar_gasto():
+    from agente.agente import normalizar_data
     data = request.json
     cid  = session["cliente_id"]
     conta_id = data.get("conta_id") or None
@@ -2007,7 +2008,7 @@ def adicionar_gasto():
     conn.execute(
         "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
         (cid, data["descricao"], float(data["valor"]), data["categoria"],
-         data.get("data", hoje_brasil().isoformat()), data.get("fonte", "manual"), conta_id)
+         normalizar_data(data.get("data")), data.get("fonte", "manual"), conta_id)
     )
     conn.commit()
     conn.close()
@@ -2026,7 +2027,8 @@ def editar_gasto(gid):
     descricao = data.get("descricao", gasto["descricao"])
     valor     = float(data["valor"]) if "valor" in data else float(gasto["valor"])
     categoria = data.get("categoria", gasto["categoria"])
-    data_g    = data.get("data", gasto["data"])
+    from agente.agente import normalizar_data
+    data_g    = normalizar_data(data["data"]) if data.get("data") else gasto["data"]
     conta_id  = data.get("conta_id", gasto["conta_id"]) if "conta_id" in data else gasto["conta_id"]
     conn.execute(
         "UPDATE gastos SET descricao=%s, valor=%s, categoria=%s, data=%s, conta_id=%s WHERE id=%s AND cliente_id=%s",

@@ -89,7 +89,14 @@ def _bar_diario_chart(gastos, mes):
 
     gastos_por_dia = {}
     for g in gastos:
-        d = int(g["data"].split("-")[2])
+        # Datas podem vir malformadas (ex.: "2026-06" sem o dia) — ignora no
+        # gráfico diário em vez de derrubar o relatório inteiro.
+        partes = str(g["data"]).split("-")
+        if len(partes) < 3 or not partes[2].isdigit():
+            continue
+        d = int(partes[2])
+        if not (1 <= d <= dias_no_mes):
+            continue
         gastos_por_dia[d] = gastos_por_dia.get(d, 0) + float(g["valor"])
 
     dias = list(range(1, dias_no_mes + 1))

@@ -8,6 +8,29 @@ def hoje_brasil():
     """Retorna a data atual no fuso horário de Brasília (UTC-3)."""
     return datetime.now(timezone(timedelta(hours=-3))).date()
 
+def normalizar_data(valor):
+    """Garante que a data gravada seja sempre uma string ISO `YYYY-MM-DD`.
+
+    O Claude e a leitura de comprovantes às vezes devolvem datas incompletas
+    (ex.: `"2026-06"` sem o dia) ou com hora; gravar isso quebra o relatório
+    (`list index out of range` no gráfico diário). Normaliza para um dia válido.
+    """
+    if not valor:
+        return hoje_brasil().isoformat()
+    s = str(valor).strip()
+    # Pega só a parte da data se vier com hora (ex.: "2026-06-19T09:00").
+    s = s.replace("/", "-").split("T")[0].split(" ")[0]
+    partes = s.split("-")
+    try:
+        if len(partes) >= 3 and partes[0].isdigit() and len(partes[0]) == 4:
+            return date(int(partes[0]), int(partes[1]), int(partes[2])).isoformat()
+        if len(partes) == 2 and partes[0].isdigit() and len(partes[0]) == 4:
+            # Ano-mês sem dia → assume o dia 1.
+            return date(int(partes[0]), int(partes[1]), 1).isoformat()
+    except (ValueError, IndexError):
+        pass
+    return hoje_brasil().isoformat()
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from db import get_db
 
@@ -140,6 +163,7 @@ def buscar_cliente_por_fone(fone):
 
 def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto, conta_id=None):
     import logging
+    data_gasto = normalizar_data(data_gasto)
     logging.warning(f"[SALVAR_GASTO] cliente_id={cliente_id} descricao={descricao!r} valor={valor} data={data_gasto!r} conta_id={conta_id}")
     conn = get_db()
     conn.execute(
@@ -208,7 +232,7 @@ def editar_gasto_por_descricao(cliente_id, descricao, novo_valor=None, nova_desc
     val_final  = float(novo_valor)      if novo_valor      is not None else float(gasto["valor"])
     desc_final = nova_descricao.strip() if nova_descricao               else gasto["descricao"]
     cat_final  = nova_categoria         if nova_categoria               else gasto["categoria"]
-    data_final = nova_data              if nova_data                    else gasto["data"]
+    data_final = normalizar_data(nova_data) if nova_data                else gasto["data"]
     conn.execute(
         "UPDATE gastos SET descricao=%s, valor=%s, categoria=%s, data=%s WHERE id=%s AND cliente_id=%s",
         (desc_final, val_final, cat_final, data_final, gasto["id"], cliente_id)
@@ -233,7 +257,7 @@ def editar_renda_por_descricao(cliente_id, descricao, novo_valor=None, nova_desc
     val_final  = float(novo_valor)      if novo_valor      is not None else float(renda["valor"])
     desc_final = nova_descricao.strip() if nova_descricao               else renda["descricao"]
     tipo_final = novo_tipo              if novo_tipo                    else renda["tipo"]
-    data_final = nova_data              if nova_data                    else renda["data"]
+    data_final = normalizar_data(nova_data) if nova_data                else renda["data"]
     conn.execute(
         "UPDATE rendas SET descricao=%s, valor=%s, tipo=%s, data=%s WHERE id=%s AND cliente_id=%s",
         (desc_final, val_final, tipo_final, data_final, renda["id"], cliente_id)
@@ -374,6 +398,7 @@ def salvar_renda(cliente_id, valor):
 
 def registrar_entrada_renda(cliente_id, descricao, valor, tipo, data, conta_id=None):
     """Registra uma entrada de renda na tabela rendas."""
+    data = normalizar_data(data)
     USE_PG = bool(os.environ.get("DATABASE_URL"))
     conn = get_db()
     if USE_PG:
