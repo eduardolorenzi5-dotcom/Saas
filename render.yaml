@@ -1,0 +1,58 @@
+# Blueprint do Render — https://render.com/docs/blueprint-spec
+# No dashboard do Render: New + > Blueprint > conectar este repo do GitHub.
+# O Render cria o web service e o Postgres juntos e injeta o DATABASE_URL.
+
+services:
+  - type: web
+    name: controla-facil
+    runtime: python
+    plan: starter            # precisa ser pago: as threads de lembretes rodam 24/7
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    healthCheckPath: /login
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: controla-facil-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WPP_PROVIDER
+        value: meta
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      # Segredos: preencher no dashboard (Environment > Add Environment Variable)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: ADMIN_KEY
+        sync: false
+      - key: BACKUP_EMAIL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+databases:
+  - name: controla-facil-db
+    plan: basic-256mb
+    region: oregon
