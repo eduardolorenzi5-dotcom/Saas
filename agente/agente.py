@@ -93,6 +93,18 @@ def mes_ano_pt(d=None):
         d = hoje_brasil()
     return f"{MESES_PT[d.month]}/{d.year}"
 
+def mes_str_valido(m):
+    """Valida string de mês no formato YYYY-MM."""
+    import re
+    return isinstance(m, str) and re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", m) is not None
+
+def mes_str_pt(mes):
+    """Converte 'YYYY-MM' para 'Nome/YYYY' (ex: '2026-06' → 'Junho/2026')."""
+    try:
+        return f"{MESES_PT[int(mes[5:7])]}/{mes[:4]}"
+    except Exception:
+        return mes
+
 def formatar_data(data_iso):
     """Converte YYYY-MM-DD para DD/MM/YYYY."""
     try:
@@ -280,8 +292,9 @@ def historico_gastos(cliente_id):
     conn.close()
     return [dict(g) for g in gastos]
 
-def resumo_mes(cliente_id):
-    mes = hoje_brasil().strftime("%Y-%m")
+def resumo_mes(cliente_id, mes=None):
+    if not mes:
+        mes = hoje_brasil().strftime("%Y-%m")
     conn = get_db()
     total = conn.execute(
         "SELECT COALESCE(SUM(valor),0) as t FROM gastos WHERE cliente_id=%s AND data LIKE %s",
@@ -638,7 +651,7 @@ Ao receber uma mensagem, identifique se é:
 3. Uma EXCLUSÃO por descrição — ex: "apaga o mercado", "cancela os 50 reais do uber"
 4. Uma EXCLUSÃO de todos os gastos — ex: "apaga todos os gastos", "zera meus gastos", "limpa o histórico", "apaga todos os gastos do mês"
 4b. Uma LIMPEZA TOTAL (gastos + rendas + saldo) — ex: "apaga tudo", "zera tudo", "limpa tudo", "quero começar do zero", "apaga todas as informações", "reinicia minha conta"
-4. Uma CONSULTA de resumo GERAL (sem citar conta específica) — ex: "quanto gastei?", "resumo do mês", "quanto ganhei?", "qual meu saldo?", "como estou esse mês?", "quanto tenho de saldo?", "quanto entrou esse mês?", "qual minha renda esse mês?"
+4. Uma CONSULTA de resumo GERAL (sem citar conta específica) — ex: "quanto gastei?", "resumo do mês", "quanto ganhei?", "qual meu saldo?", "como estou esse mês?", "quanto tenho de saldo?", "quanto entrou esse mês?", "qual minha renda esse mês?", "quanto gastei mês passado?", "resumo de junho", "gastos de maio"
 4c. Uma CONSULTA de resumo de UMA CONTA ESPECÍFICA — ex: "quanto tenho na conta do Nubank?", "resumo do Bradesco", "como está meu Banco do Brasil?", "saldo da conta Itaú", "quanto gastei no Inter esse mês?" → use acao resumo_conta
 5. Um pedido de ANÁLISE financeira — ex: "analisa meus gastos", "onde estou gastando mais?", "como estão minhas finanças?", "tendência de gastos", "o que devo economizar?"
 6. Um pedido de DASHBOARD/GRÁFICO — ex: "manda o gráfico", "quero ver meu dashboard", "relatório visual", "gráfico de gastos"
@@ -690,6 +703,9 @@ Se for exclusão por descrição (extraia a descrição e opcionalmente o valor)
 
 Se for consulta de resumo GERAL (sem citar conta específica), responda:
 {{"acao": "resumo"}}
+Se o usuário pedir o resumo/gastos de um mês ESPECÍFICO diferente do atual (ex: "quanto gastei mês passado?", "resumo de junho", "gastos de maio"), inclua o mês calculado a partir da data de hoje:
+{{"acao": "resumo", "mes": "YYYY-MM"}}
+(ex: se hoje é julho e o usuário pediu "mês passado", use o mês de junho; omita "mes" se for o mês atual)
 
 ⚠️ IMPORTANTE: Se o usuário mencionar o nome de uma conta bancária junto ao pedido de resumo/saldo/quanto tenho, use OBRIGATORIAMENTE resumo_conta, NÃO resumo.
 Exemplos que devem usar resumo_conta: "quanto tenho na conta do Banco do Brasil?", "resumo do Nubank", "como está meu Bradesco", "saldo da conta Inter", "quanto gastei no Itaú".
@@ -704,10 +720,13 @@ Se for pedido de dashboard/gráfico visual:
 
 Se for pedido de relatório PDF completo (geral, sem filtro por conta):
 {{"acao": "relatorio"}}
+Se pedir o relatório/extrato de um mês ESPECÍFICO diferente do atual (ex: "relatório do mês passado", "extrato de junho"), inclua o mês:
+{{"acao": "relatorio", "mes": "YYYY-MM"}}
 
 Se for pedido de relatório PDF de UMA conta específica (ex: "relatório da conta Bradesco", "extrato em PDF do Nubank"):
 {{"acao": "relatorio_conta", "conta_nome": "Bradesco"}}
 - conta_nome: nome/parte do nome da conta mencionada pelo usuário
+- inclua "mes": "YYYY-MM" se o usuário pedir um mês específico diferente do atual
 
 Se for pedido para conectar Google Agenda:
 {{"acao": "conectar_agenda"}}
@@ -1395,7 +1414,8 @@ def processar_mensagem(fone, mensagem, _cliente=None):
 
         elif acao == "relatorio":
             import logging
-            mes_rel = hoje_brasil().strftime("%Y-%m")
+            mes_req = resultado.get("mes")
+            mes_rel = mes_req if mes_str_valido(mes_req) else hoje_brasil().strftime("%Y-%m")
             enviar_whatsapp(fone, "⏳ Gerando seu relatório PDF completo, aguarde um instante...")
             try:
                 from relatorio.gerador import gerar_e_enviar_pdf_wpp
@@ -1410,8 +1430,9 @@ def processar_mensagem(fone, mensagem, _cliente=None):
 
         elif acao == "relatorio_conta":
             import logging
-            mes_rel = hoje_brasil().strftime("%Y-%m")
-            conta_nome_busca = dados.get("conta_nome", "").strip().lower()
+            mes_req = resultado.get("mes")
+            mes_rel = mes_req if mes_str_valido(mes_req) else hoje_brasil().strftime("%Y-%m")
+            conta_nome_busca = resultado.get("conta_nome", "").strip().lower()
             # Localiza a conta pelo nome (busca parcial)
             conn_rc = get_db()
             contas_rc = conn_rc.execute(
@@ -1449,14 +1470,16 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                     resposta = "Ocorreu um erro ao gerar o relatório. Tente novamente."
             else:
                 nomes = ", ".join(c["nome"] for c in contas_rc) if contas_rc else "nenhuma"
-                resposta = f"Não encontrei a conta '{dados.get('conta_nome', '')}'. Suas contas: {nomes}."
+                resposta = f"Não encontrei a conta '{resultado.get('conta_nome', '')}'. Suas contas: {nomes}."
 
         elif acao == "analise":
             gastos = historico_gastos(cliente["id"])
             resposta = gerar_analise_financeira(gastos)
 
         elif acao == "resumo":
-            total, por_cat = resumo_mes(cliente["id"])
+            mes_req = resultado.get("mes")
+            mes_ref = mes_req if mes_str_valido(mes_req) else hoje_brasil().strftime("%Y-%m")
+            total, por_cat = resumo_mes(cliente["id"], mes=mes_ref)
             renda_estatica = float(cliente["renda_mensal"]) if cliente.get("renda_mensal") else None
             # Busca rendas do mês atual (com fallback caso tabela não exista ainda)
             rendas_rows = []
@@ -1464,7 +1487,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 import logging as _log
                 USE_PG = bool(os.environ.get("DATABASE_URL"))
                 conn_r = get_db()
-                mes_atual = hoje_brasil().strftime("%Y-%m")
+                mes_atual = mes_ref
                 if USE_PG:
                     rendas_rows = conn_r.execute(
                         "SELECT descricao, valor, tipo FROM rendas WHERE cliente_id=%s AND data LIKE %s ORDER BY tipo, valor DESC",
@@ -1493,7 +1516,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 renda_ref = total_renda
             else:
                 renda_ref = renda_estatica
-            linhas = [f"📊 *Resumo de {mes_ano_pt()}*", ""]
+            linhas = [f"📊 *Resumo de {mes_str_pt(mes_ref)}*", ""]
             if renda_ref:
                 saldo = renda_ref - total
                 pct = (total / renda_ref * 100) if renda_ref else 0
