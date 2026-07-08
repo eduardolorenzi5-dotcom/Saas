@@ -204,10 +204,19 @@ def _meta_upload_media_b64(imagem_b64: str, filename: str) -> str | None:
     import base64
     try:
         img_bytes = base64.b64decode(imagem_b64)
+    except Exception as e:
+        logging.error(f"[WPP-META] Erro decode base64: {e}")
+        return None
+    return _meta_upload_media(img_bytes, filename, "image/png")
+
+
+def _meta_upload_media(data: bytes, filename: str, mimetype: str) -> str | None:
+    """Faz upload de mídia (bytes) para Meta e retorna media_id."""
+    try:
         r = requests.post(
             f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_ID}/media",
             headers={"Authorization": f"Bearer {WHATSAPP_TOKEN}"},
-            files={"file": (filename, img_bytes, "image/png")},
+            files={"file": (filename, data, mimetype)},
             data={"messaging_product": "whatsapp"},
             timeout=30
         )
@@ -242,6 +251,77 @@ def _meta_send_image_id(fone: str, media_id: str, caption: str) -> bool:
         return r.status_code < 300
     except Exception as e:
         logging.error(f"[WPP-META] Erro send_image_id: {e}")
+        return False
+
+
+# ── Envio de documento (PDF etc.) ────────────────────────────────────────────
+
+def send_document_bytes(fone: str, data: bytes, filename: str = "documento.pdf",
+                        caption: str = "", mimetype: str = "application/pdf") -> bool:
+    """Envia um documento (bytes) pelo WhatsApp. Retorna True se enviou."""
+    fone = _limpar_fone(fone)
+    if not fone or not data:
+        return False
+
+    if WPP_PROVIDER == "meta":
+        media_id = _meta_upload_media(data, filename, mimetype)
+        if not media_id:
+            return False
+        return _meta_send_document_id(fone, media_id, filename, caption)
+    else:
+        return _evolution_send_document_bytes(fone, data, filename, caption, mimetype)
+
+
+def _evolution_send_document_bytes(fone: str, data: bytes, filename: str,
+                                   caption: str, mimetype: str) -> bool:
+    import base64
+    if not EVOLUTION_KEY:
+        print(f"[WPP-DEV → {fone}] documento {filename} ({len(data)} bytes)")
+        return True
+    try:
+        r = requests.post(
+            f"{EVOLUTION_URL}/message/sendMedia/{EVOLUTION_INSTANCE}",
+            headers={"apikey": EVOLUTION_KEY, "Content-Type": "application/json"},
+            json={
+                "number": fone,
+                "mediatype": "document",
+                "mimetype": mimetype,
+                "caption": caption,
+                "media": base64.b64encode(data).decode(),
+                "fileName": filename,
+            },
+            timeout=30
+        )
+        return r.status_code < 300
+    except Exception as e:
+        logging.error(f"[WPP-EVOLUTION] Erro send_document: {e}")
+        return False
+
+
+def _meta_send_document_id(fone: str, media_id: str, filename: str, caption: str) -> bool:
+    try:
+        body = {
+            "messaging_product": "whatsapp",
+            "to": fone,
+            "type": "document",
+            "document": {"id": media_id, "filename": filename}
+        }
+        if caption:
+            body["document"]["caption"] = caption
+        r = requests.post(
+            META_API_URL,
+            headers={
+                "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json=body,
+            timeout=15
+        )
+        if r.status_code >= 300:
+            logging.error(f"[WPP-META] Erro send_document {r.status_code}: {r.text}")
+        return r.status_code < 300
+    except Exception as e:
+        logging.error(f"[WPP-META] Erro send_document: {e}")
         return False
 
 

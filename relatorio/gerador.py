@@ -512,16 +512,11 @@ def gerar_pdf(cliente_id, mes, conta_id=None):
 
 
 def gerar_e_enviar_pdf_wpp(cliente_id, mes, whatsapp, conta_id=None):
-    """Gera o PDF e envia pelo WhatsApp via Evolution API. Retorna True/False."""
-    import base64, requests as _req, logging, os
+    """Gera o PDF e envia pelo WhatsApp (via wpp_provider). Retorna True/False."""
+    import logging
+    from agente.wpp_provider import send_document_bytes
 
     caminho = gerar_pdf(cliente_id, mes, conta_id=conta_id)
-    ev_url  = os.environ.get("EVOLUTION_URL", "").rstrip("/")
-    ev_inst = os.environ.get("EVOLUTION_INSTANCE", "")
-    ev_key  = os.environ.get("EVOLUTION_KEY", "")
-    if not ev_url or not ev_inst or not ev_key:
-        logging.warning("[PDF] EVOLUTION_* não configurados")
-        return False
 
     numero = "".join(c for c in (whatsapp or "") if c.isdigit())
     if not numero:
@@ -544,27 +539,14 @@ def gerar_e_enviar_pdf_wpp(cliente_id, mes, whatsapp, conta_id=None):
             pass
 
     with open(caminho, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
+        pdf_bytes = f.read()
 
     caption = f"📊 Seu relatório financeiro{conta_label} de *{mes_nome}* está pronto!"
-    file_name = f"relatorio_{mes_nome}{conta_label}.pdf".replace(" ", "_")
+    file_name = f"relatorio_{mes_nome}{conta_label}.pdf".replace(" ", "_").replace("—", "-")
 
-    payload = {
-        "number": numero,
-        "mediatype": "document",
-        "mimetype": "application/pdf",
-        "caption": caption,
-        "media": b64,
-        "fileName": file_name,
-    }
-    try:
-        r = _req.post(
-            f"{ev_url}/message/sendMedia/{ev_inst}",
-            headers={"apikey": ev_key, "Content-Type": "application/json"},
-            json=payload, timeout=30,
-        )
-        logging.info(f"[PDF] Enviado para {numero} — status {r.status_code}")
-        return r.status_code in (200, 201)
-    except Exception as e:
-        logging.error(f"[PDF] Falha ao enviar para {numero}: {e}")
-        return False
+    ok = send_document_bytes(numero, pdf_bytes, filename=file_name, caption=caption)
+    if ok:
+        logging.info(f"[PDF] Enviado para {numero}")
+    else:
+        logging.error(f"[PDF] Falha ao enviar para {numero}")
+    return ok
