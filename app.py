@@ -1345,7 +1345,7 @@ def checkout_mercadopago(cliente_id):
     if not cliente:
         return redirect(url_for("index"))
 
-    base_url = os.environ.get("BASE_URL", "https://saas-production-2a7a.up.railway.app")
+    base_url = os.environ.get("BASE_URL", "https://controlafacilai.com.br")
     payload = {
         "reason": f"Controla Fácil — Plano {cliente['plano_nome']}",
         "auto_recurring": {

@@ -43,7 +43,7 @@ EVOLUTION_INSTANCE = os.environ.get("EVOLUTION_INSTANCE", "minha-instancia")
 from agente.wpp_provider import send_text as _wpp_send_text, send_image_b64 as _wpp_send_image_b64
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-APP_URL = os.environ.get("APP_URL", "https://saas-production-2a7a.up.railway.app")
+APP_URL = os.environ.get("APP_URL", "https://controlafacilai.com.br")
 GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
