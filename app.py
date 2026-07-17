@@ -114,6 +114,22 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS pagamentos_externos (
+                id SERIAL PRIMARY KEY,
+                origem TEXT DEFAULT 'kiwify',
+                evento TEXT,
+                order_id TEXT,
+                email TEXT,
+                whatsapp TEXT,
+                nome TEXT,
+                valor REAL,
+                cliente_id INTEGER,
+                status TEXT DEFAULT 'recebido',
+                payload TEXT,
+                criado_em TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS lembretes (
                 id SERIAL PRIMARY KEY,
                 cliente_id INTEGER NOT NULL,
@@ -289,6 +305,20 @@ def init_db():
                 referencia TEXT,
                 criado_em TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+            );
+            CREATE TABLE IF NOT EXISTS pagamentos_externos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                origem TEXT DEFAULT 'kiwify',
+                evento TEXT,
+                order_id TEXT,
+                email TEXT,
+                whatsapp TEXT,
+                nome TEXT,
+                valor REAL,
+                cliente_id INTEGER,
+                status TEXT DEFAULT 'recebido',
+                payload TEXT,
+                criado_em TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS lembretes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -636,14 +666,8 @@ def _popular_categorias_padrao(conn, cliente_id):
             pass
 
 def enviar_wpp_boas_vindas(whatsapp, nome, cliente_id=None):
-    """Envia mensagem de boas-vindas pelo WhatsApp via Evolution API."""
-    import urllib.request, json as _json
-    url = os.environ.get("EVOLUTION_URL", "").rstrip("/")
-    instance = os.environ.get("EVOLUTION_INSTANCE", "")
-    key = os.environ.get("EVOLUTION_KEY", "")
-    if not url or not instance or not key:
-        logging.warning("[WPP] EVOLUTION_URL/INSTANCE/KEY não configurados")
-        return
+    """Envia mensagem de boas-vindas pelo WhatsApp (via wpp_provider, agnóstico de provedor)."""
+    from agente.wpp_provider import send_text
     numero = "".join(c for c in (whatsapp or "") if c.isdigit())
     if not numero:
         logging.warning("[WPP] Número inválido para boas-vindas")
@@ -678,45 +702,22 @@ def enviar_wpp_boas_vindas(whatsapp, nome, cliente_id=None):
         f"{link_agenda}\n\n"
         f"Pode começar agora! Me manda seu primeiro gasto 😊"
     )
-    payload = _json.dumps({
-        "number": numero,
-        "text": mensagem,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        f"{url}/message/sendText/{instance}",
-        data=payload,
-        headers={
-            "apikey": key,
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            logging.info(f"[WPP] Boas-vindas enviado para {numero} — status {resp.status}")
+        ok = send_text(numero, mensagem)
+        logging.info(f"[WPP] Boas-vindas enviado para {numero} — ok={ok}")
     except Exception as e:
         logging.error(f"[WPP] Falha ao enviar boas-vindas para {numero}: {e}")
 
 
 def _notificar_admin(texto):
-    """Avisa o admin pelo WhatsApp (Evolution). No-op se ADMIN_WHATSAPP não estiver definido."""
-    import urllib.request, json as _json
+    """Avisa o admin pelo WhatsApp (via wpp_provider). No-op se ADMIN_WHATSAPP não estiver definido."""
+    from agente.wpp_provider import send_text
     numero = "".join(c for c in os.environ.get("ADMIN_WHATSAPP", "") if c.isdigit())
-    url = os.environ.get("EVOLUTION_URL", "").rstrip("/")
-    instance = os.environ.get("EVOLUTION_INSTANCE", "")
-    key = os.environ.get("EVOLUTION_KEY", "")
-    if not (numero and url and instance and key):
+    if not numero:
         return
-    payload = _json.dumps({"number": numero, "text": texto}).encode("utf-8")
-    req = urllib.request.Request(
-        f"{url}/message/sendText/{instance}",
-        data=payload,
-        headers={"apikey": key, "Content-Type": "application/json"},
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            logging.info(f"[ADMIN] Aviso enviado — status {resp.status}")
+        ok = send_text(numero, texto)
+        logging.info(f"[ADMIN] Aviso enviado — ok={ok}")
     except Exception as e:
         logging.error(f"[ADMIN] Falha ao avisar admin: {e}")
 
@@ -847,6 +848,18 @@ def normalizar_whatsapp(numero):
     if not digits.startswith("55"):
         digits = "55" + digits
     return digits
+
+def variantes_whatsapp(numero):
+    """Número normalizado + variante com/sem o 9º dígito, para busca tolerante."""
+    w = normalizar_whatsapp(numero or "")
+    if len(w) < 12:
+        return []
+    variantes = [w]
+    if len(w) == 12:
+        variantes.append(w[:4] + "9" + w[4:])
+    elif len(w) == 13:
+        variantes.append(w[:4] + w[5:])
+    return variantes
 
 def login_required(f):
     @wraps(f)
@@ -1252,6 +1265,12 @@ def cadastro():
                         (nome, email, hash_senha(senha), plano_id, token, wpp_existente["id"])
                     )
                     conn.commit()
+                    # Se já existe pagamento Kiwify órfão desta pessoa, ativa direto
+                    if _resgatar_pagamento_orfao(conn, wpp_existente["id"], email, whatsapp):
+                        conn.close()
+                        session["cliente_id"] = wpp_existente["id"]
+                        session["cliente_nome"] = nome
+                        return redirect(url_for("dashboard"))
                     conn.close()
                     return redirect(url_for("pagamento", cliente_id=wpp_existente["id"]))
                 conn.close()
@@ -1266,6 +1285,12 @@ def cadastro():
                         (nome, hash_senha(senha), whatsapp, plano_id, token, email_existente["id"])
                     )
                     conn.commit()
+                    # Se já existe pagamento Kiwify órfão desta pessoa, ativa direto
+                    if _resgatar_pagamento_orfao(conn, email_existente["id"], email, whatsapp):
+                        conn.close()
+                        session["cliente_id"] = email_existente["id"]
+                        session["cliente_nome"] = nome
+                        return redirect(url_for("dashboard"))
                     conn.close()
                     return redirect(url_for("pagamento", cliente_id=email_existente["id"]))
                 conn.close()
@@ -1278,6 +1303,8 @@ def cadastro():
             )
             conn.commit()
             cliente_id = conn.execute("SELECT id FROM clientes WHERE email=%s", (email,)).fetchone()["id"]
+            # Se a pessoa pagou na Kiwify ANTES de se cadastrar, vincula e remove o trial
+            _resgatar_pagamento_orfao(conn, cliente_id, email, whatsapp)
             conn.close()
             # Envia boas-vindas imediatamente (trial já ativo)
             try: enviar_email_boas_vindas(email, nome, cliente_id)
@@ -1560,32 +1587,66 @@ def _meta_purchase_event(email, fone, nome, valor):
 def webhook_kiwify():
     import hmac, hashlib
     try:
-        # Valida token — Kiwify envia via query param ou body
-        token_esperado = os.environ.get("KIWIFY_WEBHOOK_TOKEN", "2dv1ph7yejc")
+        # ── Validação: assinatura HMAC-SHA1 da Kiwify (query ?signature=) ou token ──
+        raw_body = request.get_data()
         data = request.get_json(force=True, silent=True) or {}
+        token_esperado = os.environ.get("KIWIFY_WEBHOOK_TOKEN", "2dv1ph7yejc")
+        assinatura = request.args.get("signature", "")
         token_recebido = (
             request.args.get("token") or
             data.get("token") or
             request.headers.get("X-Kiwify-Token") or ""
         )
-        logging.warning(f"[KIWIFY] token_recebido={token_recebido!r} token_esperado={token_esperado!r}")
-        if token_recebido and token_recebido != token_esperado:
-            logging.warning(f"[KIWIFY] Token inválido — bloqueado")
-            return jsonify({"ok": False}), 401
+        if assinatura:
+            esperada = hmac.new(token_esperado.encode(), raw_body, hashlib.sha1).hexdigest()
+            if not hmac.compare_digest(assinatura, esperada):
+                logging.warning("[KIWIFY] Assinatura HMAC inválida — bloqueado")
+                return jsonify({"ok": False}), 401
+        elif token_recebido:
+            if token_recebido != token_esperado:
+                logging.warning("[KIWIFY] Token inválido — bloqueado")
+                return jsonify({"ok": False}), 401
+        else:
+            # Sem assinatura nem token: processa mas registra o alerta (não perder pagamento real)
+            logging.warning("[KIWIFY] Webhook SEM assinatura/token — verifique a config na Kiwify")
 
-        evento = data.get("webhook_event_type", "")
+        evento = data.get("webhook_event_type", "") or data.get("event", "")
         logging.warning(f"[KIWIFY] evento={evento} data={str(data)[:500]}")
 
         customer = data.get("Customer", {})
         email = (customer.get("email") or "").strip().lower()
-        nome = customer.get("full_name") or customer.get("name") or ""
-        fone = customer.get("mobile") or customer.get("phone") or ""
+        nome = customer.get("full_name") or customer.get("name") or customer.get("first_name") or ""
+        fone_bruto = customer.get("mobile") or customer.get("phone") or customer.get("phone_number") or ""
+        fone = normalizar_whatsapp(fone_bruto) if fone_bruto else ""
+        order_id = str(data.get("order_id") or data.get("order_ref") or "")
 
-        if not email:
+        if not email and not fone:
             return jsonify({"ok": True}), 200
 
         conn = get_db()
-        cliente = conn.execute("SELECT * FROM clientes WHERE LOWER(email)=%s", (email,)).fetchone()
+
+        # ── Match em cascata: e-mail exato → telefone (variantes 9º dígito) ──
+        cliente = None
+        if email:
+            cliente = conn.execute("SELECT * FROM clientes WHERE LOWER(email)=%s", (email,)).fetchone()
+        if not cliente:
+            for v in variantes_whatsapp(fone):
+                cliente = conn.execute("SELECT * FROM clientes WHERE whatsapp=%s", (v,)).fetchone()
+                if cliente:
+                    break
+
+        def _registrar_evento(status_reg, valor=None):
+            """Auditoria: grava todo evento recebido em pagamentos_externos."""
+            try:
+                conn.execute(
+                    "INSERT INTO pagamentos_externos (origem, evento, order_id, email, whatsapp, nome, valor, cliente_id, status, payload) "
+                    "VALUES ('kiwify', %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (evento, order_id, email, fone, nome, valor,
+                     cliente["id"] if cliente else None, status_reg, str(data)[:2000])
+                )
+                conn.commit()
+            except Exception as e:
+                logging.error(f"[KIWIFY] Falha ao registrar evento: {e}")
 
         if evento in ("order_approved", "order.approved"):
             # Pagamento aprovado — ativa conta
@@ -1594,25 +1655,84 @@ def webhook_kiwify():
             if cliente:
                 ja_ativo = cliente["status"] == "ativo" and not cliente["trial_expiry"]
                 conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s", (cliente["id"],))
+                try:
+                    conn.execute(
+                        "INSERT INTO pagamentos (cliente_id, valor, status, referencia) VALUES (%s, %s, 'aprovado', %s)",
+                        (cliente["id"], valor_pago, f"kiwify:{order_id}")
+                    )
+                except Exception as e:
+                    logging.error(f"[KIWIFY] Falha ao registrar em pagamentos: {e}")
                 conn.commit()
+                _registrar_evento("vinculado", valor_pago)
                 if not ja_ativo:
                     try: enviar_email_boas_vindas(cliente["email"], cliente["nome"], cliente["id"])
                     except Exception as e: logging.error(f"[KIWIFY] email boas-vindas: {e}")
                     try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
                     except Exception as e: logging.error(f"[KIWIFY] wpp boas-vindas: {e}")
                 logging.warning(f"[KIWIFY] Cliente {email} ATIVADO")
+                try:
+                    _notificar_admin(
+                        f"💰 *Pagamento aprovado (Kiwify)*\n\n"
+                        f"Cliente: {cliente['nome']}\nE-mail: {email}\nValor: R$ {valor_pago:.2f}\n"
+                        f"Conta ativada automaticamente. ✅"
+                    )
+                except Exception: pass
             else:
-                logging.warning(f"[KIWIFY] Cliente não encontrado para email={email}")
+                # Pagamento ÓRFÃO: pagador ainda não tem cadastro (ou usou outro e-mail/fone).
+                # Fica salvo e é resgatado automaticamente quando o cadastro acontecer.
+                ja_orfao = None
+                if order_id:
+                    ja_orfao = conn.execute(
+                        "SELECT id FROM pagamentos_externos WHERE order_id=%s AND evento=%s AND status='orfao'",
+                        (order_id, evento)
+                    ).fetchone()
+                _registrar_evento("orfao", valor_pago)
+                logging.warning(f"[KIWIFY] Pagamento ÓRFÃO — email={email} fone={fone} (sem cliente correspondente)")
+                if not ja_orfao:
+                    try:
+                        _notificar_admin(
+                            f"⚠️ *Pagamento aprovado SEM cadastro correspondente (Kiwify)*\n\n"
+                            f"Nome: {nome}\nE-mail: {email}\nWhatsApp: {fone or '—'}\nValor: R$ {valor_pago:.2f}\n\n"
+                            f"Se a pessoa se cadastrar com esse e-mail ou WhatsApp, o acesso libera sozinho. "
+                            f"Ou ative manualmente no /admin."
+                        )
+                    except Exception: pass
             # Dispara evento Purchase na Meta Conversions API (server-side)
             try:
                 _meta_purchase_event(email, fone, nome, valor_pago)
             except Exception as e:
                 logging.error(f"[META CAPI] Erro ao enviar Purchase: {e}")
 
+        elif evento in ("order_refunded", "order.refunded", "chargeback", "order_chargedback"):
+            # Reembolso/chargeback — bloqueia acesso e avisa o admin
+            _registrar_evento("reembolso")
+            if cliente:
+                conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (cliente["id"],))
+                conn.commit()
+            try:
+                _notificar_admin(
+                    f"🔴 *{'Chargeback' if 'charge' in evento else 'Reembolso'} (Kiwify)*\n\n"
+                    f"Nome: {nome}\nE-mail: {email}\n"
+                    f"{'Conta bloqueada (pendente).' if cliente else 'Sem cadastro correspondente.'}"
+                )
+            except Exception: pass
+
+        elif evento in ("subscription_late", "subscription.late"):
+            # Cobrança da assinatura atrasada — só avisa (Kiwify ainda vai tentar de novo)
+            _registrar_evento("atrasado")
+            try:
+                _notificar_admin(
+                    f"🟡 *Assinatura com cobrança atrasada (Kiwify)*\n\n"
+                    f"Nome: {nome}\nE-mail: {email}\n"
+                    f"A Kiwify vai retentar a cobrança. Acesso mantido por enquanto."
+                )
+            except Exception: pass
+
         elif evento in ("subscription_canceled", "subscription.canceled"):
             # Assinatura cancelada/suspensa no Kiwify — bloqueia acesso mas mantém recuperável.
             # 'pendente' (e não 'cancelado') porque o gatilho costuma ser falha de cobrança,
             # que volta sozinho num próximo pagamento aprovado.
+            _registrar_evento("cancelado")
             if cliente:
                 conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (cliente["id"],))
                 conn.commit()
@@ -1630,15 +1750,71 @@ def webhook_kiwify():
 
         elif evento in ("subscription_renewed", "subscription.renewed"):
             # Renovação — mantém ativo
+            _registrar_evento("renovado")
             if cliente:
                 conn.execute("UPDATE clientes SET status='ativo' WHERE id=%s", (cliente["id"],))
                 conn.commit()
                 logging.warning(f"[KIWIFY] Cliente {email} RENOVADO")
 
+        else:
+            # Evento desconhecido — registra para auditoria, não perde informação
+            _registrar_evento("ignorado")
+
         conn.close()
     except Exception as e:
         logging.error(f"[KIWIFY] Erro webhook: {e}")
     return jsonify({"ok": True}), 200
+
+
+def _resgatar_pagamento_orfao(conn, cliente_id, email, whatsapp):
+    """Procura pagamento aprovado 'órfão' (webhook chegou antes do cadastro, ou com
+    e-mail/telefone diferente) que bata com este cliente. Se achar, ativa a conta
+    e marca o pagamento como resgatado. Retorna True se ativou."""
+    try:
+        email = (email or "").strip().lower()
+        orfao = None
+        if email:
+            orfao = conn.execute(
+                "SELECT * FROM pagamentos_externos WHERE status='orfao' "
+                "AND evento IN ('order_approved', 'order.approved') AND LOWER(email)=%s "
+                "ORDER BY id DESC", (email,)
+            ).fetchone()
+        if not orfao:
+            for v in variantes_whatsapp(whatsapp):
+                orfao = conn.execute(
+                    "SELECT * FROM pagamentos_externos WHERE status='orfao' "
+                    "AND evento IN ('order_approved', 'order.approved') AND whatsapp=%s "
+                    "ORDER BY id DESC", (v,)
+                ).fetchone()
+                if orfao:
+                    break
+        if not orfao:
+            return False
+        conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s", (cliente_id,))
+        conn.execute(
+            "UPDATE pagamentos_externos SET cliente_id=%s, status='resgatado' WHERE id=%s",
+            (cliente_id, orfao["id"])
+        )
+        try:
+            conn.execute(
+                "INSERT INTO pagamentos (cliente_id, valor, status, referencia) VALUES (%s, %s, 'aprovado', %s)",
+                (cliente_id, orfao["valor"] or 0, f"kiwify:{orfao['order_id']} (resgatado)")
+            )
+        except Exception as e:
+            logging.error(f"[KIWIFY] Falha ao registrar pagamento resgatado: {e}")
+        conn.commit()
+        logging.warning(f"[KIWIFY] Pagamento órfão #{orfao['id']} resgatado para cliente {cliente_id}")
+        try:
+            _notificar_admin(
+                f"🔗 *Pagamento órfão vinculado automaticamente*\n\n"
+                f"O cadastro de {email or whatsapp} bateu com um pagamento Kiwify "
+                f"que estava sem dono. Conta ativada. ✅"
+            )
+        except Exception: pass
+        return True
+    except Exception as e:
+        logging.error(f"[KIWIFY] Erro no resgate de pagamento órfão: {e}")
+        return False
 
 @app.route("/pagamento/confirmar/<int:cliente_id>", methods=["POST"])
 def confirmar_pagamento(cliente_id):
