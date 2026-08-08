@@ -434,7 +434,8 @@ def init_db():
     if USE_PG:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
-                    "renda_mensal REAL", "mp_subscription_id TEXT"]:
+                    "renda_mensal REAL", "mp_subscription_id TEXT",
+                    "asaas_customer_id TEXT", "asaas_subscription_id TEXT"]:
             conn.execute(f"ALTER TABLE clientes ADD COLUMN IF NOT EXISTS {col}")
         # Migration: dia_mes para lembretes mensais recorrentes
         conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS dia_mes INTEGER")
@@ -493,7 +494,8 @@ def init_db():
     else:
         for col in ["reset_token TEXT", "reset_expiry TEXT",
                     "google_access_token TEXT", "google_refresh_token TEXT", "google_token_expiry TEXT",
-                    "renda_mensal REAL", "mp_subscription_id TEXT"]:
+                    "renda_mensal REAL", "mp_subscription_id TEXT",
+                    "asaas_customer_id TEXT", "asaas_subscription_id TEXT"]:
             try:
                 conn.execute(f"ALTER TABLE clientes ADD COLUMN {col}")
             except Exception:
@@ -1000,19 +1002,21 @@ def admin_relatorio(cliente_id):
 @admin_required
 def admin_cancelar(cliente_id):
     conn = get_db()
-    cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    cliente = conn.execute("SELECT mp_subscription_id, asaas_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cliente_id,))
     conn.commit()
     conn.close()
     if cliente and cliente["mp_subscription_id"]:
         cancelar_assinatura_mp(cliente["mp_subscription_id"])
+    if cliente and cliente["asaas_subscription_id"]:
+        cancelar_assinatura_asaas(cliente["asaas_subscription_id"])
     return redirect(url_for("admin_painel"))
 
 @app.route("/admin/deletar/<int:cliente_id>", methods=["POST"])
 @admin_required
 def admin_deletar(cliente_id):
     conn = get_db()
-    cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
+    cliente = conn.execute("SELECT mp_subscription_id, asaas_subscription_id FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
     # Remove todas as tabelas filhas antes de deletar o cliente
     for tabela in ("gastos", "pagamentos", "lembretes", "categorias", "tipos_renda", "rendas", "conversa_historico", "transferencias", "parcelamentos", "contas_mensais", "contas_pagamentos", "contas_bancarias", "rendas_recorrentes"):
         try:
@@ -1024,6 +1028,8 @@ def admin_deletar(cliente_id):
     conn.close()
     if cliente and cliente["mp_subscription_id"]:
         cancelar_assinatura_mp(cliente["mp_subscription_id"])
+    if cliente and cliente["asaas_subscription_id"]:
+        cancelar_assinatura_asaas(cliente["asaas_subscription_id"])
     return redirect(url_for("admin_painel"))
 
 @app.route("/admin/criar-conta", methods=["POST"])
@@ -1335,8 +1341,7 @@ def pagamento(cliente_id):
         (cliente_id,)
     ).fetchone()
     conn.close()
-    kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y")
-    return render_template("pagamento.html", cliente=cliente, kiwify_url=kiwify_url)
+    return render_template("pagamento.html", cliente=cliente)
 
 def cancelar_assinatura_mp(subscription_id):
     """Cancela a assinatura recorrente no Mercado Pago."""
@@ -1539,6 +1544,315 @@ def webhook_mercadopago():
 
     except Exception as e:
         logging.error(f"Erro webhook MP: {e}")
+    return jsonify({"ok": True}), 200
+
+# ─────────────────────────  Asaas (assinaturas)  ─────────────────────────────
+# Novo gateway de recebimento. Assinantes antigos continuam na Kiwify
+# (webhook /webhook/kiwify segue ativo); todo checkout novo passa por aqui.
+
+def _asaas_req(method, path, payload=None):
+    """Chamada à API do Asaas. ASAAS_BASE_URL aponta para sandbox ou produção."""
+    import requests as _req
+    base = os.environ.get("ASAAS_BASE_URL", "https://api.asaas.com/v3").rstrip("/")
+    return _req.request(
+        method, f"{base}{path}",
+        headers={
+            "access_token": os.environ.get("ASAAS_API_KEY", ""),
+            "Content-Type": "application/json",
+            "User-Agent": "ControlaFacil",
+        },
+        json=payload, timeout=15,
+    )
+
+def cancelar_assinatura_asaas(subscription_id):
+    """Cancela a assinatura recorrente no Asaas."""
+    if not subscription_id or not os.environ.get("ASAAS_API_KEY"):
+        return
+    try:
+        resp = _asaas_req("DELETE", f"/subscriptions/{subscription_id}")
+        logging.warning(f"[ASAAS] Assinatura {subscription_id} cancelada (status={resp.status_code})")
+    except Exception as e:
+        logging.error(f"[ASAAS] Erro ao cancelar assinatura {subscription_id}: {e}")
+
+@app.route("/pagamento/checkout-asaas/<int:cliente_id>", methods=["POST"])
+def checkout_asaas(cliente_id):
+    cliente = _get_cliente_plano(cliente_id)
+    if not cliente:
+        return redirect(url_for("index"))
+    if not os.environ.get("ASAAS_API_KEY"):
+        return render_template("pagamento.html", cliente=cliente,
+            erro="Pagamento indisponível no momento. Contate o suporte.")
+
+    cpf = "".join(d for d in request.form.get("cpf", "") if d.isdigit())
+    if len(cpf) not in (11, 14):
+        return render_template("pagamento.html", cliente=cliente,
+            erro="CPF inválido. Digite os 11 números do seu CPF.")
+
+    try:
+        # ── Cliente no Asaas: reaproveita, busca por CPF ou cria ──
+        customer_id = cliente["asaas_customer_id"]
+        if not customer_id:
+            busca = _asaas_req("GET", f"/customers?cpfCnpj={cpf}")
+            achados = busca.json().get("data", []) if busca.status_code == 200 else []
+            if achados:
+                customer_id = achados[0]["id"]
+            else:
+                fone = cliente["whatsapp"] or ""
+                if fone.startswith("55"):
+                    fone = fone[2:]
+                resp = _asaas_req("POST", "/customers", {
+                    "name": cliente["nome"],
+                    "email": cliente["email"],
+                    "cpfCnpj": cpf,
+                    "mobilePhone": fone,
+                    "externalReference": str(cliente_id),
+                })
+                if resp.status_code not in (200, 201):
+                    logging.error(f"[ASAAS] Erro ao criar customer: {resp.status_code} {resp.text[:300]}")
+                    return render_template("pagamento.html", cliente=cliente,
+                        erro="Erro ao iniciar o pagamento. Confira o CPF e tente novamente.")
+                customer_id = resp.json()["id"]
+
+        # ── Assinatura mensal no cartão ──
+        resp = _asaas_req("POST", "/subscriptions", {
+            "customer": customer_id,
+            "billingType": "CREDIT_CARD",
+            "value": float(cliente["preco"]),
+            "nextDueDate": hoje_brasil().isoformat(),
+            "cycle": "MONTHLY",
+            "description": f"Controla Fácil — Plano {cliente['plano_nome']}",
+            "externalReference": str(cliente_id),
+        })
+        if resp.status_code not in (200, 201):
+            logging.error(f"[ASAAS] Erro ao criar assinatura: {resp.status_code} {resp.text[:300]}")
+            return render_template("pagamento.html", cliente=cliente,
+                erro="Erro ao criar assinatura. Tente novamente em instantes.")
+        subscription_id = resp.json()["id"]
+
+        conn = get_db()
+        conn.execute(
+            "UPDATE clientes SET asaas_customer_id=%s, asaas_subscription_id=%s WHERE id=%s",
+            (customer_id, subscription_id, cliente_id)
+        )
+        conn.commit()
+        conn.close()
+
+        # ── Fatura da 1ª cobrança: redireciona para o checkout do Asaas ──
+        invoice_url = None
+        for _ in range(3):
+            pags = _asaas_req("GET", f"/subscriptions/{subscription_id}/payments")
+            dados = pags.json().get("data", []) if pags.status_code == 200 else []
+            if dados:
+                invoice_url = dados[0].get("invoiceUrl")
+                break
+            time.sleep(1.5)
+        if not invoice_url:
+            logging.error(f"[ASAAS] Assinatura {subscription_id} criada mas sem fatura gerada ainda")
+            return render_template("pagamento.html", cliente=cliente,
+                erro="Assinatura criada, mas a fatura ainda não ficou pronta. Tente de novo em 1 minuto.")
+        return redirect(invoice_url)
+    except Exception as e:
+        logging.error(f"[ASAAS] Erro no checkout: {e}")
+        return render_template("pagamento.html", cliente=cliente,
+            erro="Erro inesperado ao iniciar o pagamento. Tente novamente.")
+
+@app.route("/webhook/asaas", methods=["POST"])
+def webhook_asaas():
+    import hmac
+    try:
+        token_esperado = os.environ.get("ASAAS_WEBHOOK_TOKEN", "")
+        token_recebido = request.headers.get("asaas-access-token", "")
+        if token_esperado:
+            if not hmac.compare_digest(token_recebido, token_esperado):
+                logging.warning("[ASAAS] Webhook com token inválido — bloqueado")
+                return jsonify({"ok": False}), 401
+        else:
+            logging.warning("[ASAAS] ASAAS_WEBHOOK_TOKEN não configurado — webhook sem validação")
+
+        data = request.get_json(force=True, silent=True) or {}
+        evento = data.get("event", "")
+        pag = data.get("payment") or {}
+        payment_id = str(pag.get("id") or "")
+        valor = pag.get("value")
+        logging.warning(f"[ASAAS] evento={evento} payment={payment_id} data={str(data)[:500]}")
+        if not evento:
+            return jsonify({"ok": True}), 200
+
+        conn = get_db()
+
+        # ── Match: externalReference (id do cliente) → subscription → customer ──
+        cliente = None
+        ext_ref = str(pag.get("externalReference") or "")
+        if ext_ref.isdigit():
+            cliente = conn.execute("SELECT * FROM clientes WHERE id=%s", (int(ext_ref),)).fetchone()
+        if not cliente and pag.get("subscription"):
+            cliente = conn.execute(
+                "SELECT * FROM clientes WHERE asaas_subscription_id=%s", (pag["subscription"],)
+            ).fetchone()
+        if not cliente and pag.get("customer"):
+            cliente = conn.execute(
+                "SELECT * FROM clientes WHERE asaas_customer_id=%s", (pag["customer"],)
+            ).fetchone()
+
+        # Sem match: busca contato do pagador no Asaas para casar por e-mail/fone
+        email = fone = nome = ""
+        if not cliente and pag.get("customer"):
+            try:
+                resp = _asaas_req("GET", f"/customers/{pag['customer']}")
+                if resp.status_code == 200:
+                    cust = resp.json()
+                    email = (cust.get("email") or "").strip().lower()
+                    nome = cust.get("name") or ""
+                    fone_bruto = cust.get("mobilePhone") or cust.get("phone") or ""
+                    fone = normalizar_whatsapp(fone_bruto) if fone_bruto else ""
+                    if email:
+                        cliente = conn.execute(
+                            "SELECT * FROM clientes WHERE LOWER(email)=%s", (email,)
+                        ).fetchone()
+                    if not cliente and fone:
+                        for v in variantes_whatsapp(fone):
+                            cliente = conn.execute(
+                                "SELECT * FROM clientes WHERE whatsapp=%s", (v,)
+                            ).fetchone()
+                            if cliente:
+                                break
+            except Exception as e:
+                logging.error(f"[ASAAS] Erro ao buscar customer: {e}")
+        if cliente:
+            email = email or cliente["email"]
+            fone = fone or cliente["whatsapp"]
+            nome = nome or cliente["nome"]
+
+        def _registrar_evento(status_reg):
+            """Auditoria: grava todo evento recebido em pagamentos_externos."""
+            try:
+                conn.execute(
+                    "INSERT INTO pagamentos_externos (origem, evento, order_id, email, whatsapp, nome, valor, cliente_id, status, payload) "
+                    "VALUES ('asaas', %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (evento, payment_id, email, fone, nome, valor,
+                     cliente["id"] if cliente else None, status_reg, str(data)[:2000])
+                )
+                conn.commit()
+            except Exception as e:
+                logging.error(f"[ASAAS] Falha ao registrar evento: {e}")
+
+        if evento in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
+            if cliente:
+                # Dedup: cartão gera CONFIRMED e depois RECEIVED para a mesma cobrança
+                ja_registrado = conn.execute(
+                    "SELECT id FROM pagamentos WHERE cliente_id=%s AND referencia=%s",
+                    (cliente["id"], f"asaas:{payment_id}")
+                ).fetchone()
+                ja_ativo = cliente["status"] == "ativo" and not cliente["trial_expiry"]
+                conn.execute(
+                    "UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s",
+                    (cliente["id"],)
+                )
+                if pag.get("subscription") and not cliente["asaas_subscription_id"]:
+                    conn.execute(
+                        "UPDATE clientes SET asaas_subscription_id=%s, asaas_customer_id=%s WHERE id=%s",
+                        (pag["subscription"], pag.get("customer"), cliente["id"])
+                    )
+                if not ja_registrado:
+                    try:
+                        conn.execute(
+                            "INSERT INTO pagamentos (cliente_id, valor, status, referencia) VALUES (%s, %s, 'aprovado', %s)",
+                            (cliente["id"], valor or 0, f"asaas:{payment_id}")
+                        )
+                    except Exception as e:
+                        logging.error(f"[ASAAS] Falha ao registrar em pagamentos: {e}")
+                conn.commit()
+                _registrar_evento("vinculado")
+                if not ja_ativo:
+                    try: enviar_email_boas_vindas(cliente["email"], cliente["nome"], cliente["id"])
+                    except Exception as e: logging.error(f"[ASAAS] email boas-vindas: {e}")
+                    try: enviar_wpp_boas_vindas(cliente["whatsapp"], cliente["nome"], cliente["id"])
+                    except Exception as e: logging.error(f"[ASAAS] wpp boas-vindas: {e}")
+                logging.warning(f"[ASAAS] Cliente {cliente['email']} ATIVADO")
+                if not ja_registrado:
+                    try:
+                        _notificar_admin(
+                            f"💰 *Pagamento aprovado (Asaas)*\n\n"
+                            f"Cliente: {cliente['nome']}\nE-mail: {cliente['email']}\nValor: R$ {(valor or 0):.2f}\n"
+                            f"Conta ativada automaticamente. ✅"
+                        )
+                    except Exception: pass
+                    try:
+                        _meta_purchase_event(email, fone, nome, valor or 0)
+                    except Exception as e:
+                        logging.error(f"[META CAPI] Erro ao enviar Purchase: {e}")
+            else:
+                # Pagamento órfão (raro no Asaas — assinatura nasce com externalReference).
+                # Resgatado automaticamente no cadastro, como na Kiwify.
+                ja_orfao = None
+                if payment_id:
+                    ja_orfao = conn.execute(
+                        "SELECT id FROM pagamentos_externos WHERE order_id=%s AND status='orfao'",
+                        (payment_id,)
+                    ).fetchone()
+                _registrar_evento("orfao")
+                logging.warning(f"[ASAAS] Pagamento ÓRFÃO — email={email} fone={fone}")
+                if not ja_orfao:
+                    try:
+                        _notificar_admin(
+                            f"⚠️ *Pagamento aprovado SEM cadastro correspondente (Asaas)*\n\n"
+                            f"Nome: {nome or '—'}\nE-mail: {email or '—'}\nWhatsApp: {fone or '—'}\nValor: R$ {(valor or 0):.2f}\n\n"
+                            f"Se a pessoa se cadastrar com esse e-mail ou WhatsApp, o acesso libera sozinho. "
+                            f"Ou ative manualmente no /admin."
+                        )
+                    except Exception: pass
+
+        elif evento == "PAYMENT_OVERDUE":
+            # Cobrança vencida — o Asaas retenta; só avisa o admin, mantém acesso
+            _registrar_evento("atrasado")
+            if cliente:
+                try:
+                    _notificar_admin(
+                        f"🟡 *Assinatura com cobrança atrasada (Asaas)*\n\n"
+                        f"Cliente: {cliente['nome']}\nE-mail: {cliente['email']}\n"
+                        f"O Asaas vai retentar a cobrança. Acesso mantido por enquanto."
+                    )
+                except Exception: pass
+
+        elif evento in ("PAYMENT_REFUNDED", "PAYMENT_CHARGEBACK_REQUESTED", "PAYMENT_CHARGEBACK_DISPUTE"):
+            _registrar_evento("estornado")
+            if cliente:
+                conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (cliente["id"],))
+                conn.commit()
+                logging.warning(f"[ASAAS] Cliente {cliente['email']} SUSPENSO ({evento}) — status=pendente")
+                try:
+                    _notificar_admin(
+                        f"🔴 *{'Chargeback' if 'CHARGEBACK' in evento else 'Reembolso'} (Asaas)*\n\n"
+                        f"Cliente: {cliente['nome']}\nE-mail: {cliente['email']}\nValor: R$ {(valor or 0):.2f}\n"
+                        f"Acesso suspenso (status=pendente)."
+                    )
+                except Exception: pass
+
+        elif evento in ("SUBSCRIPTION_DELETED", "SUBSCRIPTION_INACTIVATED"):
+            sub_obj = data.get("subscription") or {}
+            sub_id = sub_obj.get("id") or pag.get("subscription")
+            if not cliente and sub_id:
+                cliente = conn.execute(
+                    "SELECT * FROM clientes WHERE asaas_subscription_id=%s", (sub_id,)
+                ).fetchone()
+            _registrar_evento("cancelado")
+            if cliente:
+                conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (cliente["id"],))
+                conn.commit()
+                logging.warning(f"[ASAAS] Cliente {cliente['email']} SUSPENSO ({evento}) — status=pendente")
+                try:
+                    _notificar_admin(
+                        f"⚠️ *Assinatura cancelada no Asaas*\n\n"
+                        f"Cliente: {cliente['nome']}\nE-mail: {cliente['email']}\n"
+                        f"Acesso suspenso (status=pendente). Reativa sozinho se voltar a pagar."
+                    )
+                except Exception: pass
+        else:
+            _registrar_evento("recebido")
+
+        conn.close()
+    except Exception as e:
+        logging.error(f"[ASAAS] Erro webhook: {e}")
     return jsonify({"ok": True}), 200
 
 def _meta_purchase_event(email, fone, nome, valor):
@@ -1773,18 +2087,19 @@ def _resgatar_pagamento_orfao(conn, cliente_id, email, whatsapp):
     try:
         email = (email or "").strip().lower()
         orfao = None
+        eventos_aprovados = ('order_approved', 'order.approved', 'PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED')
         if email:
             orfao = conn.execute(
                 "SELECT * FROM pagamentos_externos WHERE status='orfao' "
-                "AND evento IN ('order_approved', 'order.approved') AND LOWER(email)=%s "
-                "ORDER BY id DESC", (email,)
+                "AND evento IN (%s, %s, %s, %s) AND LOWER(email)=%s "
+                "ORDER BY id DESC", (*eventos_aprovados, email)
             ).fetchone()
         if not orfao:
             for v in variantes_whatsapp(whatsapp):
                 orfao = conn.execute(
                     "SELECT * FROM pagamentos_externos WHERE status='orfao' "
-                    "AND evento IN ('order_approved', 'order.approved') AND whatsapp=%s "
-                    "ORDER BY id DESC", (v,)
+                    "AND evento IN (%s, %s, %s, %s) AND whatsapp=%s "
+                    "ORDER BY id DESC", (*eventos_aprovados, v)
                 ).fetchone()
                 if orfao:
                     break
@@ -1795,19 +2110,20 @@ def _resgatar_pagamento_orfao(conn, cliente_id, email, whatsapp):
             "UPDATE pagamentos_externos SET cliente_id=%s, status='resgatado' WHERE id=%s",
             (cliente_id, orfao["id"])
         )
+        origem = orfao["origem"] or "kiwify"
         try:
             conn.execute(
                 "INSERT INTO pagamentos (cliente_id, valor, status, referencia) VALUES (%s, %s, 'aprovado', %s)",
-                (cliente_id, orfao["valor"] or 0, f"kiwify:{orfao['order_id']} (resgatado)")
+                (cliente_id, orfao["valor"] or 0, f"{origem}:{orfao['order_id']} (resgatado)")
             )
         except Exception as e:
-            logging.error(f"[KIWIFY] Falha ao registrar pagamento resgatado: {e}")
+            logging.error(f"[{origem.upper()}] Falha ao registrar pagamento resgatado: {e}")
         conn.commit()
-        logging.warning(f"[KIWIFY] Pagamento órfão #{orfao['id']} resgatado para cliente {cliente_id}")
+        logging.warning(f"[{origem.upper()}] Pagamento órfão #{orfao['id']} resgatado para cliente {cliente_id}")
         try:
             _notificar_admin(
                 f"🔗 *Pagamento órfão vinculado automaticamente*\n\n"
-                f"O cadastro de {email or whatsapp} bateu com um pagamento Kiwify "
+                f"O cadastro de {email or whatsapp} bateu com um pagamento {origem.capitalize()} "
                 f"que estava sem dono. Conta ativada. ✅"
             )
         except Exception: pass
@@ -2059,7 +2375,7 @@ def dashboard():
         renda_fixa_mes=renda_fixa_mes,
         renda_extra_mes=renda_extra_mes,
         trial_dias_restantes=trial_dias_restantes,
-        kiwify_url=os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y"),
+        assinar_url=url_for("pagamento", cliente_id=cid),
         contas_bancarias=contas_bancarias,
         transferencias_recentes=transferencias_recentes,
         parcelamentos=parcelamentos,
@@ -2164,12 +2480,14 @@ def assinatura():
 def cancelar_assinatura():
     cid = session["cliente_id"]
     conn = get_db()
-    cliente = conn.execute("SELECT mp_subscription_id FROM clientes WHERE id=%s", (cid,)).fetchone()
+    cliente = conn.execute("SELECT mp_subscription_id, asaas_subscription_id FROM clientes WHERE id=%s", (cid,)).fetchone()
     conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cid,))
     conn.commit()
     conn.close()
     if cliente and cliente["mp_subscription_id"]:
         cancelar_assinatura_mp(cliente["mp_subscription_id"])
+    if cliente and cliente["asaas_subscription_id"]:
+        cancelar_assinatura_asaas(cliente["asaas_subscription_id"])
     session.clear()
     return redirect(url_for("index") + "?cancelado=1")
 
@@ -4000,7 +4318,6 @@ def _verificar_trials():
                 clientes_trial = conn.execute(
                     "SELECT id, nome, whatsapp, email, trial_expiry, ultimo_aviso_trial FROM clientes WHERE status='ativo' AND trial_expiry IS NOT NULL"
                 ).fetchall()
-                kiwify_url = os.environ.get("KIWIFY_CHECKOUT_URL", "https://pay.kiwify.com.br/yMEjH4Y")
                 banner_url = os.environ.get("TRIAL_BANNER_URL", "")  # URL de imagem para enviar junto
                 app_url = os.environ.get("APP_URL", "https://controlafacilai.com.br")
                 ev_url = os.environ.get("EVOLUTION_URL", "").rstrip("/")
@@ -4047,6 +4364,7 @@ def _verificar_trials():
                             continue  # Já notificou hoje, pula
 
                         nome = c["nome"].split()[0]  # só primeiro nome
+                        pagamento_url = f"{app_url}/pagamento/{c['id']}"
 
                         # Aviso 2 dias antes
                         if dias_restantes == 2:
@@ -4060,7 +4378,7 @@ def _verificar_trials():
                                 f"✅ Lembretes automáticos\n"
                                 f"✅ Relatório PDF + Dashboard\n\n"
                                 f"Continue por apenas *R$ 9,90/mês* — menos de 33 centavos por dia! 💚\n\n"
-                                f"👉 {kiwify_url}"
+                                f"👉 {pagamento_url}"
                             )
                             conn.execute("UPDATE clientes SET ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
                             conn.commit()
@@ -4077,7 +4395,7 @@ def _verificar_trials():
                                 f"📋 Controle de contas a pagar\n"
                                 f"🔒 Todos os seus dados preservados\n\n"
                                 f"*Assine agora e continue sem interrupção:*\n"
-                                f"👉 {kiwify_url}\n\n"
+                                f"👉 {pagamento_url}\n\n"
                                 f"_Cancele quando quiser, sem multa._ 😊"
                             )
                             conn.execute("UPDATE clientes SET ultimo_aviso_trial=%s WHERE id=%s", (str(hoje), c["id"]))
@@ -4092,7 +4410,7 @@ def _verificar_trials():
                                 f"😕 *{nome}, seu período gratuito encerrou hoje.*\n\n"
                                 f"Seus dados estão todos salvos e esperando por você! 🔒\n\n"
                                 f"Para voltar a ter seu assistente financeiro no WhatsApp:\n"
-                                f"👉 {kiwify_url}\n\n"
+                                f"👉 {pagamento_url}\n\n"
                                 f"*R$ 9,90/mês* — seus dados restaurados na hora!\n"
                                 f"_Cancele quando quiser, sem multa._ 💚"
                             )
