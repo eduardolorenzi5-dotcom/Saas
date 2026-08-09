@@ -57,6 +57,20 @@ from db import get_db, USE_PG
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
+@app.template_filter("data_br")
+def _filtro_data_br(v):
+    """Formata datetime OU string ISO ('2026-08-08 21:30:00') como dd/mm/aaaa.
+    Necessário porque o SQLite devolve strings e o Postgres devolve datetime."""
+    if not v:
+        return "—"
+    try:
+        return v.strftime("%d/%m/%Y")
+    except AttributeError:
+        try:
+            return datetime.strptime(str(v)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        except Exception:
+            return str(v)[:10]
+
 @app.context_processor
 def inject_pixel():
     return {
@@ -2496,7 +2510,16 @@ def assinatura():
         (cid,)
     ).fetchall()
     conn.close()
-    return render_template("assinatura.html", cliente=cliente, pagamentos=pagamentos)
+    acesso_ate_fmt = None
+    if cliente and cliente["acesso_ate"]:
+        try:
+            acesso_ate_fmt = datetime.strptime(
+                str(cliente["acesso_ate"])[:19], "%Y-%m-%d %H:%M:%S"
+            ).strftime("%d/%m/%Y")
+        except Exception:
+            acesso_ate_fmt = str(cliente["acesso_ate"])[:10]
+    return render_template("assinatura.html", cliente=cliente, pagamentos=pagamentos,
+                           acesso_ate_fmt=acesso_ate_fmt)
 
 @app.route("/cancelar-assinatura", methods=["POST"])
 @login_required
@@ -2543,8 +2566,8 @@ def cancelar_assinatura():
                 f"Cobranças futuras canceladas. Acesso mantido até {acesso_ate_dt.strftime('%d/%m/%Y')} (fim do período pago)."
             )
         except Exception: pass
-        # Continua logado e com acesso até o fim do período pago
-        return redirect(url_for("dashboard"))
+        # Continua logado; a página de assinatura mostra o cancelamento agendado
+        return redirect(url_for("assinatura"))
 
     # Sem pagamento vigente (trial ou período pago já vencido): encerra na hora
     conn.execute("UPDATE clientes SET status='cancelado', acesso_ate=NULL WHERE id=%s", (cid,))

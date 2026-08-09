@@ -93,7 +93,7 @@
       </div>
       <div class="info-item">
         <label>Membro desde</label>
-        <span>{{ cliente.criado_em.strftime('%d/%m/%Y') if cliente.criado_em else '—' }}</span>
+        <span>{{ cliente.criado_em|data_br }}</span>
       </div>
     </div>
   </div>
@@ -109,7 +109,7 @@
       <tbody>
         {% for p in pagamentos %}
         <tr>
-          <td>{{ p.criado_em.strftime('%d/%m/%Y') if p.criado_em else '—' }}</td>
+          <td>{{ p.criado_em|data_br }}</td>
           <td>R$ {{ "%.2f"|format(p.valor) }}</td>
           <td>
             <span style="color:{% if p.status == 'aprovado' %}#065f46{% else %}#92400e{% endif %};font-weight:600;">
@@ -125,8 +125,19 @@
     {% endif %}
   </div>
 
-  <!-- CANCELAR -->
-  {% if cliente.status == 'ativo' %}
+  <!-- CANCELAR / CANCELAMENTO AGENDADO -->
+  {% if acesso_ate_fmt %}
+  <div class="card" style="border:1px solid #fbbf24;background:#fffbeb;">
+    <div class="card-title">Cancelamento agendado</div>
+    <p style="font-size:14px;color:#92400e;margin:8px 0;">
+      🔕 Sua assinatura foi cancelada — você <strong>não receberá novas cobranças</strong>.<br/>
+      Seu acesso continua normal até <strong>{{ acesso_ate_fmt }}</strong> (fim do período já pago).
+    </p>
+    <p style="font-size:13px;color:#92400e;margin:8px 0 0;">
+      Mudou de ideia? <a href="/pagamento/{{ cliente.id }}" style="color:#7c3aed;font-weight:700;">Assine novamente</a> e continue sem interrupção.
+    </p>
+  </div>
+  {% elif cliente.status == 'ativo' %}
   <div class="card">
     <div class="card-title">Cancelar assinatura</div>
     <button class="btn-cancelar" onclick="document.getElementById('modal-cancelar').classList.add('open')">
