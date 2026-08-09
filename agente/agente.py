@@ -674,6 +674,7 @@ Ao receber uma mensagem, identifique se é:
 19. EXCLUIR conta mensal — ex: "remover conta da luz", "excluir débito automático do aluguel", "apagar conta mensal da academia"
 20. MARCAR conta mensal como PAGA — ex: "paguei a conta de luz", "marquei o aluguel como pago", "paguei energia"
 21. MARCAR TODAS as contas vencidas como pagas — ex: "paguei todas as contas vencidas", "marquei todas como pagas"
+21b. CANCELAR A ASSINATURA do Controla Fácil (o próprio serviço/plano/mensalidade) — ex: "quero cancelar minha assinatura", "como faço para cancelar?", "não quero mais o serviço", "quero cancelar o plano", "cancelar mensalidade", "quero parar de pagar", "como cancelo minha conta?". ATENÇÃO: não confunda com cancelar lembrete (11), parcelamento (17) ou conta mensal (19) — aqui a pessoa quer sair do Controla Fácil.
 22. Outra mensagem — responda de forma amigável
 
 Categorias disponíveis: {', '.join(cats_list)}
@@ -849,6 +850,9 @@ Se for MARCAR UMA conta como paga:
 
 Se for MARCAR TODAS as contas vencidas/com advertência como pagas:
 {{"acao": "marcar_todas_pagas"}}
+
+Se for CANCELAR A ASSINATURA do Controla Fácil (o serviço em si — NÃO lembrete, parcelamento ou conta mensal):
+{{"acao": "cancelar_assinatura"}}
 
 Para outras mensagens:
 {{"acao": "mensagem", "texto": "sua resposta aqui"}}
@@ -1411,6 +1415,17 @@ def processar_mensagem(fone, mensagem, _cliente=None):
                 resposta = ""
             else:
                 resposta = "Você ainda não tem gastos registrados este mês para gerar o gráfico."
+
+        elif acao == "cancelar_assinatura":
+            resposta = (
+                f"Poxa, que pena que você está pensando em cancelar! 😔\n\n"
+                f"O cancelamento é feito pelo site, é rapidinho:\n\n"
+                f"1️⃣ Acesse {APP_URL}/assinatura e entre com seu e-mail e senha\n"
+                f"2️⃣ Clique em *Cancelar minha assinatura* e confirme\n\n"
+                f"✅ Você não recebe novas cobranças e seu acesso continua até o fim do período já pago.\n\n"
+                f"Se estiver cancelando por causa de algum problema ou dúvida, me conta aqui — "
+                f"talvez eu consiga te ajudar antes de você ir embora! 💚"
+            )
 
         elif acao == "relatorio":
             import logging
