@@ -2524,6 +2524,10 @@ def cancelar_assinatura():
         except Exception as e:
             logging.error(f"[CANCELAR] Erro ao calcular carência do cliente {cid}: {e}")
 
+    dados = conn.execute("SELECT nome, email FROM clientes WHERE id=%s", (cid,)).fetchone()
+    nome_cli = dados["nome"] if dados else f"id {cid}"
+    email_cli = dados["email"] if dados else "—"
+
     if acesso_ate_dt and acesso_ate_dt > datetime.now():
         conn.execute(
             "UPDATE clientes SET acesso_ate=%s WHERE id=%s",
@@ -2532,6 +2536,13 @@ def cancelar_assinatura():
         conn.commit()
         conn.close()
         logging.warning(f"[CANCELAR] Cliente {cid} cancelou — acesso mantido até {acesso_ate_dt}")
+        try:
+            _notificar_admin(
+                f"🔕 *Cliente cancelou a assinatura*\n\n"
+                f"Cliente: {nome_cli}\nE-mail: {email_cli}\n"
+                f"Cobranças futuras canceladas. Acesso mantido até {acesso_ate_dt.strftime('%d/%m/%Y')} (fim do período pago)."
+            )
+        except Exception: pass
         # Continua logado e com acesso até o fim do período pago
         return redirect(url_for("dashboard"))
 
@@ -2539,6 +2550,13 @@ def cancelar_assinatura():
     conn.execute("UPDATE clientes SET status='cancelado', acesso_ate=NULL WHERE id=%s", (cid,))
     conn.commit()
     conn.close()
+    try:
+        _notificar_admin(
+            f"🔕 *Cliente cancelou a assinatura*\n\n"
+            f"Cliente: {nome_cli}\nE-mail: {email_cli}\n"
+            f"Sem período pago vigente — acesso encerrado na hora."
+        )
+    except Exception: pass
     session.clear()
     return redirect(url_for("index") + "?cancelado=1")
 
@@ -4488,6 +4506,13 @@ def _verificar_trials():
                                 f"Obrigado por usar o Controla Fácil! 💚"
                             )
                             logging.warning(f"[CANCELAR] Carência encerrada — cliente {c['id']} desativado")
+                            try:
+                                _notificar_admin(
+                                    f"🔚 *Fim da carência de cancelamento*\n\n"
+                                    f"Cliente: {c['nome']}\n"
+                                    f"O período pago terminou e o acesso foi encerrado."
+                                )
+                            except Exception: pass
                     except Exception as e:
                         logging.error(f"[CANCELAR] Erro carência cliente {c['id']}: {e}")
                 conn.close()
