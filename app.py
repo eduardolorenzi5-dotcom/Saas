@@ -1599,29 +1599,32 @@ def checkout_asaas(cliente_id):
             achados = busca.json().get("data", []) if busca.status_code == 200 else []
             if achados:
                 customer_id = achados[0]["id"]
-                # Reaproveitou cadastro antigo do Asaas: atualiza com os dados atuais
-                try:
-                    _asaas_req("PUT", f"/customers/{customer_id}", {
-                        "name": cliente["nome"],
-                        "email": cliente["email"],
-                        "mobilePhone": fone,
-                        "externalReference": str(cliente_id),
-                    })
-                except Exception as e:
-                    logging.warning(f"[ASAAS] Falha ao atualizar customer {customer_id}: {e}")
-            else:
-                resp = _asaas_req("POST", "/customers", {
+        if customer_id:
+            # Reaproveitou cadastro existente no Asaas: sincroniza com os dados atuais
+            # (evita fatura sair no nome de um cadastro antigo com o mesmo CPF)
+            try:
+                _asaas_req("PUT", f"/customers/{customer_id}", {
                     "name": cliente["nome"],
                     "email": cliente["email"],
                     "cpfCnpj": cpf,
                     "mobilePhone": fone,
                     "externalReference": str(cliente_id),
                 })
-                if resp.status_code not in (200, 201):
-                    logging.error(f"[ASAAS] Erro ao criar customer: {resp.status_code} {resp.text[:300]}")
-                    return render_template("pagamento.html", cliente=cliente,
-                        erro="Erro ao iniciar o pagamento. Confira o CPF e tente novamente.")
-                customer_id = resp.json()["id"]
+            except Exception as e:
+                logging.warning(f"[ASAAS] Falha ao atualizar customer {customer_id}: {e}")
+        else:
+            resp = _asaas_req("POST", "/customers", {
+                "name": cliente["nome"],
+                "email": cliente["email"],
+                "cpfCnpj": cpf,
+                "mobilePhone": fone,
+                "externalReference": str(cliente_id),
+            })
+            if resp.status_code not in (200, 201):
+                logging.error(f"[ASAAS] Erro ao criar customer: {resp.status_code} {resp.text[:300]}")
+                return render_template("pagamento.html", cliente=cliente,
+                    erro="Erro ao iniciar o pagamento. Confira o CPF e tente novamente.")
+            customer_id = resp.json()["id"]
 
         # ── Assinatura mensal no cartão ──
         resp = _asaas_req("POST", "/subscriptions", {
