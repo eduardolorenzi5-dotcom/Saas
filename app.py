@@ -443,6 +443,8 @@ def init_db():
         conn.execute("ALTER TABLE lembretes ADD COLUMN IF NOT EXISTS ultimo_envio TEXT")
         # Migration: trial gratuito de 7 dias
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS trial_expiry TIMESTAMP")
+        # Migration: cancelamento com carência (acesso até o fim do período pago)
+        conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS acesso_ate TIMESTAMP")
         # Migration: controle de aviso de trial (evita envio repetido no mesmo dia)
         conn.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS ultimo_aviso_trial DATE")
         # Migration: Plano Casal — segundo número e grupo WhatsApp
@@ -510,6 +512,10 @@ def init_db():
             pass
         try:
             conn.execute("ALTER TABLE clientes ADD COLUMN trial_expiry TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE clientes ADD COLUMN acesso_ate TEXT")
         except Exception:
             pass
         try:
@@ -960,7 +966,7 @@ def admin_painel():
 def admin_ativar(cliente_id):
     conn = get_db()
     cliente = conn.execute("SELECT id, nome, email, whatsapp, status FROM clientes WHERE id=%s", (cliente_id,)).fetchone()
-    conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL, ultimo_aviso_trial=NULL WHERE id=%s", (cliente_id,))
+    conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL, ultimo_aviso_trial=NULL, acesso_ate=NULL WHERE id=%s", (cliente_id,))
     conn.commit()
     conn.close()
     if cliente and cliente["status"] != "ativo":
@@ -1758,7 +1764,7 @@ def webhook_asaas():
                 ).fetchone()
                 ja_ativo = cliente["status"] == "ativo" and not cliente["trial_expiry"]
                 conn.execute(
-                    "UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s",
+                    "UPDATE clientes SET status='ativo', trial_expiry=NULL, acesso_ate=NULL WHERE id=%s",
                     (cliente["id"],)
                 )
                 if pag.get("subscription") and not cliente["asaas_subscription_id"]:
@@ -1849,7 +1855,11 @@ def webhook_asaas():
                     "SELECT * FROM clientes WHERE asaas_subscription_id=%s", (sub_id,)
                 ).fetchone()
             _registrar_evento("cancelado")
-            if cliente:
+            if cliente and cliente["acesso_ate"]:
+                # Cancelamento feito pelo próprio app, com carência — acesso segue
+                # até o fim do período pago (a thread horária encerra depois).
+                logging.warning(f"[ASAAS] {evento} do cliente {cliente['email']} — carência ativa, acesso mantido")
+            elif cliente:
                 conn.execute("UPDATE clientes SET status='pendente' WHERE id=%s", (cliente["id"],))
                 conn.commit()
                 logging.warning(f"[ASAAS] Cliente {cliente['email']} SUSPENSO ({evento}) — status=pendente")
@@ -1981,7 +1991,7 @@ def webhook_kiwify():
                                data.get("order", {}).get("amount") or 9.90)
             if cliente:
                 ja_ativo = cliente["status"] == "ativo" and not cliente["trial_expiry"]
-                conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s", (cliente["id"],))
+                conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL, acesso_ate=NULL WHERE id=%s", (cliente["id"],))
                 try:
                     conn.execute(
                         "INSERT INTO pagamentos (cliente_id, valor, status, referencia) VALUES (%s, %s, 'aprovado', %s)",
@@ -2118,7 +2128,7 @@ def _resgatar_pagamento_orfao(conn, cliente_id, email, whatsapp):
                     break
         if not orfao:
             return False
-        conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL WHERE id=%s", (cliente_id,))
+        conn.execute("UPDATE clientes SET status='ativo', trial_expiry=NULL, acesso_ate=NULL WHERE id=%s", (cliente_id,))
         conn.execute(
             "UPDATE pagamentos_externos SET cliente_id=%s, status='resgatado' WHERE id=%s",
             (cliente_id, orfao["id"])
@@ -2494,13 +2504,41 @@ def cancelar_assinatura():
     cid = session["cliente_id"]
     conn = get_db()
     cliente = conn.execute("SELECT mp_subscription_id, asaas_subscription_id FROM clientes WHERE id=%s", (cid,)).fetchone()
-    conn.execute("UPDATE clientes SET status='cancelado' WHERE id=%s", (cid,))
-    conn.commit()
-    conn.close()
+
+    # Cancela as cobranças futuras nos gateways imediatamente
     if cliente and cliente["mp_subscription_id"]:
         cancelar_assinatura_mp(cliente["mp_subscription_id"])
     if cliente and cliente["asaas_subscription_id"]:
         cancelar_assinatura_asaas(cliente["asaas_subscription_id"])
+
+    # Carência: quem já pagou mantém o acesso até completar 30 dias do último pagamento
+    ultimo_pag = conn.execute(
+        "SELECT criado_em FROM pagamentos WHERE cliente_id=%s AND status='aprovado' ORDER BY criado_em DESC LIMIT 1",
+        (cid,)
+    ).fetchone()
+    acesso_ate_dt = None
+    if ultimo_pag:
+        try:
+            base = datetime.strptime(str(ultimo_pag["criado_em"])[:19], "%Y-%m-%d %H:%M:%S")
+            acesso_ate_dt = base + timedelta(days=30)
+        except Exception as e:
+            logging.error(f"[CANCELAR] Erro ao calcular carência do cliente {cid}: {e}")
+
+    if acesso_ate_dt and acesso_ate_dt > datetime.now():
+        conn.execute(
+            "UPDATE clientes SET acesso_ate=%s WHERE id=%s",
+            (acesso_ate_dt.strftime("%Y-%m-%d %H:%M:%S"), cid)
+        )
+        conn.commit()
+        conn.close()
+        logging.warning(f"[CANCELAR] Cliente {cid} cancelou — acesso mantido até {acesso_ate_dt}")
+        # Continua logado e com acesso até o fim do período pago
+        return redirect(url_for("dashboard"))
+
+    # Sem pagamento vigente (trial ou período pago já vencido): encerra na hora
+    conn.execute("UPDATE clientes SET status='cancelado', acesso_ate=NULL WHERE id=%s", (cid,))
+    conn.commit()
+    conn.close()
     session.clear()
     return redirect(url_for("index") + "?cancelado=1")
 
@@ -4430,6 +4468,28 @@ def _verificar_trials():
                             logging.info(f"[TRIAL] Expirado e desativado: {c['email']}")
                     except Exception as e:
                         logging.error(f"[TRIAL] Erro cliente {c['id']}: {e}")
+
+                # Cancelamentos com carência: desativa quem passou do fim do período pago
+                cancelamentos = conn.execute(
+                    "SELECT id, nome, whatsapp, acesso_ate FROM clientes WHERE status='ativo' AND acesso_ate IS NOT NULL"
+                ).fetchall()
+                for c in cancelamentos:
+                    try:
+                        fim = _dt.strptime(str(c["acesso_ate"])[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=_tz(_td(hours=-3)))
+                        if fim <= agora:
+                            conn.execute("UPDATE clientes SET status='cancelado', acesso_ate=NULL WHERE id=%s", (c["id"],))
+                            conn.commit()
+                            nome = (c["nome"] or "").split()[0]
+                            _enviar(c["whatsapp"],
+                                f"👋 *{nome}, seu período pago chegou ao fim.*\n\n"
+                                f"Sua assinatura foi encerrada como você pediu — sem novas cobranças.\n"
+                                f"Seus dados ficam salvos, e se quiser voltar é só assinar de novo:\n"
+                                f"👉 {app_url}/pagamento/{c['id']}\n\n"
+                                f"Obrigado por usar o Controla Fácil! 💚"
+                            )
+                            logging.warning(f"[CANCELAR] Carência encerrada — cliente {c['id']} desativado")
+                    except Exception as e:
+                        logging.error(f"[CANCELAR] Erro carência cliente {c['id']}: {e}")
                 conn.close()
         except Exception as e:
             logging.error(f"[TRIAL] Erro no loop: {e}")

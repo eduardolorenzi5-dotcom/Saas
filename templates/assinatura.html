@@ -132,7 +132,7 @@
     <button class="btn-cancelar" onclick="document.getElementById('modal-cancelar').classList.add('open')">
       Cancelar minha assinatura
     </button>
-    <p class="aviso-cancelar">Ao cancelar, seu acesso ao dashboard e ao agente WhatsApp será encerrado imediatamente. Seus dados de gastos ficam salvos por 30 dias.</p>
+    <p class="aviso-cancelar">Ao cancelar, você não recebe novas cobranças e seu acesso continua até o fim do período já pago. Seus dados de gastos ficam salvos por 30 dias após o encerramento.</p>
   </div>
   {% endif %}
 </div>
@@ -141,7 +141,7 @@
 <div class="modal-overlay" id="modal-cancelar">
   <div class="modal">
     <h2>Cancelar assinatura?</h2>
-    <p>Seu acesso será encerrado imediatamente. Tem certeza que deseja cancelar o plano <strong>{{ cliente.plano_nome or 'Controla Fácil' }}</strong>?</p>
+    <p>Você não receberá novas cobranças e seu acesso continua até o fim do período já pago. Tem certeza que deseja cancelar o plano <strong>{{ cliente.plano_nome or 'Controla Fácil' }}</strong>?</p>
     <div class="modal-btns">
       <button class="btn-voltar" onclick="document.getElementById('modal-cancelar').classList.remove('open')">Voltar</button>
       <form method="POST" action="/cancelar-assinatura" style="flex:1;">
