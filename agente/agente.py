@@ -1263,6 +1263,37 @@ def processar_botao(fone, botao_id):
         enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento no Controla Fácil.")
         return "conta inativa"
 
+    # Botão "Começar" do template de boas-vindas → envia o guia completo
+    # (o toque no botão abre a janela de 24h da Meta)
+    normalizado = (botao_id or "").strip().lower()
+    if normalizado.startswith("começar") or normalizado.startswith("comecar"):
+        nome_cli = (cliente["nome"] or "").split()[0] if cliente["nome"] else ""
+        app_url = os.environ.get("APP_URL", "https://controlafacilai.com.br")
+        resposta = (
+            f"Que bom ter você aqui, *{nome_cli}*! 🎉\n\n"
+            f"Veja como é simples usar:\n\n"
+            f"💬 *Registre gastos em texto ou áudio:*\n"
+            f"_\"Gastei 50 no mercado\"_\n"
+            f"_\"Paguei 120 de conta de luz\"_\n\n"
+            f"📸 *Mande foto do comprovante:*\n"
+            f"Eu leio e registro automático pra você\n\n"
+            f"📊 *Veja seu saldo na hora:*\n"
+            f"_\"Resumo\"_ ou _\"Quanto gastei esse mês?\"_\n\n"
+            f"📋 *Cadastre suas contas mensais:*\n"
+            f"_\"Todo dia 10 me lembre de pagar a conta de luz\"_\n\n"
+            f"💵 *Registre sua renda:*\n"
+            f"_\"Recebi meu salário de 3000\"_\n\n"
+            f"📈 *Peça análise financeira:*\n"
+            f"_\"Analisa meus gastos\"_\n\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"👉 Quer conectar seu *Google Agenda* também?\n"
+            f"{app_url}/agenda/conectar/{cliente['id']}\n\n"
+            f"Pode começar agora! Me manda seu primeiro gasto 😊"
+        )
+        salvar_historico_conversa(cliente["id"], "assistant", resposta)
+        enviar_whatsapp(fone, resposta)
+        return resposta
+
     resposta = "Não entendi esse botão. Me manda uma mensagem que eu te ajudo! 😊"
     try:
         acao, _, gid = (botao_id or "").partition(":")

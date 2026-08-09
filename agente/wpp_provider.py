@@ -584,6 +584,16 @@ def _parse_meta_webhook(payload: dict) -> dict | None:
                         "texto": reply.get("title", ""), "raw": payload}
             return None
 
+        elif msg_type == "button":
+            # Resposta a botão quick-reply de TEMPLATE (formato diferente do interactive)
+            btn = msg.get("button", {})
+            botao_id = btn.get("payload") or btn.get("text", "")
+            if botao_id:
+                return {"fone": fone, "msg_id": msg_id, "tipo": "button",
+                        "botao_id": botao_id,
+                        "texto": btn.get("text", ""), "raw": payload}
+            return None
+
         return None
     except Exception as e:
         logging.error(f"[WPP-META] Erro parse_webhook: {e}")

@@ -725,8 +725,20 @@ def enviar_wpp_boas_vindas(whatsapp, nome, cliente_id=None):
         f"Pode começar agora! Me manda seu primeiro gasto 😊"
     )
     try:
-        ok = send_text(numero, mensagem)
-        logging.info(f"[WPP] Boas-vindas enviado para {numero} — ok={ok}")
+        # Meta: cliente novo nunca falou com o número → texto livre é rejeitado
+        # fora da janela de 24h (erro 131047). Template aprovado sempre chega;
+        # o botão "Começar" do template abre a janela quando o cliente toca.
+        from agente.wpp_provider import provedor_ativo, send_template
+        ok = False
+        template = os.environ.get("WELCOME_TEMPLATE_NAME", "boas_vindas_controla_facil")
+        if provedor_ativo() == "meta" and template:
+            primeiro_nome = (nome or "").split()[0] if nome else "tudo bem"
+            ok = send_template(numero, template, body_params=[primeiro_nome])
+            if ok:
+                logging.info(f"[WPP] Boas-vindas via template enviado para {numero}")
+        if not ok:
+            ok = send_text(numero, mensagem)
+            logging.info(f"[WPP] Boas-vindas via texto enviado para {numero} — ok={ok}")
     except Exception as e:
         logging.error(f"[WPP] Falha ao enviar boas-vindas para {numero}: {e}")
 
