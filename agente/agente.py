@@ -151,6 +151,8 @@ def buscar_cliente_por_fone(fone):
             "SELECT * FROM clientes WHERE whatsapp = %s OR whatsapp2 = %s", (v, v)
         ).fetchone()
         if cliente:
+            # dict() para portabilidade: sqlite3.Row não tem .get()
+            cliente = dict(cliente)
             via = "whatsapp" if cliente.get("whatsapp") == v else "whatsapp2"
             logging.warning(f"[BUSCA_CLIENTE] encontrado via {via} {v!r}: id={cliente['id']}")
             break
@@ -163,6 +165,7 @@ def buscar_cliente_por_fone(fone):
             (f"%{sufixo}", f"%{sufixo}")
         ).fetchone()
         if cliente:
+            cliente = dict(cliente)
             logging.warning(f"[BUSCA_CLIENTE] encontrado via sufixo {sufixo!r}: id={cliente['id']} whatsapp={cliente.get('whatsapp')!r}")
 
     if cliente:
@@ -174,17 +177,28 @@ def buscar_cliente_por_fone(fone):
     return cliente
 
 def salvar_gasto(cliente_id, descricao, valor, categoria, data_gasto, conta_id=None):
+    """Salva o gasto e retorna o id da linha criada (para os botões editar/excluir)."""
     import logging
     data_gasto = normalizar_data(data_gasto)
     logging.warning(f"[SALVAR_GASTO] cliente_id={cliente_id} descricao={descricao!r} valor={valor} data={data_gasto!r} conta_id={conta_id}")
     conn = get_db()
-    conn.execute(
-        "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-        (cliente_id, descricao, valor, categoria, data_gasto, "whatsapp", conta_id)
-    )
+    gasto_id = None
+    if os.environ.get("DATABASE_URL"):
+        row = conn.execute(
+            "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (cliente_id, descricao, valor, categoria, data_gasto, "whatsapp", conta_id)
+        ).fetchone()
+        gasto_id = row["id"] if row else None
+    else:
+        cur = conn.execute(
+            "INSERT INTO gastos (cliente_id, descricao, valor, categoria, data, fonte, conta_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (cliente_id, descricao, valor, categoria, data_gasto, "whatsapp", conta_id)
+        )
+        gasto_id = getattr(cur, "lastrowid", None)
     conn.commit()
     conn.close()
-    logging.warning(f"[SALVAR_GASTO] OK - gasto salvo para cliente_id={cliente_id}")
+    logging.warning(f"[SALVAR_GASTO] OK - gasto {gasto_id} salvo para cliente_id={cliente_id}")
+    return gasto_id
 
 def deletar_todos_gastos(cliente_id, mes=None):
     conn = get_db()
@@ -947,6 +961,8 @@ def enviar_imagem_whatsapp(fone, imagem_b64, caption=""):
 
 def enviar_whatsapp(fone, mensagem):
     """Envia mensagem de texto via provedor ativo (Evolution ou Meta)."""
+    if not mensagem:
+        return
     _wpp_send_text(fone, mensagem)
 
 def analisar_comprovante_claude(imagem_b64, caption="", categorias=None):
@@ -1236,6 +1252,60 @@ def _agendar_evento(cliente_id, titulo, data_hora, duracao=60, cor=None):
     )
 
 
+def processar_botao(fone, botao_id):
+    """Trata cliques nos botões interativos da Meta (ids: editar_gasto:<id>, excluir_gasto:<id>)."""
+    import logging
+    cliente = buscar_cliente_por_fone(fone)
+    if not cliente:
+        enviar_whatsapp(fone, "Olá! Não encontrei sua conta. Cadastre-se no Controla Fácil para começar.")
+        return "cliente não encontrado"
+    if cliente["status"] != "ativo":
+        enviar_whatsapp(fone, "Sua conta ainda não está ativa. Conclua o pagamento no Controla Fácil.")
+        return "conta inativa"
+
+    resposta = "Não entendi esse botão. Me manda uma mensagem que eu te ajudo! 😊"
+    try:
+        acao, _, gid = (botao_id or "").partition(":")
+        gid = int(gid) if gid.isdigit() else None
+        if gid and acao in ("editar_gasto", "excluir_gasto"):
+            conn = get_db()
+            gasto = conn.execute(
+                "SELECT id, descricao, valor, categoria FROM gastos WHERE id=%s AND cliente_id=%s",
+                (gid, cliente["id"])
+            ).fetchone()
+            if not gasto:
+                conn.close()
+                resposta = "Esse lançamento não existe mais — provavelmente já foi excluído ou alterado. ✅"
+            elif acao == "excluir_gasto":
+                conn.execute("DELETE FROM gastos WHERE id=%s AND cliente_id=%s", (gid, cliente["id"]))
+                conn.commit()
+                conn.close()
+                resposta = (
+                    f"🗑️ Prontinho! Excluí o lançamento:\n\n"
+                    f"✏️ {gasto['descricao']}\n"
+                    f"💲 R$ {float(gasto['valor']):.2f}"
+                )
+            else:
+                conn.close()
+                # Deixa o pedido de edição registrado no histórico para o Claude
+                # entender a resposta seguinte ("o valor é 45") como editar_gasto
+                salvar_historico_conversa(cliente["id"], "user", f"Quero editar o gasto {gasto['descricao']}")
+                resposta = (
+                    f"✏️ O que você quer corrigir em *{gasto['descricao']}* (R$ {float(gasto['valor']):.2f})?\n\n"
+                    f"Me responde com a correção, por exemplo:\n"
+                    f"_\"o valor é 45\"_\n"
+                    f"_\"a categoria é Lazer\"_\n"
+                    f"_\"a data é ontem\"_"
+                )
+    except Exception as e:
+        import traceback
+        logging.error(f"[BOTAO] Erro: {e}\n{traceback.format_exc()}")
+        resposta = "Desculpe, não consegui processar sua ação. Tente novamente."
+
+    salvar_historico_conversa(cliente["id"], "assistant", resposta)
+    enviar_whatsapp(fone, resposta)
+    return resposta
+
 def processar_mensagem(fone, mensagem, _cliente=None):
     """Função principal chamada pelo webhook."""
     cliente = _cliente or buscar_cliente_por_fone(fone)
@@ -1260,7 +1330,7 @@ def processar_mensagem(fone, mensagem, _cliente=None):
         if acao == "registrar":
             conta_id = resultado.get("conta_id") or None
             conta_nome = next((c["nome"] for c in contas if c["id"] == conta_id), None) if conta_id else None
-            salvar_gasto(
+            gasto_id = salvar_gasto(
                 cliente["id"],
                 resultado["descricao"],
                 float(resultado["valor"]),
@@ -1279,6 +1349,15 @@ def processar_mensagem(fone, mensagem, _cliente=None):
             )
             if conta_nome:
                 resposta += f"\n🏦 Conta: {conta_nome}"
+            if gasto_id:
+                # Confirmação com botões de ação rápida (Meta; cai p/ texto em outros provedores)
+                from agente.wpp_provider import send_buttons
+                send_buttons(fone, resposta, [
+                    {"id": f"editar_gasto:{gasto_id}", "titulo": "✏️ Editar"},
+                    {"id": f"excluir_gasto:{gasto_id}", "titulo": "🗑️ Excluir"},
+                ])
+                salvar_historico_conversa(cliente["id"], "assistant", resposta)
+                resposta = ""  # já enviada com os botões
 
         elif acao == "registrar_multiplos":
             gastos = resultado.get("gastos", [])

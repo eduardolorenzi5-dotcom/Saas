@@ -94,6 +94,63 @@ def _meta_send_text(fone: str, mensagem: str) -> bool:
         return False
 
 
+# ── Envio de texto com botões de resposta rápida ─────────────────────────────
+
+def send_buttons(fone: str, texto: str, botoes: list) -> bool:
+    """
+    Envia mensagem com botões de resposta rápida (interactive buttons).
+    botoes = [{"id": "acao:123", "titulo": "✏️ Editar"}, ...] — máx 3 botões,
+    título máx 20 caracteres (limites da Meta).
+
+    Só a Meta Cloud API suporta botões; na Evolution (ou se o envio interativo
+    falhar) cai para texto simples, garantindo que a mensagem nunca se perca.
+    """
+    fone = _limpar_fone(fone)
+    if not fone:
+        return False
+
+    if WPP_PROVIDER == "meta":
+        if _meta_send_buttons(fone, texto, botoes):
+            return True
+        return _meta_send_text(fone, texto)
+    return send_text(fone, texto)
+
+
+def _meta_send_buttons(fone: str, texto: str, botoes: list) -> bool:
+    if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:
+        logging.error("[WPP-META] WHATSAPP_TOKEN ou WHATSAPP_PHONE_ID não configurado")
+        return False
+    try:
+        r = requests.post(
+            META_API_URL,
+            headers={
+                "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "messaging_product": "whatsapp",
+                "to": fone,
+                "type": "interactive",
+                "interactive": {
+                    "type": "button",
+                    "body": {"text": texto[:1024]},
+                    "action": {"buttons": [
+                        {"type": "reply",
+                         "reply": {"id": str(b["id"])[:256], "title": str(b["titulo"])[:20]}}
+                        for b in botoes[:3]
+                    ]},
+                },
+            },
+            timeout=10
+        )
+        if r.status_code >= 300:
+            logging.error(f"[WPP-META] Erro send_buttons {r.status_code}: {r.text}")
+        return r.status_code < 300
+    except Exception as e:
+        logging.error(f"[WPP-META] Erro send_buttons: {e}")
+        return False
+
+
 # ── Envio de imagem (URL pública) ────────────────────────────────────────────
 
 def send_image_url(fone: str, image_url: str, caption: str = "") -> bool:
@@ -517,6 +574,15 @@ def _parse_meta_webhook(payload: dict) -> dict | None:
             return {"fone": fone, "msg_id": msg_id, "tipo": "image",
                     "media_url": media_url, "caption": caption,
                     "texto": "", "raw": payload}
+
+        elif msg_type == "interactive":
+            inter = msg.get("interactive", {})
+            reply = inter.get("button_reply") or inter.get("list_reply") or {}
+            if reply.get("id"):
+                return {"fone": fone, "msg_id": msg_id, "tipo": "button",
+                        "botao_id": reply.get("id", ""),
+                        "texto": reply.get("title", ""), "raw": payload}
+            return None
 
         return None
     except Exception as e:

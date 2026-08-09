@@ -3470,6 +3470,12 @@ def _webhook_meta(payload, processar_mensagem, processar_imagem, processar_audio
                 _threading.Thread(target=_bg_img, args=(fone, media_url, caption), daemon=True).start()
             return jsonify({"status": "processando"}), 200
 
+        # Clique em botão interativo (editar/excluir transação)
+        if tipo == "button":
+            from agente.agente import processar_botao
+            processar_botao(fone, parsed.get("botao_id", ""))
+            return jsonify({"status": "ok"}), 200
+
         # Texto
         texto = parsed.get("texto", "")
         if not texto:
