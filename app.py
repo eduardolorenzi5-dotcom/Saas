@@ -1590,16 +1590,26 @@ def checkout_asaas(cliente_id):
 
     try:
         # ── Cliente no Asaas: reaproveita, busca por CPF ou cria ──
+        fone = cliente["whatsapp"] or ""
+        if fone.startswith("55"):
+            fone = fone[2:]
         customer_id = cliente["asaas_customer_id"]
         if not customer_id:
             busca = _asaas_req("GET", f"/customers?cpfCnpj={cpf}")
             achados = busca.json().get("data", []) if busca.status_code == 200 else []
             if achados:
                 customer_id = achados[0]["id"]
+                # Reaproveitou cadastro antigo do Asaas: atualiza com os dados atuais
+                try:
+                    _asaas_req("PUT", f"/customers/{customer_id}", {
+                        "name": cliente["nome"],
+                        "email": cliente["email"],
+                        "mobilePhone": fone,
+                        "externalReference": str(cliente_id),
+                    })
+                except Exception as e:
+                    logging.warning(f"[ASAAS] Falha ao atualizar customer {customer_id}: {e}")
             else:
-                fone = cliente["whatsapp"] or ""
-                if fone.startswith("55"):
-                    fone = fone[2:]
                 resp = _asaas_req("POST", "/customers", {
                     "name": cliente["nome"],
                     "email": cliente["email"],
