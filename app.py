@@ -76,6 +76,7 @@ def inject_pixel():
     return {
         "META_PIXEL_ID": os.environ.get("META_PIXEL_ID", ""),
         "GA_MEASUREMENT_ID": os.environ.get("GA_MEASUREMENT_ID", ""),
+        "OPENAI_ADS_PIXEL_ID": os.environ.get("OPENAI_ADS_PIXEL_ID", ""),
     }
 
 def init_db():
@@ -1349,6 +1350,26 @@ def cadastro():
             except Exception as e: logging.error(f"[TRIAL] email boas-vindas: {e}")
             try: enviar_wpp_boas_vindas(whatsapp, nome, cliente_id)
             except Exception as e: logging.error(f"[TRIAL] wpp boas-vindas: {e}")
+            # Metrifica o cadastro: CAPI server-side agora + pixel no dashboard (mesmo event_id p/ dedup)
+            event_id = secrets.token_hex(16)
+            session["cadastro_event_id"] = event_id
+            _ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "").split(",")[0].strip()
+            _ua = request.headers.get("User-Agent", "")
+            _fbp = request.cookies.get("_fbp")
+            _fbc = request.cookies.get("_fbc")
+            _obref = request.cookies.get("__obref")
+            _src_url = request.url
+            def _enviar_capi_cadastro(em=email, wpp=whatsapp, nm=nome, eid=event_id, ip=_ip, ua=_ua,
+                                      fbp=_fbp, fbc=_fbc, obref=_obref, src=_src_url):
+                try:
+                    _meta_registration_event(em, wpp, nm, eid, ip, ua, fbp, fbc)
+                except Exception as e:
+                    logging.error(f"[META CAPI] Erro ao enviar CompleteRegistration: {e}")
+                try:
+                    _openai_registration_event(em, eid, ip, ua, obref, src)
+                except Exception as e:
+                    logging.error(f"[OPENAI CAPI] Erro ao enviar registration_completed: {e}")
+            threading.Thread(target=_enviar_capi_cadastro, daemon=True).start()
             # Loga o cliente automaticamente após o cadastro
             session["cliente_id"] = cliente_id
             session["cliente_nome"] = nome
@@ -1946,6 +1967,91 @@ def _meta_purchase_event(email, fone, nome, valor):
     logging.warning(f"[META CAPI] status={resp.status_code} body={resp.text[:300]}")
     resp.raise_for_status()
 
+def _meta_registration_event(email, fone, nome, event_id, client_ip=None, client_ua=None, fbp=None, fbc=None):
+    """Envia evento CompleteRegistration para a Meta Conversions API (server-side).
+
+    O mesmo event_id é disparado pelo pixel no navegador (dashboard) para a Meta deduplicar.
+    """
+    import hashlib, time, requests as _req
+    pixel_id     = os.environ.get("META_PIXEL_ID", "")
+    access_token = os.environ.get("META_ACCESS_TOKEN", "")
+    if not pixel_id or not access_token:
+        logging.warning("[META CAPI] META_PIXEL_ID ou META_ACCESS_TOKEN não configurado — evento ignorado")
+        return
+
+    def _hash(v):
+        return hashlib.sha256(v.strip().lower().encode()).hexdigest() if v else None
+
+    user_data = {}
+    if email: user_data["em"] = [_hash(email)]
+    if fone:
+        digits = "".join(c for c in fone if c.isdigit())
+        user_data["ph"] = [_hash(digits)]
+    if nome:
+        partes = nome.strip().split()
+        user_data["fn"] = [_hash(partes[0])]
+        if len(partes) > 1:
+            user_data["ln"] = [_hash(" ".join(partes[1:]))]
+    if client_ip: user_data["client_ip_address"] = client_ip
+    if client_ua: user_data["client_user_agent"] = client_ua
+    if fbp: user_data["fbp"] = fbp
+    if fbc: user_data["fbc"] = fbc
+
+    payload = {
+        "data": [{
+            "event_name": "CompleteRegistration",
+            "event_time": int(time.time()),
+            "event_id": event_id,
+            "action_source": "website",
+            "user_data": user_data,
+            "custom_data": {
+                "content_name": "Controla Fácil",
+                "status": "trial"
+            }
+        }]
+    }
+    url = f"https://graph.facebook.com/v19.0/{pixel_id}/events"
+    resp = _req.post(url, params={"access_token": access_token}, json=payload, timeout=10)
+    logging.warning(f"[META CAPI] CompleteRegistration status={resp.status_code} body={resp.text[:300]}")
+    resp.raise_for_status()
+
+def _openai_registration_event(email, event_id, client_ip=None, client_ua=None, obref=None, source_url=None):
+    """Envia evento registration_completed para a Conversions API da OpenAI Ads (server-side).
+
+    O mesmo event_id é disparado pelo pixel oaiq no navegador (dashboard) para deduplicação.
+    """
+    import hashlib, time, requests as _req
+    pixel_id = os.environ.get("OPENAI_ADS_PIXEL_ID", "")
+    api_key  = os.environ.get("OPENAI_ADS_API_KEY", "")
+    if not pixel_id or not api_key:
+        logging.warning("[OPENAI CAPI] OPENAI_ADS_PIXEL_ID ou OPENAI_ADS_API_KEY não configurado — evento ignorado")
+        return
+
+    user = {}
+    if email:
+        user["email_sha256"] = hashlib.sha256(email.strip().lower().encode()).hexdigest()
+    if obref: user["obref"] = obref
+    if client_ip: user["ip_address"] = client_ip
+    if client_ua: user["user_agent"] = client_ua
+
+    evento = {
+        "id": event_id,
+        "type": "registration_completed",
+        "timestamp_ms": int(time.time() * 1000),
+        "source_url": source_url or "https://controlafacilai.com.br/cadastro",
+        "action_source": "web",
+        "user": user,
+        "data": {"type": "customer_action"}
+    }
+    resp = _req.post(
+        f"https://bzr.openai.com/v1/events?pid={pixel_id}",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={"validate_only": False, "events": [evento]},
+        timeout=10
+    )
+    logging.warning(f"[OPENAI CAPI] registration_completed status={resp.status_code} body={resp.text[:300]}")
+    resp.raise_for_status()
+
 @app.route("/webhook/kiwify", methods=["POST"])
 def webhook_kiwify():
     import hmac, hashlib
@@ -2238,6 +2344,9 @@ def dashboard():
     cid = session["cliente_id"]
     hoje = hoje_brasil()
 
+    # Pixel de cadastro: dispara uma única vez, na primeira carga após o signup
+    cadastro_event_id = session.pop("cadastro_event_id", None)
+
     # Permite navegar por mês via ?mes=YYYY-MM
     mes_param = request.args.get("mes", "")
     try:
@@ -2425,6 +2534,7 @@ def dashboard():
         renda_extra_mes=renda_extra_mes,
         trial_dias_restantes=trial_dias_restantes,
         assinar_url=url_for("pagamento", cliente_id=cid),
+        cadastro_event_id=cadastro_event_id,
         contas_bancarias=contas_bancarias,
         transferencias_recentes=transferencias_recentes,
         parcelamentos=parcelamentos,

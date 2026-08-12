@@ -6,6 +6,39 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Dashboard — Controla Fácil</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  {% if cadastro_event_id %}
+  {% include "_openai_pixel.html" %}
+  {% if OPENAI_ADS_PIXEL_ID %}
+  <!-- OpenAI Ads: registration_completed (dispara só na 1ª carga após o cadastro; mesmo event_id da CAPI p/ dedup) -->
+  <script>
+  oaiq("measure", "registration_completed", { type: "customer_action" }, { event_id: "{{ cadastro_event_id }}" });
+  </script>
+  {% endif %}
+  {% if META_PIXEL_ID %}
+  <!-- Meta Pixel: CompleteRegistration (dispara só na 1ª carga após o cadastro; mesmo event_id do CAPI p/ dedup) -->
+  <script>
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '{{ META_PIXEL_ID }}');
+  fbq('track', 'PageView');
+  fbq('track', 'CompleteRegistration', {content_name: 'Controla Fácil', status: 'trial'}, {eventID: '{{ cadastro_event_id }}'});
+  </script>
+  {% endif %}
+  {% if GA_MEASUREMENT_ID %}
+  <!-- Google Analytics: sign_up -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ GA_MEASUREMENT_ID }}"></script>
+  <script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag("js", new Date());
+  gtag("config", "{{ GA_MEASUREMENT_ID }}");
+  gtag("event", "sign_up", {method: "site"});
+  </script>
+  {% endif %}
+  {% endif %}
   <style>
     :root {
       --bg: #f4f5fb;

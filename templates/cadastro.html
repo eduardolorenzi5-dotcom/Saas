@@ -16,6 +16,7 @@
     .divider-cad { display:flex; align-items:center; gap:10px; margin:14px 0; color:#aaa; font-size:12px; }
     .divider-cad::before,.divider-cad::after { content:''; flex:1; height:1px; background:#e5e5e3; }
   </style>
+  {% include "_openai_pixel.html" %}
   {% if META_PIXEL_ID %}
   <script>
   !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
